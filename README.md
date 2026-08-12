@@ -19,14 +19,14 @@ Read [SPEC.md](./SPEC.md) — that document is the actual product.
 
 ## Status
 
-Milestone 1 of 5. The standard exists, is tested, and is proven from two
-languages. The studio (the editing UI) is next.
+Milestone 2 of 5. The standard is proven from two languages, and the studio can
+edit and publish real content to a real repository.
 
 |                         |                                                                              |
 | ----------------------- | ---------------------------------------------------------------------------- |
 | ✅ **M0** Foundation    | pnpm + Turborepo, oxlint + oxfmt (Rust), tsdown/Rolldown, Vitest             |
 | ✅ **M1** The standard  | `@greatcms/spec`, conformance kit, Node reader, Astro example, Python reader |
-| ⬜ **M2** Studio        | GitHub App auth, generated editor, atomic commits                            |
+| ✅ **M2** Studio        | Auth, multi-site registry, schema-generated editor, atomic publishes         |
 | ⬜ **M3** Preview       | Draft branch + your own CI, iframed                                          |
 | ⬜ **M4** Dynamic layer | Forms, comments, inbox, email                                                |
 | ⬜ **M5** Hardening     | Full a11y pass, perf budgets, CLI, docs                                      |
@@ -34,7 +34,9 @@ languages. The studio (the editing UI) is next.
 ## What's here
 
 ```
+apps/studio/            The CMS: sign in, connect repos, edit regions, publish
 packages/spec/          The standard: schema parsing, validation, resolution rules
+packages/git/           Atomic multi-file commits via the GitHub Git Data API
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
 packages/reader/        Build-time reader for any JS framework
 examples/site-astro/    A real Astro site: managed regions beside hand-written markup
@@ -48,6 +50,18 @@ pnpm install
 pnpm build
 pnpm test
 ```
+
+Run the studio:
+
+```bash
+pnpm --filter @greatcms/studio build
+STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
+# http://localhost:8787
+```
+
+Connect a repository containing a `.cms/schema.yaml` and a token with
+`contents: write`, and it builds the editor from your schema. Or run it as a
+container — `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
 
 Then look at the example site:
 
@@ -76,8 +90,18 @@ node packages/conformance/bin/greatcms-conformance.mjs verify /tmp/out
 `<script>` tags and weighs 34 KB across four pages — asserted in
 `examples/site-astro/tests/a11y.test.ts`.
 
-**It is accessible.** axe runs against the built HTML for every page, every
-form control is labelled, and the contact form submits with JavaScript disabled.
+**It is accessible.** axe runs against every page of the example site _and_
+every screen of the studio, every form control is labelled, and errors are
+attached with `aria-invalid` and `aria-describedby` rather than colour alone.
+
+**The admin needs no JavaScript either.** The studio is server-rendered and
+every mutation is a form POST — including adding, removing, and reordering
+blocks. That is what makes it keyboard- and screen-reader-navigable by
+construction rather than by patching ARIA onto custom widgets.
+
+**A publish is one commit, or nothing.** Invalid content is refused before it
+reaches the repository, and a branch that moved while you were editing gets a
+409 rather than an overwrite.
 
 **The awkward cases are covered.** The conformance fixture includes a region
 with no content file, a region edited before a field was added to the schema, a

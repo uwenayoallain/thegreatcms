@@ -1,0 +1,323 @@
+import type { CmsSchema, RegionDef } from "@greatcms/spec";
+import { isBlocksRegion } from "@greatcms/spec";
+import { html } from "hono/html";
+import type { Publish, Site } from "../db.js";
+import { fieldName } from "../form.js";
+import { type ErrorsByPath, renderFields } from "./fields.js";
+import { page, type PageOptions } from "./layout.js";
+
+export function signInPage(options: { error?: string } = {}): string {
+  return page(
+    {
+      title: "Sign in",
+      flash: options.error ? { kind: "error", message: options.error } : undefined,
+    },
+    html`
+      <h1>Sign in</h1>
+      <form method="POST" action="/sign-in">
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            autocomplete="current-password"
+            required
+            autofocus
+          />
+        </div>
+        <div class="actions"><button type="submit">Sign in</button></div>
+      </form>
+    `,
+  );
+}
+
+export function sitesPage(sites: Site[], flash?: PageOptions["flash"]): string {
+  return page(
+    { title: "Sites", flash },
+    html`
+      <h1>Sites</h1>
+      ${
+        sites.length === 0
+          ? html`<p class="muted">
+              No sites yet. Connect a repository that contains a
+              <code>.cms/schema.yaml</code> file.
+            </p>`
+          : html`
+              <ul class="cards">
+                ${sites.map(
+                  (site) => html`
+                    <li class="card">
+                      <h2><a href="/sites/${site.id}">${site.name}</a></h2>
+                      <p><code>${site.owner}/${site.repo}</code> · ${site.branch}</p>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `
+      }
+      <div class="actions"><a class="button" href="/sites/new">Connect a site</a></div>
+    `,
+  );
+}
+
+export function newSitePage(
+  options: { error?: string; values?: Record<string, string> } = {},
+): string {
+  const values = options.values ?? {};
+  return page(
+    {
+      title: "Connect a site",
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: "/sites/new", label: "Connect a site" },
+      ],
+      flash: options.error ? { kind: "error", message: options.error } : undefined,
+    },
+    html`
+      <h1>Connect a site</h1>
+      <p class="muted">
+        The repository needs a <code>.cms/schema.yaml</code> file. The studio reads it to build the
+        editor — it never runs any code from your repository.
+      </p>
+      <form method="POST" action="/sites">
+        <div class="field">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" value="${values.name ?? ""}" required />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="owner">Owner</label>
+            <input type="text" id="owner" name="owner" value="${values.owner ?? ""}" required />
+          </div>
+          <div class="field">
+            <label for="repo">Repository</label>
+            <input type="text" id="repo" name="repo" value="${values.repo ?? ""}" required />
+          </div>
+          <div class="field">
+            <label for="branch">Branch</label>
+            <input
+              type="text"
+              id="branch"
+              name="branch"
+              value="${values.branch ?? "main"}"
+              required
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="token">Access token</label>
+          <input
+            type="password"
+            id="token"
+            name="token"
+            autocomplete="off"
+            required
+            aria-describedby="token-hint"
+          />
+          <span class="hint" id="token-hint">
+            Needs <code>contents: write</code> on this repository only. Stored on this server.
+          </span>
+        </div>
+        <div class="actions">
+          <button type="submit">Connect</button>
+          <a class="button secondary" href="/">Cancel</a>
+        </div>
+      </form>
+    `,
+  );
+}
+
+export function sitePage(
+  site: Site,
+  schema: CmsSchema,
+  publishes: Publish[],
+  flash?: PageOptions["flash"],
+): string {
+  const regions = Object.entries(schema.regions);
+  return page(
+    {
+      title: site.name,
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: `/sites/${site.id}`, label: site.name },
+      ],
+      flash,
+    },
+    html`
+      <h1>${site.name}</h1>
+      <p class="muted"><code>${site.owner}/${site.repo}</code> · publishing to ${site.branch}</p>
+
+      <h2>Regions</h2>
+      <ul class="cards">
+        ${regions.map(
+          ([id, region]) => html`
+            <li class="card">
+              <h3><a href="/sites/${site.id}/regions/${id}">${region.label ?? id}</a></h3>
+              <p><code>${id}</code> · ${describeRegion(region)}</p>
+            </li>
+          `,
+        )}
+      </ul>
+
+      ${
+        publishes.length > 0
+          ? html`
+              <h2>Recent publishes</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Region</th>
+                    <th scope="col">When</th>
+                    <th scope="col">Commit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${publishes.map(
+                    (entry) => html`
+                      <tr>
+                        <td><code>${entry.region_id}</code></td>
+                        <td>${entry.created_at}</td>
+                        <td><a href="${entry.commit_url}">${entry.commit_sha.slice(0, 7)}</a></td>
+                      </tr>
+                    `,
+                  )}
+                </tbody>
+              </table>
+            `
+          : ""
+      }
+
+      <h2>Danger zone</h2>
+      <form method="POST" action="/sites/${site.id}/delete">
+        <p class="muted">
+          Disconnects this site from the studio. Nothing is deleted from the repository.
+        </p>
+        <button class="danger" type="submit">Disconnect ${site.name}</button>
+      </form>
+    `,
+  );
+}
+
+export interface EditPageOptions {
+  site: Site;
+  schema: CmsSchema;
+  regionId: string;
+  region: RegionDef;
+  document: Record<string, unknown>;
+  errors: ErrorsByPath;
+  headSha: string;
+  flash?: PageOptions["flash"];
+}
+
+export function editRegionPage(options: EditPageOptions): string {
+  const { site, schema, regionId, region, document, errors, headSha, flash } = options;
+  const title = region.label ?? regionId;
+
+  return page(
+    {
+      title,
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: `/sites/${site.id}`, label: site.name },
+        { href: `/sites/${site.id}/regions/${regionId}`, label: title },
+      ],
+      flash,
+    },
+    html`
+      <h1>${title}</h1>
+      <p class="muted">
+        <code>${regionId}</code> — publishing writes one commit to
+        <code>${site.owner}/${site.repo}</code> on ${site.branch}.
+      </p>
+
+      <form method="POST" action="/sites/${site.id}/regions/${regionId}">
+        <input type="hidden" name="headSha" value="${headSha}" />
+
+        ${
+          isBlocksRegion(region)
+            ? renderBlocks(schema, region, document, errors)
+            : renderFields(region.fields, document, errors)
+        }
+
+        <div class="actions">
+          <button type="submit" name="action" value="publish">Publish</button>
+          <a class="button secondary" href="/sites/${site.id}">Back to site</a>
+        </div>
+      </form>
+    `,
+  );
+}
+
+function renderBlocks(
+  schema: CmsSchema,
+  region: Extract<RegionDef, { type: "blocks" }>,
+  document: Record<string, unknown>,
+  errors: ErrorsByPath,
+) {
+  const blocks = Array.isArray(document.blocks)
+    ? (document.blocks as Array<Record<string, unknown>>)
+    : [];
+
+  return html`
+    ${blocks.map((block, index) => {
+      const type = String(block._type ?? "");
+      const definition = schema.blocks[type];
+      const name = fieldName(["blocks", index, "_type"]);
+      return html`
+        <section class="block" aria-label="${definition?.label ?? type} (position ${index + 1})">
+          <header>
+            <h2>${definition?.label ?? type}</h2>
+            <div class="tools">
+              <button
+                type="submit"
+                name="action"
+                value="up:${index}"
+                ${index === 0 ? "disabled" : ""}
+              >
+                Move up<span class="visually-hidden"> ${definition?.label ?? type}</span>
+              </button>
+              <button
+                type="submit"
+                name="action"
+                value="down:${index}"
+                ${index === blocks.length - 1 ? "disabled" : ""}
+              >
+                Move down<span class="visually-hidden"> ${definition?.label ?? type}</span>
+              </button>
+              <button type="submit" name="action" value="remove:${index}">
+                Remove<span class="visually-hidden"> ${definition?.label ?? type}</span>
+              </button>
+            </div>
+          </header>
+          <input type="hidden" name="${name}" value="${type}" />
+          ${
+            definition
+              ? renderFields(definition.fields, block, errors, ["blocks", index])
+              : html`<p class="error-text">
+                  This block type is no longer in the schema. Publishing will drop it.
+                </p>`
+          }
+        </section>
+      `;
+    })}
+
+    <div class="field">
+      <label for="add-block">Add a block</label>
+      <select id="add-block" name="addType">
+        ${region.allow.map(
+          (type) => html`<option value="${type}">${schema.blocks[type]?.label ?? type}</option>`,
+        )}
+      </select>
+      <button class="secondary" type="submit" name="action" value="add">Add block</button>
+    </div>
+  `;
+}
+
+function describeRegion(region: RegionDef): string {
+  if (isBlocksRegion(region)) {
+    return `block list (${region.allow.join(", ")})`;
+  }
+  const count = Object.keys(region.fields).length;
+  return `${count} field${count === 1 ? "" : "s"}`;
+}

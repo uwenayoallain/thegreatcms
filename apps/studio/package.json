@@ -1,0 +1,26 @@
+{
+  "name": "@greatcms/studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The GreatCMS studio: manage many Git-backed sites from one place.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsdown --watch & node --watch --enable-source-maps dist/main.js",
+    "start": "node --enable-source-maps dist/main.js",
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@greatcms/git": "workspace:*",
+    "@greatcms/spec": "workspace:*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@greatcms/conformance": "workspace:*",
+    "axe-core": "^4.13.0",
+    "jsdom": "^30.0.1",
+    "vitest": "^4.1.10"
+  }
+}
