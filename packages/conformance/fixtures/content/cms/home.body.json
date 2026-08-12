@@ -1,0 +1,36 @@
+{
+  "blocks": [
+    {
+      "_type": "hero",
+      "heading": "Hybrid by default",
+      "image": {
+        "alt": "Diagram of a page with one managed section",
+        "src": "/media/hybrid.webp",
+        "width": 900,
+        "height": 600
+      }
+    },
+    {
+      "_type": "text",
+      "body": {
+        "html": "<p>Manage the <strong>hero</strong> and leave the rest of the page as code.</p>"
+      }
+    },
+    {
+      "_type": "cta",
+      "label": "Read the spec",
+      "link": { "href": "https://example.com/spec", "external": true },
+      "style": "secondary"
+    },
+    {
+      "_type": "cta",
+      "label": "Browse the examples",
+      "link": { "href": "/examples" }
+    }
+  ],
+  "_meta": {
+    "updatedAt": "2026-08-12T18:05:00.000Z",
+    "updatedBy": "conformance-fixture",
+    "version": 1
+  }
+}

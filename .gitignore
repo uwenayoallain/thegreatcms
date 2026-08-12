@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+data/*.sqlite
+data/*.sqlite-*
+test-results/
+playwright-report/
+public/uploads/

@@ -1,0 +1,23 @@
+{
+  "name": "@greatcms/example-site-astro",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@greatcms/reader": "workspace:*",
+    "astro": "^5.1.1",
+    "marked": "^15.0.4"
+  },
+  "devDependencies": {
+    "axe-core": "^4.13.0",
+    "jsdom": "^30.0.1",
+    "vitest": "^2.1.9"
+  }
+}

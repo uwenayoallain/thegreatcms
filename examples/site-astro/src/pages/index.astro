@@ -1,0 +1,103 @@
+---
+import Feature from '../components/Feature.astro';
+import Quote from '../components/Quote.astro';
+import Base from '../layouts/Base.astro';
+import { type Hero, cms } from '../lib/cms';
+
+// Managed content: one function call, resolved at build time.
+const hero = cms.region<Hero>('home.hero');
+const features = cms.blocks('home.features');
+
+// Where form submissions go. Set PUBLIC_CMS_URL to your studio; with it unset
+// the form still renders and still validates, it just has nowhere to post.
+const studio = import.meta.env.PUBLIC_CMS_URL ?? '';
+const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
+---
+
+<Base title={hero.heading} description={hero.subtitle}>
+  <!-- ── Managed by the CMS ───────────────────────────────────────────── -->
+  <section class="hero">
+    <p class="eyebrow">Managed region: home.hero</p>
+    <h1>{hero.heading}</h1>
+    {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
+    {hero.cta?.href && <a class="button" href={hero.cta.href}>{hero.cta.label ?? 'Learn more'}</a>}
+  </section>
+
+  <!-- ── Not managed: ordinary Astro the studio never sees ────────────── -->
+  <section aria-labelledby="how">
+    <p class="eyebrow">Hand-written — not managed</p>
+    <h2 id="how">How this page is assembled</h2>
+    <p>
+      The heading above came from <code>content/cms/home.hero.json</code>. This
+      paragraph is hard-coded in <code>src/pages/index.astro</code>. Both end up
+      in the same static HTML, and the CMS has no idea this section exists.
+    </p>
+    <ol>
+      <li>An editor saves in the studio.</li>
+      <li>The studio commits JSON to this repository.</li>
+      <li>The commit triggers the deploy this site already had.</li>
+    </ol>
+  </section>
+
+  <!-- ── Managed block list ───────────────────────────────────────────── -->
+  <section aria-labelledby="why">
+    <p class="eyebrow">Managed region: home.features</p>
+    <h2 id="why">Why it works this way</h2>
+    <ul class="grid" role="list">
+      {
+        features.map((block) =>
+          block._type === 'feature' ? (
+            <Feature {...(block as any)} />
+          ) : (
+            <Quote {...(block as any)} />
+          ),
+        )
+      }
+    </ul>
+  </section>
+
+  <!-- ── Dynamic: the one thing Git cannot hold ──────────────────────── -->
+  <section aria-labelledby="contact">
+    <p class="eyebrow">Dynamic — handled by the studio</p>
+    <h2 id="contact">Send a message</h2>
+    <p>
+      A plain HTML form posting to the studio. No JavaScript, no third-party
+      form service, and submissions land in one inbox across every site.
+    </p>
+
+    <form class="contact" method="POST" action={`${studio}/f/${siteId}/contact`}>
+      <div>
+        <label for="name">Your name</label>
+        <input id="name" name="name" type="text" autocomplete="name" required />
+      </div>
+
+      <div>
+        <label for="email">
+          Email
+          <span class="hint" id="email-hint">So we can reply. Never shared.</span>
+        </label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          aria-describedby="email-hint"
+          required
+        />
+      </div>
+
+      <div>
+        <label for="message">Message</label>
+        <textarea id="message" name="message" rows="5" required></textarea>
+      </div>
+
+      <!-- Spam trap: real people never fill this in. -->
+      <div class="trap" aria-hidden="true">
+        <label for="company">Company</label>
+        <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+      </div>
+
+      <button type="submit">Send message</button>
+    </form>
+  </section>
+</Base>

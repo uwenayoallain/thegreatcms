@@ -1,0 +1,14 @@
+{
+  "cta": {
+    "href": "/get-started",
+    "label": "Get started"
+  },
+  "heading": "Publish from anywhere",
+  "image": {
+    "alt": "A person editing a page on a laptop",
+    "height": 800,
+    "src": "/media/hero.webp",
+    "width": 1200
+  },
+  "subtitle": "Content in Git, deploys on commit."
+}

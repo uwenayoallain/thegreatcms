@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint and format check
+        run: pnpm biome check .
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test (includes the accessibility gate)
+        run: pnpm test
+
+      # The standard has to be usable outside JavaScript, so CI proves it every
+      # run: a Python reader written from SPEC.md must pass the same suite.
+      - name: Cross-language conformance
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 examples/reader-python/read.py packages/conformance/fixtures "$RUNNER_TEMP/py-out"
+          node packages/conformance/bin/greatcms-conformance.mjs verify "$RUNNER_TEMP/py-out"

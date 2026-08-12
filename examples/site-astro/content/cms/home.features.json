@@ -1,0 +1,25 @@
+{
+  "blocks": [
+    {
+      "_type": "feature",
+      "title": "Content lives in Git",
+      "body": "Every publish is a commit, so content has history, review, and rollback for free.",
+      "icon": "git"
+    },
+    {
+      "_type": "feature",
+      "title": "Nothing at runtime",
+      "body": "Pages are built from files on disk. The CMS is never in the request path, so it can never be the reason a page is slow or down."
+    },
+    {
+      "_type": "quote",
+      "text": "The best CMS dependency is the one your production site does not have.",
+      "attribution": "The README"
+    }
+  ],
+  "_meta": {
+    "updatedAt": "2026-08-12T18:22:00.000Z",
+    "updatedBy": "example",
+    "version": 1
+  }
+}

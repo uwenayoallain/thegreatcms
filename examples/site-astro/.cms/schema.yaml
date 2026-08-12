@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/schema.schema.json
+#
+# The content model for this site. Only what is listed here is managed by the
+# CMS; every other line of markup in this repo is ordinary Astro that the studio
+# never sees or touches.
+
+version: 1
+
+site:
+  name: Example — Astro
+
+blocks:
+  feature:
+    label: Feature
+    fields:
+      title: { type: text, required: true, max: 60 }
+      body: { type: text, multiline: true, required: true }
+      icon: { type: select, options: [git, bolt, lock], default: git }
+
+  quote:
+    label: Pull quote
+    fields:
+      text: { type: text, required: true, multiline: true }
+      attribution: { type: text }
+
+regions:
+  # Managed: an editor can change this without touching code.
+  home.hero:
+    label: Home hero
+    fields:
+      heading: { type: text, required: true, max: 80 }
+      subtitle: { type: text, max: 160 }
+      cta: { type: link }
+    default:
+      heading: A CMS that gets out of the way
+      subtitle: Content in Git. Deploys on commit. Nothing at runtime.
+
+  # Managed block list: add, remove, reorder without a deploy from a developer.
+  home.features:
+    label: Home features
+    type: blocks
+    allow: [feature, quote]
+    max: 6
+
+  # Deliberately has no content file — proves the site builds from schema
+  # defaults before the CMS has ever touched it.
+  about.intro:
+    label: About intro
+    fields:
+      heading: { type: text, default: About this example }
+      body:
+        type: text
+        multiline: true
+        default: >-
+          Nobody has edited this region yet, so it renders the defaults declared
+          in the schema. The studio has never touched this page, and the build
+          did not care.
+
+collections:
+  blog:
+    label: Blog
+    path: content/blog
+    format: markdown
+    body: content
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 120 }
+      description: { type: text, max: 200 }
+      date: { type: date, required: true }
+      content: { type: richtext }

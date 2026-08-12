@@ -1,0 +1,13 @@
+{
+  "cta": {
+    "href": "/blog/publish-from-anywhere",
+    "label": "How publishing works"
+  },
+  "heading": "Manage the hero. Leave the rest as code.",
+  "subtitle": "This heading came from the CMS. The layout around it did not.",
+  "_meta": {
+    "updatedAt": "2026-08-12T18:20:00.000Z",
+    "updatedBy": "example",
+    "version": 1
+  }
+}

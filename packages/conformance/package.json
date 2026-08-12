@@ -1,0 +1,32 @@
+{
+  "name": "@greatcms/conformance",
+  "version": "0.1.0",
+  "description": "Fixtures and a verifier that prove a tool reads the GreatCMS standard correctly, in any language.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./fixtures/*": "./fixtures/*"
+  },
+  "bin": {
+    "greatcms-conformance": "./bin/greatcms-conformance.mjs"
+  },
+  "files": ["dist", "fixtures", "expected", "bin"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@greatcms/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

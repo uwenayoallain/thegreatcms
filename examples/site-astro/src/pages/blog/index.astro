@@ -1,0 +1,35 @@
+---
+import Base from '../../layouts/Base.astro';
+import { cms } from '../../lib/cms';
+
+const posts = cms
+  .collection('blog')
+  .sort((a, b) => String(b.data.date).localeCompare(String(a.data.date)));
+---
+
+<Base title="Blog" description="Posts, stored as Markdown in this repository.">
+  <section>
+    <h1>Blog</h1>
+    <p>Collection entries are Markdown with frontmatter — exactly what every static site generator already expects.</p>
+
+    <ul class="entry-list" role="list">
+      {
+        posts.map((post) => (
+          <li>
+            <h2>
+              <a href={`/blog/${post.slug}/`}>{post.data.title}</a>
+            </h2>
+            <time datetime={String(post.data.date)}>
+              {new Date(String(post.data.date)).toLocaleDateString('en', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </time>
+            {post.data.description && <p>{post.data.description}</p>}
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>

@@ -1,0 +1,79 @@
+{
+  "$ref": "#/definitions/GreatCMS config",
+  "definitions": {
+    "GreatCMS config": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "content": {
+          "type": "object",
+          "properties": {
+            "regions": {
+              "type": "string",
+              "minLength": 1,
+              "default": "content/cms"
+            },
+            "media": {
+              "$ref": "#/definitions/GreatCMS config/properties/content/properties/regions",
+              "default": "public/media"
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "regions": "content/cms",
+            "media": "public/media"
+          }
+        },
+        "mediaUrlPrefix": {
+          "type": "string",
+          "default": "/media"
+        },
+        "publish": {
+          "type": "object",
+          "properties": {
+            "branch": {
+              "type": "string",
+              "default": "main"
+            },
+            "draftBranchPrefix": {
+              "type": "string",
+              "default": "cms/draft"
+            },
+            "commitMessage": {
+              "type": "string",
+              "default": "content: update {summary}"
+            },
+            "dispatchEvent": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "branch": "main",
+            "draftBranchPrefix": "cms/draft",
+            "commitMessage": "content: update {summary}"
+          }
+        },
+        "preview": {
+          "type": "object",
+          "properties": {
+            "urlTemplate": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GreatCMS config",
+  "description": "Repository layout and publishing settings for GreatCMS (.cms/config.yaml)."
+}

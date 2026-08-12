@@ -1,0 +1,33 @@
+---
+import Base from '../layouts/Base.astro';
+import { type AboutIntro, cms } from '../lib/cms';
+
+// `about.intro` has no content file in this repo. It still renders, because a
+// missing file resolves to the defaults declared in the schema — which is what
+// lets a site be built before the CMS has ever been opened.
+const intro = cms.region<AboutIntro>('about.intro');
+---
+
+<Base title={intro.heading}>
+  <section>
+    <p class="eyebrow">Managed region: about.intro (never edited)</p>
+    <h1>{intro.heading}</h1>
+    <p>{intro.body}</p>
+  </section>
+
+  <section aria-labelledby="proof">
+    <h2 id="proof">Why this page is the interesting one</h2>
+    <p>
+      There is no <code>content/cms/about.intro.json</code> in this repository.
+      The text above comes from <code>default:</code> values in
+      <code>.cms/schema.yaml</code>, so this page rendered correctly before the
+      studio had ever been opened.
+    </p>
+    <p>
+      Everything this build needs is committed here: a schema file, some JSON,
+      some Markdown. No network call, no database, no API key, no running
+      studio. Shut the CMS down permanently and this site keeps building from
+      what is already in Git.
+    </p>
+  </section>
+</Base>

@@ -1,0 +1,26 @@
+---
+import { marked } from 'marked';
+import Base from '../../layouts/Base.astro';
+import { cms } from '../../lib/cms';
+
+export function getStaticPaths() {
+  return cms.collection('blog').map((entry) => ({
+    params: { slug: entry.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const html = marked.parse(entry.body) as string;
+const date = new Date(String(entry.data.date));
+---
+
+<Base title={String(entry.data.title)} description={entry.data.description as string | undefined}>
+  <article class="prose">
+    <h1>{entry.data.title}</h1>
+    <time datetime={date.toISOString().slice(0, 10)}>
+      {date.toLocaleDateString('en', { year: 'numeric', month: 'long', day: 'numeric' })}
+    </time>
+    <Fragment set:html={html} />
+  </article>
+</Base>

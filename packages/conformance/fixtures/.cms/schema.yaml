@@ -1,0 +1,80 @@
+# Conformance fixture site.
+#
+# Any tool claiming to read the GreatCMS standard must resolve this repo into
+# the documents under `expected/`. It deliberately exercises the awkward cases:
+# a region with no content file, a region edited before a field was added, a
+# blocks region, and a Markdown collection.
+
+version: 1
+
+site:
+  name: Conformance Fixture
+
+blocks:
+  hero:
+    label: Hero
+    fields:
+      heading: { type: text, required: true, max: 80 }
+      image: { type: image }
+
+  text:
+    label: Text
+    fields:
+      body: { type: richtext }
+
+  cta:
+    label: Call to action
+    fields:
+      label: { type: text, required: true }
+      link: { type: link, required: true }
+      style: { type: select, options: [primary, secondary], default: primary }
+
+regions:
+  # Fully edited: content file overrides every default.
+  home.hero:
+    label: Home hero
+    fields:
+      heading: { type: text, required: true, max: 80 }
+      subtitle: { type: text, default: Default subtitle }
+      image: { type: image }
+      cta: { type: link }
+    default:
+      heading: Welcome
+
+  # Edited before `badge` existed — proves new schema fields still render.
+  home.notice:
+    fields:
+      message: { type: text, required: true }
+      badge: { type: text, default: New }
+      dismissible: { type: boolean, default: true }
+
+  # Never edited — proves a site builds before the CMS has touched it.
+  about.intro:
+    fields:
+      heading: { type: text, default: About us }
+      body: { type: richtext, default: { html: "<p>We have not written this yet.</p>" } }
+
+  # Block list with nested groups and lists.
+  home.body:
+    type: blocks
+    allow: [hero, text, cta]
+    max: 8
+
+  # Decorative image: empty alt is valid here and only here.
+  home.decor:
+    fields:
+      image: { type: image, alt: decorative-allowed }
+
+collections:
+  blog:
+    label: Blog
+    path: content/blog
+    format: markdown
+    body: content
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 120 }
+      date: { type: date, required: true }
+      tags: { type: list, of: { type: text }, max: 5 }
+      draft: { type: boolean, default: false }
+      content: { type: richtext }

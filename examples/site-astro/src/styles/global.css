@@ -1,0 +1,324 @@
+/*
+ * Hand-written CSS, no framework. Colour pairs are checked for WCAG AA contrast
+ * in both schemes, focus is always visible, and motion is opt-out.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --ink: #14161a;
+  --ink-soft: #4a5058;
+  --paper: #fbfaf8;
+  --paper-raised: #ffffff;
+  --line: #dcd8d1;
+  --accent: #1f4d3d;
+  --accent-ink: #ffffff;
+  --focus: #b4530a;
+
+  --measure: 68ch;
+  --gap: clamp(1rem, 2.5vw, 2rem);
+  --radius: 10px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #eceae6;
+    --ink-soft: #b0aca5;
+    --paper: #14161a;
+    --paper-raised: #1c1f24;
+    --line: #333840;
+    --accent: #7fd3b0;
+    --accent-ink: #10201a;
+    --focus: #ffb066;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: clamp(1rem, 0.97rem + 0.2vw, 1.0625rem);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(2rem, 1.4rem + 3vw, 3.25rem);
+  margin: 0 0 0.5em;
+}
+
+h2 {
+  font-size: clamp(1.4rem, 1.2rem + 1vw, 1.9rem);
+  margin: 0 0 0.4em;
+}
+
+p {
+  max-width: var(--measure);
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 10;
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: var(--radius);
+  transition: top 120ms ease;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 1.25rem var(--gap);
+  border-bottom: 1px solid var(--line);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-header nav ul {
+  display: flex;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-header nav a[aria-current="page"] {
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--accent);
+}
+
+main {
+  padding: clamp(2rem, 5vw, 4rem) var(--gap);
+  margin-inline: auto;
+  max-width: 74rem;
+}
+
+section + section {
+  margin-top: clamp(2.5rem, 6vw, 4.5rem);
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 0.75rem;
+}
+
+.hero p.lede {
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.3rem);
+  color: var(--ink-soft);
+}
+
+.button {
+  display: inline-block;
+  margin-top: 1.25rem;
+  padding: 0.7rem 1.3rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: var(--radius);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+.grid {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  margin-top: 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  padding: 1.25rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+blockquote.pull {
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  border-left: 4px solid var(--accent);
+  background: var(--paper-raised);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+blockquote.pull p {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+blockquote.pull footer {
+  margin-top: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 0;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.entry-list h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.entry-list p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+time {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.prose :is(h2, h3) {
+  margin-top: 2rem;
+}
+
+form.contact {
+  display: grid;
+  gap: 1rem;
+  max-width: 34rem;
+  margin-top: 1.5rem;
+}
+
+form.contact label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+form.contact :is(input, textarea) {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  color: inherit;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+form.contact .hint {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+form.contact button {
+  justify-self: start;
+  padding: 0.7rem 1.3rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* A honeypot: hidden from sight but never with `display:none`, which some
+   browsers skip when autofilling. Kept out of the accessibility tree too. */
+.trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.site-footer {
+  padding: 2rem var(--gap);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
