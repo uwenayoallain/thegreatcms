@@ -22,14 +22,14 @@ Read [SPEC.md](./SPEC.md) — that document is the actual product.
 Milestone 1 of 5. The standard exists, is tested, and is proven from two
 languages. The studio (the editing UI) is next.
 
-| | |
-|---|---|
-| ✅ **M0** Foundation | pnpm + Turborepo, TypeScript strict, Biome, Vitest |
-| ✅ **M1** The standard | `@greatcms/spec`, conformance kit, Node reader, Astro example, Python reader |
-| ⬜ **M2** Studio | GitHub App auth, generated editor, atomic commits |
-| ⬜ **M3** Preview | Draft branch + your own CI, iframed |
-| ⬜ **M4** Dynamic layer | Forms, comments, inbox, email |
-| ⬜ **M5** Hardening | Full a11y pass, perf budgets, CLI, docs |
+|                         |                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| ✅ **M0** Foundation    | pnpm + Turborepo, oxlint + oxfmt (Rust), tsdown/Rolldown, Vitest             |
+| ✅ **M1** The standard  | `@greatcms/spec`, conformance kit, Node reader, Astro example, Python reader |
+| ⬜ **M2** Studio        | GitHub App auth, generated editor, atomic commits                            |
+| ⬜ **M3** Preview       | Draft branch + your own CI, iframed                                          |
+| ⬜ **M4** Dynamic layer | Forms, comments, inbox, email                                                |
+| ⬜ **M5** Hardening     | Full a11y pass, perf budgets, CLI, docs                                      |
 
 ## What's here
 
@@ -84,6 +84,19 @@ with no content file, a region edited before a field was added to the schema, a
 block missing a defaulted field, and a decorative image with empty alt text —
 the four things naive implementations get wrong.
 
+## Toolchain
+
+Rust where a Rust tool exists, because build and check times are a feature:
+
+| Job            | Tool                        | Why                                    |
+| -------------- | --------------------------- | -------------------------------------- |
+| Lint           | **oxlint** (oxc)            | Whole repo in ~1.4s, hundreds of rules |
+| Format         | **oxfmt** (oxc)             | 65 files in ~0.7s, multi-threaded      |
+| Library builds | **tsdown** (Rolldown + oxc) | ESM + declarations in ~2s per package  |
+| Site builds    | **rolldown-vite**           | Astro build went 3.6s → 1.8s           |
+| Task graph     | **Turborepo** (Rust)        | Content-hashed caching across packages |
+| Tests          | **Vitest 4**                | Runs on the same Rolldown pipeline     |
+
 ## Design decisions worth knowing
 
 **Content is JSON; prose is Markdown.** Every language parses JSON with no
@@ -99,7 +112,7 @@ field explicitly marked `alt: decorative-allowed`, which makes an inaccessible
 image a deliberate act rather than an oversight.
 
 **A missing content file is never an error.** It resolves to schema defaults, so
-a site is correct before the CMS has ever been opened. A missing *schema* file
+a site is correct before the CMS has ever been opened. A missing _schema_ file
 is an error — failing loudly beats quietly rendering empty regions.
 
 **Publishing is one atomic commit.** Blob → tree → commit → ref via the GitHub

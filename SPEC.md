@@ -42,7 +42,7 @@ Nothing else in the repository is touched by the CMS, ever.
 sees. This is the hybrid model: a page can have one managed region, or be
 entirely managed, and both are the same mechanism.
 
-**Block** — a reusable field set. A *blocks region* holds an ordered list of
+**Block** — a reusable field set. A _blocks region_ holds an ordered list of
 blocks the editor can add, remove, and reorder.
 
 **Collection** — a folder of entries with a shared shape: a blog, case studies,
@@ -56,22 +56,22 @@ changelog. Entries are Markdown with YAML frontmatter by default.
 version: 1
 
 site:
-  name: My Site               # optional, shown in the studio
+  name: My Site # optional, shown in the studio
 
-blocks:                       # optional
+blocks: # optional
   hero:
     label: Hero
     fields:
       heading: { type: text, required: true, max: 80 }
       image: { type: image }
 
-regions:                      # at least one region or collection is required
-  home.hero:                  # ← the region id
+regions: # at least one region or collection is required
+  home.hero: # ← the region id
     label: Home hero
     fields:
       heading: { type: text, required: true, max: 80 }
       subtitle: { type: text, default: Welcome }
-    default:                  # region-level defaults beat field-level defaults
+    default: # region-level defaults beat field-level defaults
       heading: Hello
 
   home.body:
@@ -80,12 +80,12 @@ regions:                      # at least one region or collection is required
     min: 0
     max: 8
 
-collections:                  # optional
+collections: # optional
   blog:
     path: content/blog
-    format: markdown          # or json
-    body: content             # which field becomes the Markdown body
-    slug: title               # which field derives the file name
+    format: markdown # or json
+    body: content # which field becomes the Markdown body
+    slug: title # which field derives the file name
     fields:
       title: { type: text, required: true }
       date: { type: date, required: true }
@@ -106,19 +106,19 @@ autocomplete and inline validation in any editor that supports it.
 
 Every field accepts `label`, `description`, and `required`.
 
-| Type | Extra keys | Stored value |
-|---|---|---|
-| `text` | `min`, `max`, `pattern`, `multiline`, `default` | string |
-| `richtext` | `allow`, `default` | `{ "html": "…", "_ast": … }` |
-| `number` | `min`, `max`, `step`, `integer`, `default` | number |
-| `boolean` | `default` | boolean |
-| `select` | `options`, `multiple`, `default` | string, or array if `multiple` |
-| `date` | `time`, `default` | ISO 8601 string |
-| `link` | `default` | `{ "href": "…", "label"?: "…", "external"?: bool }` |
-| `image` | `alt`, `accept`, `default` | `{ "src": "…", "alt": "…", "width"?: n, "height"?: n }` |
-| `file` | `accept`, `default` | `{ "src": "…", "name"?: "…", "size"?: n }` |
-| `list` | `of`, `min`, `max` | array of the `of` type |
-| `group` | `fields` | nested object |
+| Type       | Extra keys                                      | Stored value                                            |
+| ---------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `text`     | `min`, `max`, `pattern`, `multiline`, `default` | string                                                  |
+| `richtext` | `allow`, `default`                              | `{ "html": "…", "_ast": … }`                            |
+| `number`   | `min`, `max`, `step`, `integer`, `default`      | number                                                  |
+| `boolean`  | `default`                                       | boolean                                                 |
+| `select`   | `options`, `multiple`, `default`                | string, or array if `multiple`                          |
+| `date`     | `time`, `default`                               | ISO 8601 string                                         |
+| `link`     | `default`                                       | `{ "href": "…", "label"?: "…", "external"?: bool }`     |
+| `image`    | `alt`, `accept`, `default`                      | `{ "src": "…", "alt": "…", "width"?: n, "height"?: n }` |
+| `file`     | `accept`, `default`                             | `{ "src": "…", "name"?: "…", "size"?: n }`              |
+| `list`     | `of`, `min`, `max`                              | array of the `of` type                                  |
+| `group`    | `fields`                                        | nested object                                           |
 
 `options` for `select` is either `[a, b]` or `[{ value: a, label: A }]`.
 
@@ -200,10 +200,10 @@ Merge rules:
   defaults, so a field added to a block later still renders.
 - **A missing content file is not an error.** The region resolves to its
   defaults, so a site builds correctly before the CMS has ever run.
-- **A missing schema file *is* an error.** Defaults live in the schema, so a
+- **A missing schema file _is_ an error.** Defaults live in the schema, so a
   consumer that cannot find it should fail loudly rather than quietly render
   empty regions. The schema is part of the site, committed alongside the code —
-  what a site never depends on is the *studio*: no network call, no database, no
+  what a site never depends on is the _studio_: no network call, no database, no
   API key, and no running service at build or request time. Shut the studio down
   permanently and every site it managed keeps building from what is in Git.
 - A stored key the schema does not define is left alone by consumers. Only the
@@ -226,9 +226,9 @@ publish:
   branch: main
   draftBranchPrefix: cms/draft
   commitMessage: "content: update {summary}"
-  dispatchEvent: null          # optional repository_dispatch after publish
+  dispatchEvent: null # optional repository_dispatch after publish
 preview:
-  urlTemplate: null            # e.g. https://{branch}--site.pages.dev
+  urlTemplate: null # e.g. https://{branch}--site.pages.dev
 ```
 
 Paths must be repository-relative and may not contain `..`.

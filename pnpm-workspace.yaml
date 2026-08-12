@@ -4,6 +4,9 @@ packages:
   - "packages/adapters/*"
   - "examples/*"
 allowBuilds:
-  '@biomejs/biome': true
   esbuild: true
   sharp: true
+
+# Rolldown (Rust) replaces Rollup for every Vite build in the repo.
+overrides:
+  vite: npm:rolldown-vite@^7.3.1

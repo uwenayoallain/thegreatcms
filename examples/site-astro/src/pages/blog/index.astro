@@ -4,7 +4,7 @@ import { cms } from '../../lib/cms';
 
 const posts = cms
   .collection('blog')
-  .sort((a, b) => String(b.data.date).localeCompare(String(a.data.date)));
+  .toSorted((a, b) => String(b.data.date).localeCompare(String(a.data.date)));
 ---
 
 <Base title="Blog" description="Posts, stored as Markdown in this repository.">

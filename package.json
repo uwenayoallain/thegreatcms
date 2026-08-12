@@ -2,22 +2,27 @@
   "name": "thegreatcms",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.21.0",
-  "engines": {
-    "node": ">=20.11"
-  },
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "lint": "biome check .",
-    "format": "biome check --write ."
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "check": "oxlint && oxfmt --check . && turbo run typecheck test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
     "@types/node": "^26.2.0",
+    "oxfmt": "^0.63.0",
+    "oxlint": "^1.78.0",
+    "tsdown": "^0.22.14",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
-  }
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "packageManager": "pnpm@11.21.0"
 }

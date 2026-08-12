@@ -4,8 +4,8 @@
  * region lives — `home.hero` is always `<regions dir>/home.hero.json`.
  */
 
-import type { CmsConfig } from './config.js';
-import { REGION_ID_RE } from './schema.js';
+import type { CmsConfig } from "./config.js";
+import { REGION_ID_RE } from "./schema.js";
 
 export function regionFilePath(config: CmsConfig, regionId: string): string {
   if (!REGION_ID_RE.test(regionId)) {
@@ -18,17 +18,17 @@ export function regionFilePath(config: CmsConfig, regionId: string): string {
 
 export function regionIdFromPath(config: CmsConfig, filePath: string): string | null {
   const dir = `${trimSlashes(config.content.regions)}/`;
-  if (!filePath.startsWith(dir) || !filePath.endsWith('.json')) return null;
-  const id = filePath.slice(dir.length, -'.json'.length);
+  if (!filePath.startsWith(dir) || !filePath.endsWith(".json")) return null;
+  const id = filePath.slice(dir.length, -".json".length);
   return REGION_ID_RE.test(id) ? id : null;
 }
 
 export function collectionEntryPath(
   config: CmsConfig,
-  collection: { path: string; format: 'markdown' | 'json' },
+  collection: { path: string; format: "markdown" | "json" },
   slug: string,
 ): string {
-  const ext = collection.format === 'markdown' ? 'md' : 'json';
+  const ext = collection.format === "markdown" ? "md" : "json";
   return `${trimSlashes(collection.path)}/${slug}.${ext}`;
 }
 
@@ -38,7 +38,7 @@ export function mediaFilePath(config: CmsConfig, fileName: string): string {
 
 /** Public URL the site will serve a committed media file from. */
 export function mediaUrl(config: CmsConfig, fileName: string): string {
-  const prefix = config.mediaUrlPrefix.replace(/\/+$/, '');
+  const prefix = config.mediaUrlPrefix.replace(/\/+$/, "");
   return `${prefix}/${fileName}`;
 }
 
@@ -48,16 +48,16 @@ export function mediaUrl(config: CmsConfig, fileName: string): string {
  */
 export function slugify(input: string): string {
   const slug = input
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '') // strip the accents NFKD just split off
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "") // strip the accents NFKD just split off
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 80)
-    .replace(/-+$/g, '');
-  return slug || 'untitled';
+    .replace(/-+$/g, "");
+  return slug || "untitled";
 }
 
 function trimSlashes(p: string): string {
-  return p.replace(/^\/+|\/+$/g, '');
+  return p.replace(/^\/+|\/+$/g, "");
 }

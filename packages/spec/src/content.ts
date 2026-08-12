@@ -7,8 +7,8 @@
  * stored content layers on top.
  */
 
-import type { FieldDef } from './fields.js';
-import { type CmsSchema, type RegionDef, isBlocksRegion } from './schema.js';
+import type { FieldDef } from "./fields.js";
+import { type CmsSchema, type RegionDef, isBlocksRegion } from "./schema.js";
 
 export type RegionDocument = Record<string, unknown>;
 
@@ -23,15 +23,15 @@ export interface RegionMeta {
 export function fieldDefaults(fields: Record<string, FieldDef>): RegionDocument {
   const out: RegionDocument = {};
   for (const [name, def] of Object.entries(fields)) {
-    if (def.type === 'group') {
+    if (def.type === "group") {
       const nested = fieldDefaults(def.fields);
       if (Object.keys(nested).length > 0) out[name] = nested;
       continue;
     }
-    if (def.type === 'list') {
+    if (def.type === "list") {
       continue; // an empty list is the only sensible default
     }
-    if ('default' in def && def.default !== undefined) {
+    if ("default" in def && def.default !== undefined) {
       out[name] = def.default;
     }
   }
@@ -49,7 +49,7 @@ function defaultsFor(region: RegionDef): RegionDocument {
   if (isBlocksRegion(region)) {
     return { blocks: region.default ?? [] };
   }
-  return { ...fieldDefaults(region.fields), ...(region.default ?? {}) };
+  return { ...fieldDefaults(region.fields), ...region.default };
 }
 
 /**
@@ -72,7 +72,7 @@ export function resolveRegion(
     // fields fill anything the stored block predates.
     const blocks = stored.blocks.map((block) => {
       const type = (block as { _type?: unknown })?._type;
-      const def = typeof type === 'string' ? schema.blocks[type] : undefined;
+      const def = typeof type === "string" ? schema.blocks[type] : undefined;
       if (!def || !isPlainObject(block)) return block;
       return deepMerge(fieldDefaults(def.fields), block);
     });
@@ -96,13 +96,13 @@ function deepMerge(base: RegionDocument, over: RegionDocument): RegionDocument {
 }
 
 function isPlainObject(value: unknown): value is RegionDocument {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Serializes a region document for commit: stable key order, trailing newline. */
 export function serializeRegion(document: RegionDocument, meta?: RegionMeta): string {
   const ordered: RegionDocument = {};
-  for (const key of Object.keys(document).sort(machineryLast)) {
+  for (const key of Object.keys(document).toSorted(machineryLast)) {
     ordered[key] = document[key];
   }
   if (meta) ordered._meta = meta;
@@ -114,8 +114,8 @@ export function serializeRegion(document: RegionDocument, meta?: RegionMeta): st
  * keeps human-meaningful content at the top of a diff.
  */
 function machineryLast(a: string, b: string): number {
-  const am = a.startsWith('_');
-  const bm = b.startsWith('_');
+  const am = a.startsWith("_");
+  const bm = b.startsWith("_");
   if (am !== bm) return am ? 1 : -1;
   return a.localeCompare(b);
 }
@@ -123,11 +123,13 @@ function machineryLast(a: string, b: string): number {
 export function parseRegionFile(source: string, file: string): RegionDocument {
   try {
     const parsed: unknown = JSON.parse(source);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('Expected a JSON object.');
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Expected a JSON object.");
     }
     return parsed as RegionDocument;
   } catch (err) {
-    throw new Error(`${file}: could not read region content — ${(err as Error).message}`);
+    throw new Error(`${file}: could not read region content — ${(err as Error).message}`, {
+      cause: err,
+    });
   }
 }

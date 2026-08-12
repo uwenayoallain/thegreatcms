@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "The GreatCMS content standard: schema format, content layout, and validation. Framework and language agnostic.",
   "license": "MIT",
+  "files": [
+    "dist",
+    "json-schema"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,9 +17,8 @@
     },
     "./json-schema": "./json-schema/schema.schema.json"
   },
-  "files": ["dist", "json-schema"],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/gen-json-schema.mjs",
+    "build": "tsdown && node scripts/gen-json-schema.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
@@ -24,8 +27,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
+    "vitest": "^4.1.10",
     "zod-to-json-schema": "^3.25.2"
   }
 }

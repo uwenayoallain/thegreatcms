@@ -33,7 +33,7 @@ export class SpecIssue {
   }
 
   toString(): string {
-    const where = [this.file, this.path].filter(Boolean).join(' › ');
+    const where = [this.file, this.path].filter(Boolean).join(" › ");
     const head = where ? `${where}: ${this.message}` : this.message;
     return this.fix ? `${head}\n  fix: ${this.fix}` : head;
   }
@@ -43,9 +43,9 @@ export class SpecError extends Error {
   readonly issues: readonly SpecIssue[];
 
   constructor(summary: string, issues: readonly SpecIssue[]) {
-    const body = issues.map((i) => `  - ${i.toString().replace(/\n/g, '\n  ')}`).join('\n');
+    const body = issues.map((i) => `  - ${i.toString().replace(/\n/g, "\n  ")}`).join("\n");
     super(issues.length > 0 ? `${summary}\n${body}` : summary);
-    this.name = 'SpecError';
+    this.name = "SpecError";
     this.issues = issues;
   }
 }
@@ -56,7 +56,7 @@ export class IssueBag {
 
   constructor(private readonly file?: string) {}
 
-  add(init: Omit<SpecIssueInit, 'file'> & { file?: string }): void {
+  add(init: Omit<SpecIssueInit, "file"> & { file?: string }): void {
     this.issues.push(new SpecIssue({ file: this.file, ...init }));
   }
 

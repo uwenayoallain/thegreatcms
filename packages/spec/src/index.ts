@@ -6,7 +6,7 @@
  * any language can read those without this package, which is the entire point.
  */
 
-export { SpecError, SpecIssue, IssueBag, type SpecIssueInit } from './errors.js';
+export { SpecError, SpecIssue, IssueBag, type SpecIssueInit } from "./errors.js";
 
 export {
   FIELD_TYPES,
@@ -18,7 +18,7 @@ export {
   type ImageValue,
   type LinkValue,
   type RichTextValue,
-} from './fields.js';
+} from "./fields.js";
 
 export {
   SPEC_VERSION,
@@ -34,9 +34,9 @@ export {
   type ParseSchemaOptions,
   type RegionDef,
   type SingleRegion,
-} from './schema.js';
+} from "./schema.js";
 
-export { ConfigFileSchema, DEFAULT_CONFIG, parseConfig, type CmsConfig } from './config.js';
+export { ConfigFileSchema, DEFAULT_CONFIG, parseConfig, type CmsConfig } from "./config.js";
 
 export {
   collectionEntryPath,
@@ -45,14 +45,14 @@ export {
   regionFilePath,
   regionIdFromPath,
   slugify,
-} from './paths.js';
+} from "./paths.js";
 
 export {
   validateFields,
   validateRegion,
   type ValidateOptions,
   type ValidationResult,
-} from './validate.js';
+} from "./validate.js";
 
 export {
   fieldDefaults,
@@ -62,6 +62,6 @@ export {
   serializeRegion,
   type RegionDocument,
   type RegionMeta,
-} from './content.js';
+} from "./content.js";
 
-export { parseFrontmatter, serializeFrontmatter, type Frontmatter } from './markdown.js';
+export { parseFrontmatter, serializeFrontmatter, type Frontmatter } from "./markdown.js";

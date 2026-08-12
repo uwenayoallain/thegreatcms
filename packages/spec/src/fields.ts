@@ -6,7 +6,7 @@
  * studio can generate an editor and so content can be validated before commit.
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 const common = {
   label: z.string().optional(),
@@ -24,11 +24,11 @@ const selectOption = z.union([
  * and the only way to omit it is to explicitly mark an image decorative, which
  * is a deliberate authoring act rather than an oversight.
  */
-const altPolicy = z.enum(['required', 'decorative-allowed']).default('required');
+const altPolicy = z.enum(["required", "decorative-allowed"]).default("required");
 
 export type FieldDef =
   | {
-      type: 'text';
+      type: "text";
       label?: string;
       description?: string;
       required?: boolean;
@@ -39,7 +39,7 @@ export type FieldDef =
       default?: string;
     }
   | {
-      type: 'richtext';
+      type: "richtext";
       label?: string;
       description?: string;
       required?: boolean;
@@ -47,7 +47,7 @@ export type FieldDef =
       default?: RichTextValue;
     }
   | {
-      type: 'number';
+      type: "number";
       label?: string;
       description?: string;
       required?: boolean;
@@ -57,9 +57,9 @@ export type FieldDef =
       integer?: boolean;
       default?: number;
     }
-  | { type: 'boolean'; label?: string; description?: string; required?: boolean; default?: boolean }
+  | { type: "boolean"; label?: string; description?: string; required?: boolean; default?: boolean }
   | {
-      type: 'select';
+      type: "select";
       label?: string;
       description?: string;
       required?: boolean;
@@ -68,25 +68,25 @@ export type FieldDef =
       default?: string | string[];
     }
   | {
-      type: 'date';
+      type: "date";
       label?: string;
       description?: string;
       required?: boolean;
       time?: boolean;
       default?: string;
     }
-  | { type: 'link'; label?: string; description?: string; required?: boolean; default?: LinkValue }
+  | { type: "link"; label?: string; description?: string; required?: boolean; default?: LinkValue }
   | {
-      type: 'image';
+      type: "image";
       label?: string;
       description?: string;
       required?: boolean;
-      alt?: 'required' | 'decorative-allowed';
+      alt?: "required" | "decorative-allowed";
       accept?: string[];
       default?: ImageValue;
     }
   | {
-      type: 'file';
+      type: "file";
       label?: string;
       description?: string;
       required?: boolean;
@@ -94,7 +94,7 @@ export type FieldDef =
       default?: FileValue;
     }
   | {
-      type: 'list';
+      type: "list";
       label?: string;
       description?: string;
       required?: boolean;
@@ -103,27 +103,27 @@ export type FieldDef =
       max?: number;
     }
   | {
-      type: 'group';
+      type: "group";
       label?: string;
       description?: string;
       required?: boolean;
       fields: Record<string, FieldDef>;
     };
 
-export type FieldType = FieldDef['type'];
+export type FieldType = FieldDef["type"];
 
 export const FIELD_TYPES: readonly FieldType[] = [
-  'text',
-  'richtext',
-  'number',
-  'boolean',
-  'select',
-  'date',
-  'link',
-  'image',
-  'file',
-  'list',
-  'group',
+  "text",
+  "richtext",
+  "number",
+  "boolean",
+  "select",
+  "date",
+  "link",
+  "image",
+  "file",
+  "list",
+  "group",
 ] as const;
 
 /**
@@ -158,10 +158,10 @@ export interface FileValue {
 }
 
 export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
-  z.discriminatedUnion('type', [
+  z.discriminatedUnion("type", [
     z.object({
       ...common,
-      type: z.literal('text'),
+      type: z.literal("text"),
       min: z.number().int().nonnegative().optional(),
       max: z.number().int().positive().optional(),
       pattern: z.string().optional(),
@@ -170,36 +170,36 @@ export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
     }),
     z.object({
       ...common,
-      type: z.literal('richtext'),
+      type: z.literal("richtext"),
       allow: z.array(z.string()).optional(),
       default: z.object({ html: z.string(), _ast: z.unknown().optional() }).optional(),
     }),
     z.object({
       ...common,
-      type: z.literal('number'),
+      type: z.literal("number"),
       min: z.number().optional(),
       max: z.number().optional(),
       step: z.number().positive().optional(),
       integer: z.boolean().optional(),
       default: z.number().optional(),
     }),
-    z.object({ ...common, type: z.literal('boolean'), default: z.boolean().optional() }),
+    z.object({ ...common, type: z.literal("boolean"), default: z.boolean().optional() }),
     z.object({
       ...common,
-      type: z.literal('select'),
+      type: z.literal("select"),
       options: z.array(selectOption).min(1),
       multiple: z.boolean().optional(),
       default: z.union([z.string(), z.array(z.string())]).optional(),
     }),
     z.object({
       ...common,
-      type: z.literal('date'),
+      type: z.literal("date"),
       time: z.boolean().optional(),
       default: z.string().optional(),
     }),
     z.object({
       ...common,
-      type: z.literal('link'),
+      type: z.literal("link"),
       default: z
         .object({
           href: z.string(),
@@ -210,7 +210,7 @@ export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
     }),
     z.object({
       ...common,
-      type: z.literal('image'),
+      type: z.literal("image"),
       alt: altPolicy,
       accept: z.array(z.string()).optional(),
       default: z
@@ -224,7 +224,7 @@ export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
     }),
     z.object({
       ...common,
-      type: z.literal('file'),
+      type: z.literal("file"),
       accept: z.array(z.string()).optional(),
       default: z
         .object({
@@ -236,25 +236,25 @@ export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
     }),
     z.object({
       ...common,
-      type: z.literal('list'),
+      type: z.literal("list"),
       of: FieldDefSchema,
       min: z.number().int().nonnegative().optional(),
       max: z.number().int().positive().optional(),
     }),
     z.object({
       ...common,
-      type: z.literal('group'),
+      type: z.literal("group"),
       fields: z.record(FieldDefSchema),
     }),
   ]),
 ) as z.ZodType<FieldDef>;
 
 /** Normalizes `options` to the object form so consumers handle one shape. */
-export function selectOptions(field: Extract<FieldDef, { type: 'select' }>): Array<{
+export function selectOptions(field: Extract<FieldDef, { type: "select" }>): Array<{
   value: string;
   label: string;
 }> {
   return field.options.map((o) =>
-    typeof o === 'string' ? { value: o, label: o } : { value: o.value, label: o.label ?? o.value },
+    typeof o === "string" ? { value: o, label: o } : { value: o.value, label: o.label ?? o.value },
   );
 }
