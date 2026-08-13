@@ -231,6 +231,25 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
     );
   }
 
+  if (["astro", "nuxt", "sveltekit"].includes(answers.framework.id)) {
+    lines.push(
+      "Add the dev-time watcher, so editing content reloads your dev server:",
+      "",
+      indent(
+        [
+          `// ${answers.framework.id === "astro" ? "astro.config.mjs" : "vite config"}`,
+          'import { greatcmsWatch } from "@greatcms/reader/vite";',
+          "",
+          "vite: { plugins: [greatcmsWatch()] }",
+        ].join("\n"),
+      ),
+      "",
+      "Without it the files change and the page does not, because the reader uses",
+      "the filesystem and Vite has no way to know.",
+      "",
+    );
+  }
+
   lines.push(
     "Then:",
     "  1. Commit .cms/ — the schema is part of your site, and reviewable in PRs.",

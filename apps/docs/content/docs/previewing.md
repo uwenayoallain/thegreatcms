@@ -4,6 +4,23 @@ summary: Your CI builds it, or your laptop does. Never our server.
 order: 40
 ---
 
+## In your own dev server
+
+Point a local site at your dev server's URL and the editor shows your real
+components beside the form. Publishing writes the files, your dev server
+reloads, and the pane updates — usually within a couple of seconds.
+
+For a Vite-based site this needs one plugin:
+
+```js
+import { greatcmsWatch } from "@greatcms/reader/vite";
+export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
+```
+
+The reader reads content with the filesystem, which is what keeps it
+framework-neutral, and it also means Vite has no idea those files are
+dependencies. Without the watcher the file changes and the page does not.
+
 ## As you type
 
 The editor shows a live preview of the content in the form — before any save,

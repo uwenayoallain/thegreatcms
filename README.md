@@ -112,6 +112,18 @@ build, updating as soon as your dev server reloads.
 **A GitHub repository.** Publishing commits over the API and your pipeline
 deploys it, as below.
 
+For a Vite-based site, add the dev-time watcher so an edit reloads the page:
+
+```js
+import { greatcmsWatch } from "@greatcms/reader/vite";
+export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
+```
+
+The reader uses the filesystem on purpose — that is what keeps it
+framework-neutral — which also means Vite cannot know a content file is a
+dependency. Without the watcher the file changes and the page does not, which is
+worse than an error because it looks like nothing happened.
+
 The studio needs exactly seven operations from a repository, and nothing about
 them is specific to GitHub — which is why a folder works without a second code
 path through the editor, the validation, or the publish.

@@ -1,8 +1,11 @@
+import { greatcmsWatch } from "@greatcms/reader/vite";
 import { defineConfig } from "astro/config";
 
-// The docs site is managed by GreatCMS itself, and reads its content the same
-// way any other site does: a function call at build time, no integration.
+// Nothing CMS-specific in the build: managed content is read with a plain
+// function call. The one dev-time addition is a watcher — the reader uses `fs`,
+// so Vite would not otherwise know that editing content should reload the page.
 export default defineConfig({
   site: "https://greatcms.dev",
   build: { format: "directory" },
+  vite: { plugins: [greatcmsWatch({ root: new URL(".", import.meta.url).pathname })] },
 });
