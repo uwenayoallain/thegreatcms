@@ -63,7 +63,15 @@ function fakeGitHub() {
     if (method === "GET" && pathname.includes("/contents/")) {
       const path = decodeURIComponent(pathname.split("/contents/")[1] ?? "");
       const content = files.get(path);
-      if (content === undefined) return json({ message: "Not Found" }, 404);
+
+      if (content === undefined) {
+        // A directory listing, the way the contents API answers one.
+        const children = [...files.keys()].filter((key) => key.startsWith(`${path}/`));
+        if (children.length > 0) {
+          return json(children.map((key) => ({ path: key, type: "file" })));
+        }
+        return json({ message: "Not Found" }, 404);
+      }
       return json({
         type: "file",
         sha: `sha-${path}`,
@@ -759,5 +767,122 @@ describe("uploading an image", () => {
     const fileInput = document.querySelector<HTMLInputElement>('input[name="m[image]"]');
     expect(fileInput?.type).toBe("file");
     expect(document.querySelector(`label[for="${fileInput?.id}"]`)).toBeTruthy();
+  });
+});
+
+describe("editing a collection", () => {
+  it("lists entries from the repository", async () => {
+    github.files.set(
+      "content/blog/first-post.md",
+      "---\ntitle: First post\ndate: 2026-08-01\n---\n\nHello.\n",
+    );
+    github.files.set(
+      "content/blog/second-post.md",
+      "---\ntitle: Second post\ndate: 2026-08-02\n---\n\nAgain.\n",
+    );
+
+    const response = await get("/sites/site-1/collections/blog");
+    expect(response.status).toBe(200);
+
+    const body = await response.text();
+    expect(body).toContain("First post");
+    expect(body).toContain("Second post");
+  });
+
+  it("opens an entry with its stored values in the form", async () => {
+    github.files.set(
+      "content/blog/first-post.md",
+      "---\ntitle: First post\ndate: 2026-08-01\n---\n\nThe body text.\n",
+    );
+
+    const { document } = new JSDOM(
+      await (await get("/sites/site-1/collections/blog/first-post")).text(),
+    ).window;
+
+    expect(document.querySelector<HTMLInputElement>('input[name="f[title]"]')?.value).toBe(
+      "First post",
+    );
+    // The Markdown body is a normal field as far as the editor is concerned.
+    expect(document.querySelector("textarea")?.textContent).toContain("The body text.");
+  });
+
+  it("publishes a new entry as Markdown with frontmatter", async () => {
+    const response = await post("/sites/site-1/collections/blog/new", {
+      headSha: "head-1",
+      "f[title]": "A brand new post",
+      "f[date]": "2026-08-13",
+      "f[content]": "Some words in the body.",
+    });
+
+    expect(response.status).toBe(200);
+    expect(github.commits).toHaveLength(1);
+
+    const file = github.commits[0]?.files[0];
+    // The file name is derived from the title via the schema's slug field.
+    expect(file?.path).toBe("content/blog/a-brand-new-post.md");
+    expect(file?.content).toMatch(/^---\n/);
+    expect(file?.content).toContain("title: A brand new post");
+    expect(file?.content).toContain("Some words in the body.");
+    // The body lives in the body, not duplicated into frontmatter.
+    expect(file?.content).not.toContain("content: Some words");
+  });
+
+  it("keeps an existing entry's file name when its title changes", async () => {
+    github.files.set(
+      "content/blog/first-post.md",
+      "---\ntitle: First post\ndate: 2026-08-01\n---\n\nBody.\n",
+    );
+
+    await post("/sites/site-1/collections/blog/first-post", {
+      headSha: "head-1",
+      "f[title]": "A completely different title",
+      "f[date]": "2026-08-01",
+      "f[content]": "Body.",
+    });
+
+    // Renaming a title must not orphan a published URL.
+    expect(github.commits[0]?.files[0]?.path).toBe("content/blog/first-post.md");
+  });
+
+  it("refuses an invalid entry, naming the field", async () => {
+    const response = await post("/sites/site-1/collections/blog/new", {
+      headSha: "head-1",
+      "f[title]": "",
+      "f[date]": "2026-08-13",
+    });
+
+    expect(response.status).toBe(422);
+    expect(github.commits).toHaveLength(0);
+    expect(await response.text()).toContain("not valid yet");
+  });
+
+  it("deletes an entry in one commit", async () => {
+    github.files.set("content/blog/first-post.md", "---\ntitle: First post\n---\n\nBody.\n");
+
+    const response = await app.request("/sites/site-1/collections/blog/first-post/delete", {
+      method: "POST",
+      headers: signedIn,
+    });
+
+    expect(response.status).toBe(303);
+    expect(github.commits[0]?.files).toEqual([{ path: "content/blog/first-post.md", content: "" }]);
+  });
+
+  it("links collections from the site page, so they are findable", async () => {
+    const body = await (await get("/sites/site-1")).text();
+    expect(body).toContain("/sites/site-1/collections/blog");
+  });
+
+  it("has no axe violations on the entry form", async () => {
+    github.files.set("content/blog/first-post.md", "---\ntitle: First post\n---\n\nBody.\n");
+    const response = await get("/sites/site-1/collections/blog/first-post");
+    const { window } = new JSDOM(await response.text(), { url: "https://studio.test/" });
+    Object.assign(globalThis, { window, document: window.document, Node: window.Node });
+
+    const results = await axe.run(window.document.documentElement, {
+      resultTypes: ["violations"],
+      rules: { "color-contrast": { enabled: false } },
+    });
+    expect(results.violations.map((v) => v.id)).toEqual([]);
   });
 });

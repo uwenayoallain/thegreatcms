@@ -8,7 +8,12 @@
  */
 
 import { ConflictError, GitHubError } from "@greatcms/git";
-import { isBlocksRegion, type RegionDocument, validateRegion } from "@greatcms/spec";
+import {
+  isBlocksRegion,
+  type RegionDocument,
+  validateFields,
+  validateRegion,
+} from "@greatcms/spec";
 import { Hono } from "hono";
 import {
   checkPassword,
@@ -33,6 +38,8 @@ import { SiteClient, SiteNotConfiguredError, type SiteContext } from "./sites.js
 import { errorsByPath } from "./views/fields.js";
 import { page } from "./views/layout.js";
 import {
+  collectionPage,
+  editEntryPage,
   editRegionPage,
   inboxPage,
   newSitePage,
@@ -245,6 +252,195 @@ export function createApp(options: AppOptions) {
   app.post("/sites/:id/delete", (c) => {
     store.removeSite(c.req.param("id"));
     return c.redirect("/", 303);
+  });
+
+  /**
+   * Collections are edited with the same generated forms and the same
+   * validation as regions; only the file they land in differs. Keeping one
+   * editing path means a Markdown blog post gets the same alt-text enforcement
+   * and the same atomic publish as a hero section.
+   */
+  app.get("/sites/:id/collections/:name", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const name = c.req.param("name");
+
+    try {
+      const client = clientFor(site);
+      const context = await client.context();
+      const collection = context.schema.collections[name];
+      if (!collection) return c.notFound();
+
+      const entries = await client.listEntries(context, name);
+      return c.html(
+        collectionPage({
+          site,
+          name,
+          label: collection.label ?? name,
+          entries: entries.map((entry) => ({
+            slug: entry.slug,
+            title: String(entry.data.title ?? entry.slug),
+            summary: entry.data.summary as string | undefined,
+          })),
+        }),
+      );
+    } catch (error) {
+      return c.html(errorPage(site.name, describeError(error)), 502);
+    }
+  });
+
+  app.get("/sites/:id/collections/:name/:slug", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const name = c.req.param("name");
+    const slug = c.req.param("slug");
+
+    try {
+      const client = clientFor(site);
+      const context = await client.context();
+      const collection = context.schema.collections[name];
+      if (!collection) return c.notFound();
+
+      const entry = slug === "new" ? null : await client.readEntry(context, name, slug);
+      if (slug !== "new" && !entry) return c.notFound();
+
+      return c.html(
+        editEntryPage({
+          site,
+          name,
+          label: collection.label ?? name,
+          slug: entry?.slug ?? null,
+          fields: collection.fields,
+          document: client.entryDocument(context, name, entry),
+          errors: new Map(),
+          headSha: context.headSha,
+        }),
+      );
+    } catch (error) {
+      return c.html(errorPage(site.name, describeError(error)), 502);
+    }
+  });
+
+  app.post("/sites/:id/collections/:name/:slug/delete", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const name = c.req.param("name");
+    const slug = c.req.param("slug");
+
+    try {
+      const client = clientFor(site);
+      const context = await client.context();
+      const entry = await client.readEntry(context, name, slug);
+      if (!entry) return c.notFound();
+
+      await client.deleteEntry({ context, name, slug, actor: c.get("actor") });
+      return c.redirect(`/sites/${site.id}/collections/${name}`, 303);
+    } catch (error) {
+      return c.html(errorPage(site.name, describeError(error)), 502);
+    }
+  });
+
+  app.post("/sites/:id/collections/:name/:slug", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const name = c.req.param("name");
+    const requested = c.req.param("slug");
+    const actor = c.get("actor");
+
+    const client = clientFor(site);
+    let context: SiteContext;
+    try {
+      context = await client.context();
+    } catch (error) {
+      return c.html(errorPage(site.name, describeError(error)), 502);
+    }
+
+    const collection = context.schema.collections[name];
+    if (!collection) return c.notFound();
+
+    const form = await c.req.formData();
+    const entries: Array<[string, string]> = [...form.entries()].map(
+      ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
+    );
+    const headSha = String(form.get("headSha") ?? "");
+    const document = decodeForm(entries, collection.fields);
+
+    const validation = validateFields(collection.fields, document, { strict: false });
+    if (!validation.ok) {
+      return c.html(
+        editEntryPage({
+          site,
+          name,
+          label: collection.label ?? name,
+          slug: requested === "new" ? null : requested,
+          fields: collection.fields,
+          document,
+          errors: errorsByPath(validation.issues),
+          headSha,
+          flash: {
+            kind: "error",
+            message: "Nothing was published — this entry is not valid yet.",
+            detail: validation.issues.map((issue) => issue.toString()),
+          },
+        }),
+        422,
+      );
+    }
+
+    // A new entry takes its file name from the slug field; an existing one keeps
+    // the name it has, so renaming a title never orphans a published URL.
+    const slug = requested === "new" ? client.entrySlug(context, name, document) : requested;
+
+    try {
+      const result = await client.publishEntry({
+        context,
+        name,
+        slug,
+        document,
+        actor,
+        expectedHeadSha: requested === "new" ? undefined : headSha || undefined,
+      });
+
+      store.recordPublish({
+        siteId: site.id,
+        regionId: `${name}/${slug}`,
+        commitSha: result.commitSha,
+        commitUrl: result.url,
+        actor,
+      });
+
+      return c.html(
+        editEntryPage({
+          site,
+          name,
+          label: collection.label ?? name,
+          slug,
+          fields: collection.fields,
+          document,
+          errors: new Map(),
+          headSha: result.commitSha,
+          flash: {
+            kind: "success",
+            message: `Published as ${result.commitSha.slice(0, 7)}.`,
+          },
+        }),
+      );
+    } catch (error) {
+      return c.html(
+        editEntryPage({
+          site,
+          name,
+          label: collection.label ?? name,
+          slug: requested === "new" ? null : slug,
+          fields: collection.fields,
+          document,
+          errors: new Map(),
+          headSha,
+          flash: { kind: "error", message: describeError(error) },
+        }),
+        error instanceof ConflictError ? 409 : 502,
+      );
+    }
   });
 
   app.get("/sites/:id/regions/:regionId", async (c) => {

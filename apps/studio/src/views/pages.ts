@@ -1,4 +1,4 @@
-import type { CmsSchema, RegionDef } from "@greatcms/spec";
+import type { CmsSchema, FieldDef, RegionDef } from "@greatcms/spec";
 import { isBlocksRegion } from "@greatcms/spec";
 import { html } from "hono/html";
 import type { Publish, Site, Submission } from "../db.js";
@@ -205,6 +205,27 @@ export function sitePage(
         )}
       </ul>
 
+      ${
+        Object.keys(schema.collections).length > 0
+          ? html`
+              <h2>Collections</h2>
+              <ul class="cards">
+                ${Object.entries(schema.collections).map(
+                  ([name, collection]) => html`
+                    <li class="card">
+                      <h3>
+                        <a href="/sites/${site.id}/collections/${name}">
+                          ${collection.label ?? name}
+                        </a>
+                      </h3>
+                      <p><code>${collection.path}</code> · ${collection.format}</p>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `
+          : ""
+      }
       ${
         publishes.length > 0
           ? html`
@@ -552,6 +573,138 @@ export function inboxPage(options: {
           Export as CSV
         </a>
       </div>
+    `,
+  );
+}
+
+export function collectionPage(options: {
+  site: Site;
+  name: string;
+  label: string;
+  entries: Array<{ slug: string; title: string; summary?: string }>;
+  flash?: PageOptions["flash"];
+}): string {
+  const { site, name, label, entries, flash } = options;
+
+  return page(
+    {
+      title: label,
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: `/sites/${site.id}`, label: site.name },
+        { href: `/sites/${site.id}/collections/${name}`, label },
+      ],
+      flash,
+    },
+    html`
+      <h1>${label}</h1>
+      <p class="muted">
+        Stored as Markdown in <code>${site.owner}/${site.repo}</code>. Each entry is a file.
+      </p>
+
+      ${
+        entries.length === 0
+          ? html`<p class="muted">No entries yet.</p>`
+          : html`
+              <ul class="cards">
+                ${entries.map(
+                  (entry) => html`
+                    <li class="card">
+                      <h2>
+                        <a href="/sites/${site.id}/collections/${name}/${entry.slug}"
+                          >${entry.title}</a
+                        >
+                      </h2>
+                      <p>
+                        <code>${entry.slug}</code>${entry.summary ? html` · ${entry.summary}` : ""}
+                      </p>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `
+      }
+
+      <div class="actions">
+        <a class="button" href="/sites/${site.id}/collections/${name}/new">New entry</a>
+        <a class="button secondary" href="/sites/${site.id}">Back to site</a>
+      </div>
+    `,
+  );
+}
+
+export function editEntryPage(options: {
+  site: Site;
+  name: string;
+  label: string;
+  slug: string | null;
+  fields: Record<string, FieldDef>;
+  document: Record<string, unknown>;
+  errors: ErrorsByPath;
+  headSha: string;
+  flash?: PageOptions["flash"];
+  pullRequest?: { number: number; url: string; title: string; fromModel: boolean };
+}): string {
+  const { site, name, label, slug, fields, document, errors, headSha, flash, pullRequest } =
+    options;
+  const title = slug ? `${label}: ${slug}` : `New ${label} entry`;
+  const action = `/sites/${site.id}/collections/${name}/${slug ?? "new"}`;
+
+  return page(
+    {
+      title,
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: `/sites/${site.id}`, label: site.name },
+        { href: `/sites/${site.id}/collections/${name}`, label },
+        { href: action, label: slug ?? "New entry" },
+      ],
+      flash,
+    },
+    html`
+      <h1>${slug ?? `New ${label} entry`}</h1>
+      <p class="muted">
+        ${
+          slug
+            ? html`Editing an existing entry. The file name stays <code>${slug}</code>.`
+            : html`The file name is derived from this entry's title when you save it.`
+        }
+      </p>
+
+      ${
+        pullRequest
+          ? html`
+              <section class="card" aria-labelledby="pr">
+                <h2 id="pr">Pull request #${pullRequest.number}</h2>
+                <p><a href="${pullRequest.url}">${pullRequest.title}</a></p>
+              </section>
+            `
+          : ""
+      }
+
+      <form method="POST" action="${action}" enctype="multipart/form-data">
+        <input type="hidden" name="headSha" value="${headSha}" />
+        ${renderFields(fields, document, errors)}
+
+        <div class="actions">
+          <button type="submit" name="action" value="publish">
+            ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
+          </button>
+          <a class="button secondary" href="/sites/${site.id}/collections/${name}">Cancel</a>
+        </div>
+      </form>
+
+      ${
+        slug
+          ? html`
+              <h2>Delete</h2>
+              <form method="POST" action="${action}/delete">
+                <p class="muted">Removes <code>${slug}</code> from the repository in one commit.</p>
+                <button class="danger" type="submit">Delete this entry</button>
+              </form>
+            `
+          : ""
+      }
     `,
   );
 }

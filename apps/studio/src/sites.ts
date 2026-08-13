@@ -10,9 +10,15 @@
 import { GitHubClient, type CommitResult, type PullRequest } from "@greatcms/git";
 import type { FileChange } from "@greatcms/git";
 import {
+  collectionEntryPath,
   DEFAULT_CONFIG,
+  parseFrontmatter,
+  serializeFrontmatter,
+  slugify,
+  type CollectionDef,
   type CmsConfig,
   type CmsSchema,
+  fieldDefaults,
   parseConfig,
   parseRegionFile,
   parseSchema,
@@ -25,6 +31,13 @@ import type { Site } from "./db.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
+
+export interface CollectionEntry {
+  slug: string;
+  /** Repo-relative path of the entry. */
+  path: string;
+  data: RegionDocument;
+}
 
 export interface SiteContext {
   schema: CmsSchema;
@@ -91,6 +104,154 @@ export class SiteClient {
   async resolvedRegion(context: SiteContext, regionId: string): Promise<RegionDocument> {
     const stored = await this.readRegion(context, regionId);
     return resolveRegion(context.schema, regionId, stored) ?? {};
+  }
+
+  /**
+   * Entries in a collection, newest-looking first. Listing costs one request
+   * plus one per entry, run together — a blog with thirty posts is one round
+   * trip's latency, not thirty.
+   */
+  async listEntries(context: SiteContext, name: string): Promise<CollectionEntry[]> {
+    const collection = this.collection(context, name);
+    const paths = await this.github.listDirectory(this.repo, collection.path, this.site.branch);
+    const extension = collection.format === "markdown" ? ".md" : ".json";
+
+    const entries = await Promise.all(
+      paths
+        .filter((path) => path.endsWith(extension))
+        .map(async (path) => {
+          const file = await this.github.getFile(this.repo, path, this.site.branch);
+          if (!file) return null;
+          return this.parseEntry(collection, path, file.content);
+        }),
+    );
+
+    return entries
+      .filter((entry): entry is CollectionEntry => entry !== null)
+      .toSorted(
+        (a, b) =>
+          String(b.data.date ?? "").localeCompare(String(a.data.date ?? "")) ||
+          a.slug.localeCompare(b.slug),
+      );
+  }
+
+  async readEntry(
+    context: SiteContext,
+    name: string,
+    slug: string,
+  ): Promise<CollectionEntry | null> {
+    const collection = this.collection(context, name);
+    const path = collectionEntryPath(context.config, collection, slug);
+    const file = await this.github.getFile(this.repo, path, this.site.branch);
+    return file ? this.parseEntry(collection, path, file.content) : null;
+  }
+
+  /** The document an editor sees: stored values over schema defaults. */
+  entryDocument(context: SiteContext, name: string, entry: CollectionEntry | null): RegionDocument {
+    const collection = this.collection(context, name);
+    const defaults = fieldDefaults(collection.fields);
+    return { ...defaults, ...entry?.data };
+  }
+
+  /** Derives the file name for a new entry from its slug field. */
+  entrySlug(context: SiteContext, name: string, document: RegionDocument): string {
+    const collection = this.collection(context, name);
+    const source = collection.slug ? document[collection.slug] : undefined;
+    return slugify(String(source ?? document.title ?? "untitled"));
+  }
+
+  entryFile(
+    context: SiteContext,
+    name: string,
+    slug: string,
+    document: RegionDocument,
+  ): {
+    path: string;
+    content: string;
+  } {
+    const collection = this.collection(context, name);
+    const path = collectionEntryPath(context.config, collection, slug);
+
+    if (collection.format === "json") {
+      return { path, content: `${JSON.stringify(document, null, 2)}\n` };
+    }
+
+    // The body field is stored as the Markdown body rather than frontmatter,
+    // which is what every static site generator already expects to read.
+    const data = { ...document };
+    let body = "";
+    if (collection.body) {
+      const value = data[collection.body];
+      body = typeof value === "string" ? value : String((value as { html?: string })?.html ?? "");
+      delete data[collection.body];
+    }
+    return { path, content: serializeFrontmatter(data, body) };
+  }
+
+  collection(context: SiteContext, name: string): CollectionDef {
+    const collection = context.schema.collections[name];
+    if (!collection) {
+      throw new Error(
+        `Unknown collection "${name}".\n  fix: add it under \`collections:\` in .cms/schema.yaml.`,
+      );
+    }
+    return collection;
+  }
+
+  private parseEntry(collection: CollectionDef, path: string, source: string): CollectionEntry {
+    const slug =
+      path
+        .split("/")
+        .pop()
+        ?.replace(/\.(md|json)$/, "") ?? path;
+
+    if (collection.format === "json") {
+      return { slug, path, data: JSON.parse(source) as RegionDocument };
+    }
+
+    const { data, body } = parseFrontmatter(source, path);
+    if (collection.body) {
+      // The body field carries the value shape its type declares: a richtext
+      // field is an object, a text field is a string. Storing a bare string in
+      // a richtext field would render an empty editor and fail validation.
+      const field = collection.fields[collection.body];
+      data[collection.body] = field?.type === "richtext" ? { html: body.trim() } : body.trim();
+    }
+    return { slug, path, data };
+  }
+
+  async publishEntry(options: {
+    context: SiteContext;
+    name: string;
+    slug: string;
+    document: RegionDocument;
+    actor?: string;
+    expectedHeadSha?: string;
+  }): Promise<CommitResult> {
+    const { context, name, slug, document, expectedHeadSha } = options;
+    const file = this.entryFile(context, name, slug, document);
+
+    return this.github.commitFiles(this.repo, {
+      branch: this.site.branch,
+      message: context.config.publish.commitMessage.replace("{summary}", `${name}/${slug}`),
+      files: [file],
+      expectedHeadSha,
+    });
+  }
+
+  async deleteEntry(options: {
+    context: SiteContext;
+    name: string;
+    slug: string;
+    actor?: string;
+  }): Promise<CommitResult> {
+    const { context, name, slug } = options;
+    const collection = this.collection(context, name);
+    return this.github.commitFiles(this.repo, {
+      branch: this.site.branch,
+      message: `content: remove ${name}/${slug}`,
+      files: [{ path: collectionEntryPath(context.config, collection, slug), delete: true }],
+    });
   }
 
   /**
