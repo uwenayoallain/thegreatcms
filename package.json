@@ -10,7 +10,9 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "check": "oxlint && oxfmt --check . && turbo run typecheck test"
+    "check": "oxlint && oxfmt --check . && node scripts/gen-agent-docs.mjs --check && turbo run typecheck test",
+    "docs:check": "node scripts/gen-agent-docs.mjs --check",
+    "docs:build": "node scripts/gen-agent-docs.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

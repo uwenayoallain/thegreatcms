@@ -34,6 +34,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The agent-readable docs are generated from SPEC.md and README.md, so a
+      # docs change that never regenerates them would quietly ship a stale copy.
+      - name: Agent docs are current
+        run: pnpm docs:check
+
       - name: Test (includes the accessibility gate)
         run: pnpm test
 

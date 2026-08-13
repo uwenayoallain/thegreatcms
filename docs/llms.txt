@@ -1,0 +1,33 @@
+# GreatCMS
+
+> GreatCMS is a Git-backed CMS for sites that should not depend on one at runtime.
+> It manages only the regions of a page you opt in; everything else stays hand-written code.
+> Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.
+> 
+> It is not a framework plugin. The integration surface is a schema file and some JSON, so Astro,
+> Hugo, Eleventy, Next, Jekyll, Laravel, or a hand-rolled Go generator all consume it identically.
+> If you are an agent wiring a site up to it, read the standard below and write files — there is no
+> SDK to install and no runtime to call.
+
+## Docs
+
+- [The GreatCMS Content Standard](https://greatcms.dev/spec): The file format a site must contain to be managed: schema, content layout, and resolution rules. This document is the product.
+  - Markdown: https://greatcms.dev/spec.md
+- [GreatCMS Overview](https://greatcms.dev/): What GreatCMS is, what it deliberately does not do, and the design decisions behind it.
+  - Markdown: https://greatcms.dev/index.md
+
+## Machine-readable entrypoints
+
+- [docs.json](https://greatcms.dev/docs.json)
+- [llms-full.txt](https://greatcms.dev/llms-full.txt) — every document above in one fetch
+- [schema.schema.json](https://greatcms.dev/json-schema/schema.schema.json) — JSON Schema for .cms/schema.yaml
+- [config.schema.json](https://greatcms.dev/json-schema/config.schema.json) — JSON Schema for .cms/config.yaml
+
+## Conformance
+
+A reader is correct if it reproduces the fixture site's resolved documents:
+
+```sh
+npx @greatcms/conformance fixtures        # path to the fixture site
+npx @greatcms/conformance verify ./out    # ./out holds <region-id>.json dumps
+```

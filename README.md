@@ -30,7 +30,7 @@ site land in one inbox.
 | ✅ **M2** Studio        | Auth, multi-site registry, schema-generated editor, atomic publishes         |
 | ✅ **M3** Preview       | Draft branch + your own CI, iframed                                          |
 | ⬜ **M4** Dynamic layer | Forms, comments, inbox, email                                                |
-| ⬜ **M5** Hardening     | Full a11y pass, perf budgets, CLI, docs                                      |
+| 🔄 **M5** Hardening     | a11y gates, perf budgets, CLI, agent docs                                    |
 
 ## What's here
 
@@ -250,6 +250,22 @@ is an error — failing loudly beats quietly rendering empty regions.
 Git Data API, so a region and its images land together or not at all. Repeated
 `PUT /contents` calls can half-apply, and half-applied content is how `main`
 stops building.
+
+## For agents
+
+The docs are published in a form a coding agent can consume in one fetch, since
+"integrate from SPEC.md in half an hour" should be true for tools as well as
+people:
+
+```
+/llms.txt        index and integration summary
+/llms-full.txt   every document in one file
+/docs.json       manifest, with agentEntrypoints and the integration steps
+```
+
+They are generated from `SPEC.md` and `README.md` by `pnpm run docs:build`, and
+CI fails if they drift. [AGENTS.md](./AGENTS.md) covers working _on_ GreatCMS —
+the invariants that are design decisions rather than implementation details.
 
 ## Licence
 

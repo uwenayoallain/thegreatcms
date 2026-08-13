@@ -6,7 +6,7 @@
  * it fails the build — accessibility is a gate here, not a checklist.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import axe from "axe-core";
 import { JSDOM } from "jsdom";
@@ -92,5 +92,51 @@ describe("the contact form", () => {
     const trap = document.querySelector(".trap");
     expect(trap?.getAttribute("aria-hidden")).toBe("true");
     expect(trap?.querySelector("input")?.getAttribute("tabindex")).toBe("-1");
+  });
+});
+
+/**
+ * Performance budget.
+ *
+ * "Resource efficient" decays silently unless something fails when it stops
+ * being true. These numbers are generous against today's output (~50 KB total)
+ * and exist to catch a regression — a font, an analytics snippet, a framework
+ * island — not to police every byte.
+ */
+function walk(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+  );
+}
+
+const kilobytes = (files: string[]) =>
+  files.reduce((total, file) => total + statSync(file).size, 0) / 1024;
+
+describe("weight", () => {
+  const BUDGETS = {
+    totalKb: 120,
+    htmlKb: 20,
+    cssKb: 20,
+  };
+
+  it("keeps the whole site under budget", () => {
+    const total = kilobytes(walk(DIST));
+    expect(total, `${total.toFixed(1)} KB total`).toBeLessThan(BUDGETS.totalKb);
+  });
+
+  it("keeps each page's HTML small", () => {
+    for (const page of PAGES) {
+      const size = statSync(join(DIST, page.file)).size / 1024;
+      expect(size, `${page.name} is ${size.toFixed(1)} KB`).toBeLessThan(BUDGETS.htmlKb);
+    }
+  });
+
+  it("ships one small stylesheet, and no JavaScript at all", () => {
+    const files = walk(DIST);
+    const css = files.filter((file) => file.endsWith(".css"));
+    const js = files.filter((file) => file.endsWith(".js") || file.endsWith(".mjs"));
+
+    expect(js).toEqual([]);
+    expect(kilobytes(css)).toBeLessThan(BUDGETS.cssKb);
   });
 });
