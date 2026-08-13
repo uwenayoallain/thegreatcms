@@ -149,13 +149,22 @@ required — uploading does not bypass validation.
 
 ## Previewing a draft
 
-Two ways, and neither runs your code on our server.
+Three ways, at three speeds. None of them runs your code on our server.
+
+**As you type.** The editor has a live preview pane that renders the content
+currently in the form — before any save, commit, or branch. It updates while you
+type, flags an image with no alt text where you will actually see it, and needs
+nothing from your site. The layout is the studio's, not yours: it shows the
+content, honestly labelled as such. Without JavaScript it becomes a button that
+renders the same preview in a new tab.
+
+The other two build your real site.
 
 **Your CI builds it.** "Save draft & preview" commits to `cms/draft-<region>`;
 set `preview.urlTemplate` in `.cms/config.yaml` and the studio iframes the
 resulting URL.
 
-**Or your own dev server builds it, right now:**
+**Or your own dev server builds it:**
 
 ```bash
 npx greatcms preview --branch cms/draft-home.hero --run "npm run dev"

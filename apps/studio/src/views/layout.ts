@@ -25,13 +25,15 @@ export interface PageOptions {
    * so no other page pays for the bundle.
    */
   editor?: boolean;
+  /** Load the live preview enhancement. */
+  livePreview?: boolean;
 }
 
 export function page(
   options: PageOptions,
   body: HtmlEscapedString | Promise<HtmlEscapedString> | string,
 ): string {
-  const { title, crumbs = [], flash, editor = false } = options;
+  const { title, crumbs = [], flash, editor = false, livePreview = false } = options;
 
   return `<!doctype html>${html`
     <html lang="en">
@@ -101,6 +103,7 @@ export function page(
           ${body}
         </main>
         ${editor ? html`<script type="module" src="/assets/editor.js"></script>` : ""}
+        ${livePreview ? html`<script type="module" src="/assets/preview.js"></script>` : ""}
       </body>
     </html>
   `}`;
@@ -161,6 +164,13 @@ body {
 .crumbs { padding: .75rem 1.25rem 0; }
 .crumbs ol { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; margin: 0; padding: 0; font-size: .9rem; color: var(--ink-soft); }
 .crumbs li + li::before { content: "/"; margin-right: .5rem; color: var(--line); }
+.split { display: grid; gap: 1.75rem; align-items: start; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 68rem) { .split { grid-template-columns: minmax(0, 1fr) minmax(0, 26rem); } main { max-width: 84rem; } }
+.live { position: sticky; top: 1rem; }
+.live-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .5rem; }
+.live-bar h2 { margin: 0; font-size: 1rem; }
+.live-bar p { margin: 0; font-size: .8rem; }
+.live-frame { width: 100%; height: 30rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); }
 main { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 h1 { font-size: 1.6rem; margin: .25rem 0 1rem; letter-spacing: -.02em; }
 h2 { font-size: 1.15rem; margin: 2rem 0 .75rem; }

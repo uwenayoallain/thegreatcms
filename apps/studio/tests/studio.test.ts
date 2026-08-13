@@ -465,10 +465,14 @@ describe("accessibility", () => {
 
   it("loads the visual editor only where there is rich text to edit", async () => {
     // home.hero has no richtext field; home.body allows a block that does.
-    expect(await (await get("/sites/site-1/regions/home.hero")).text()).not.toMatch(/<script/i);
-    expect(await (await get("/sites/site-1/regions/home.body")).text()).toContain(
-      "/assets/editor.js",
-    );
+    const plain = await (await get("/sites/site-1/regions/home.hero")).text();
+    const rich = await (await get("/sites/site-1/regions/home.body")).text();
+
+    expect(plain).not.toContain("/assets/editor.js");
+    expect(rich).toContain("/assets/editor.js");
+
+    // Both get live preview, which is a kilobyte and useful everywhere.
+    expect(plain).toContain("/assets/preview.js");
   });
 
   it("keeps a working textarea underneath the editor", async () => {
@@ -916,5 +920,84 @@ describe("editing a collection", () => {
       rules: { "color-contrast": { enabled: false } },
     });
     expect(results.violations.map((v) => v.id)).toEqual([]);
+  });
+});
+
+describe("live preview", () => {
+  it("renders the content in the form, without committing anything", async () => {
+    const response = await post("/sites/site-1/regions/home.hero/preview", {
+      "f[heading]": "Typed but never saved",
+      "f[subtitle]": "Still unsaved",
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("Typed but never saved");
+    expect(github.commits).toHaveLength(0);
+  });
+
+  it("previews a block list in order", async () => {
+    const response = await post("/sites/site-1/regions/home.body/preview", {
+      "f[blocks][0][_type]": "hero",
+      "f[blocks][0][heading]": "First block",
+      "f[blocks][1][_type]": "text",
+      "f[blocks][1][body]": "<p>Second block</p>",
+    });
+
+    const body = await response.text();
+    expect(body.indexOf("First block")).toBeLessThan(body.indexOf("Second block"));
+    expect(github.commits).toHaveLength(0);
+  });
+
+  it("flags an image with no alt text, where an editor will see it", async () => {
+    const response = await post("/sites/site-1/regions/home.hero/preview", {
+      "f[heading]": "Has a picture",
+      "f[image][src]": "/media/a.webp",
+      "f[image][alt]": "",
+    });
+
+    expect(await response.text()).toContain("No alt text");
+  });
+
+  it("shows empty fields as empty rather than hiding them", async () => {
+    const body = await (
+      await post("/sites/site-1/regions/home.hero/preview", { "f[heading]": "Only a heading" })
+    ).text();
+
+    expect(body).toContain("Only a heading");
+    expect(body).toContain("empty");
+  });
+
+  it("previews a collection entry too", async () => {
+    const response = await post("/sites/site-1/collections/blog/new/preview", {
+      "f[title]": "An unsaved post",
+      "f[content]": "<p>Body in progress</p>",
+    });
+
+    const body = await response.text();
+    expect(body).toContain("An unsaved post");
+    expect(body).toContain("Body in progress");
+  });
+
+  it("gives the editor a sandboxed frame and a manual fallback", async () => {
+    const { document } = new JSDOM(await (await get("/sites/site-1/regions/home.hero")).text())
+      .window;
+
+    const frame = document.querySelector<HTMLIFrameElement>("iframe[data-live-preview]");
+    expect(frame?.getAttribute("sandbox")).toBe("");
+    expect(frame?.title).toContain("Live preview");
+    expect(frame?.dataset.livePreview).toBe("/sites/site-1/regions/home.hero/preview");
+
+    // Without JavaScript this button renders the same preview in a new tab.
+    expect(document.querySelector("[data-preview-fallback] button")).toBeTruthy();
+  });
+
+  it("serves the preview bundle", async () => {
+    expect((await get("/assets/preview.js")).status).toBe(200);
+  });
+
+  it("refuses to serve anything else from the asset route", async () => {
+    expect((await get("/assets/../src/db.ts")).status).toBe(404);
+    expect((await get("/assets/secrets.js")).status).toBe(404);
   });
 });

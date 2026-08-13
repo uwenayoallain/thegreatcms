@@ -12,7 +12,7 @@ export default defineConfig([
   {
     // The visual editor: the studio's only client-side JavaScript, and a
     // progressive enhancement over a textarea that already works.
-    entry: ["client/editor.ts"],
+    entry: ["client/editor.ts", "client/preview.ts"],
     format: ["esm"],
     dts: false,
     clean: false,

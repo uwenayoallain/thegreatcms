@@ -304,6 +304,7 @@ export function editRegionPage(options: EditPageOptions): string {
       ],
       flash,
       editor,
+      livePreview: true,
     },
     html`
       <h1>${title}</h1>
@@ -333,29 +334,62 @@ export function editRegionPage(options: EditPageOptions): string {
           : ""
       }
 
-      <form
-        method="POST"
-        action="/sites/${site.id}/regions/${regionId}"
-        enctype="multipart/form-data"
-      >
-        <input type="hidden" name="headSha" value="${headSha}" />
+      <div class="split">
+        <form
+          method="POST"
+          action="/sites/${site.id}/regions/${regionId}"
+          enctype="multipart/form-data"
+          data-editor-form
+          id="preview-form"
+        >
+          <input type="hidden" name="headSha" value="${headSha}" />
 
-        ${
-          isBlocksRegion(region)
-            ? renderBlocks(schema, region, document, errors)
-            : renderFields(region.fields, document, errors)
-        }
+          ${
+            isBlocksRegion(region)
+              ? renderBlocks(schema, region, document, errors)
+              : renderFields(region.fields, document, errors)
+          }
 
-        <div class="actions">
-          <button type="submit" name="action" value="publish">
-            ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
-          </button>
-          <button class="secondary" type="submit" name="action" value="draft">
-            Save draft &amp; preview
-          </button>
-          <a class="button secondary" href="/sites/${site.id}">Back to site</a>
-        </div>
-      </form>
+          <div class="actions">
+            <button type="submit" name="action" value="publish">
+              ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
+            </button>
+            <button class="secondary" type="submit" name="action" value="draft">
+              Save draft &amp; preview
+            </button>
+            <a class="button secondary" href="/sites/${site.id}">Back to site</a>
+          </div>
+        </form>
+
+        <aside class="live" aria-labelledby="live-heading">
+          <div class="live-bar">
+            <h2 id="live-heading">Live preview</h2>
+            <p class="muted" id="preview-status" role="status">Not yet rendered</p>
+          </div>
+          <iframe
+            title="Live preview of ${title}"
+            class="live-frame"
+            sandbox=""
+            data-live-preview="/sites/${site.id}/regions/${regionId}/preview"
+          ></iframe>
+          <p class="hint">
+            Your unsaved content, in the shape the schema describes. The layout is the studio's —
+            for your real design, save a draft or run <code>greatcms preview</code>.
+          </p>
+          <p data-preview-fallback>
+            <button
+              class="secondary"
+              type="submit"
+              form="preview-form"
+              formaction="/sites/${site.id}/regions/${regionId}/preview"
+              formmethod="POST"
+              formtarget="_blank"
+            >
+              Render preview
+            </button>
+          </p>
+        </aside>
+      </div>
 
       ${
         preview
@@ -666,6 +700,7 @@ export function editEntryPage(options: {
       ],
       flash,
       editor: hasRichText(fields),
+      livePreview: true,
     },
     html`
       <h1>${slug ?? `New ${label} entry`}</h1>
@@ -688,17 +723,51 @@ export function editEntryPage(options: {
           : ""
       }
 
-      <form method="POST" action="${action}" enctype="multipart/form-data">
-        <input type="hidden" name="headSha" value="${headSha}" />
-        ${renderFields(fields, document, errors)}
+      <div class="split">
+        <form
+          method="POST"
+          action="${action}"
+          enctype="multipart/form-data"
+          data-editor-form
+          id="preview-form"
+        >
+          <input type="hidden" name="headSha" value="${headSha}" />
+          ${renderFields(fields, document, errors)}
 
-        <div class="actions">
-          <button type="submit" name="action" value="publish">
-            ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
-          </button>
-          <a class="button secondary" href="/sites/${site.id}/collections/${name}">Cancel</a>
-        </div>
-      </form>
+          <div class="actions">
+            <button type="submit" name="action" value="publish">
+              ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
+            </button>
+            <a class="button secondary" href="/sites/${site.id}/collections/${name}">Cancel</a>
+          </div>
+        </form>
+
+        <aside class="live" aria-labelledby="live-heading">
+          <div class="live-bar">
+            <h2 id="live-heading">Live preview</h2>
+            <p class="muted" id="preview-status" role="status">Not yet rendered</p>
+          </div>
+          <iframe
+            title="Live preview of this entry"
+            class="live-frame"
+            sandbox=""
+            data-live-preview="${action}/preview"
+          ></iframe>
+          <p class="hint">Your unsaved content, updating as you type. Nothing is committed.</p>
+          <p data-preview-fallback>
+            <button
+              class="secondary"
+              type="submit"
+              form="preview-form"
+              formaction="${action}/preview"
+              formmethod="POST"
+              formtarget="_blank"
+            >
+              Render preview
+            </button>
+          </p>
+        </aside>
+      </div>
 
       ${
         slug

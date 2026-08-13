@@ -11,7 +11,13 @@
     "es2024": true,
     "node": true
   },
-  "ignorePatterns": ["**/dist/**", "**/.astro/**", "**/json-schema/**", "**/node_modules/**"],
+  "ignorePatterns": [
+    "**/.astro/**",
+    "**/apps/studio/public/**",
+    "**/dist/**",
+    "**/json-schema/**",
+    "**/node_modules/**"
+  ],
   "rules": {
     "no-console": "off",
     "typescript/no-explicit-any": "warn",

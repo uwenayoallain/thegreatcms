@@ -14,4 +14,4 @@ playwright-report/
 public/uploads/
 .astro/
 apps/docs/dist/
-apps/studio/public/editor.js
+apps/studio/public/*.js

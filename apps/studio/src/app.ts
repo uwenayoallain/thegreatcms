@@ -37,6 +37,7 @@ import {
 } from "./submissions.js";
 import { SiteClient, SiteNotConfiguredError, type SiteContext } from "./sites.js";
 import { errorsByPath } from "./views/fields.js";
+import { previewDocument } from "./views/preview.js";
 import { page } from "./views/layout.js";
 import {
   collectionPage,
@@ -148,11 +149,15 @@ export function createApp(options: AppOptions) {
   });
 
   /**
-   * The editor bundle. Read once and held, because it never changes while the
-   * process runs, and hashed so a new build busts a cached copy.
+   * Client bundles. An allowlist rather than a static directory: the studio
+   * serves exactly two files, and a path-traversal bug in a file server is a
+   * silly way to lose a token database.
    */
-  app.get("/assets/editor.js", async (c) => {
-    const asset = await editorAsset();
+  app.get("/assets/:file", async (c) => {
+    const file = c.req.param("file");
+    if (!CLIENT_ASSETS.has(file)) return c.notFound();
+
+    const asset = await clientAsset(file);
     if (!asset) return c.notFound();
     return c.body(asset, 200, {
       "content-type": "text/javascript; charset=utf-8",
@@ -455,6 +460,59 @@ export function createApp(options: AppOptions) {
         error instanceof ConflictError ? 409 : 502,
       );
     }
+  });
+
+  app.post("/sites/:id/regions/:regionId/preview", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const regionId = c.req.param("regionId");
+
+    const client = clientFor(site);
+    const context = await client.context();
+    const region = context.schema.regions[regionId];
+    if (!region) return c.notFound();
+
+    const form = await c.req.formData();
+    const entries: Array<[string, string]> = [...form.entries()].map(
+      ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
+    );
+
+    const document = isBlocksRegion(region)
+      ? { blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields) }
+      : decodeForm(entries, region.fields);
+
+    return c.html(
+      previewDocument({
+        title: region.label ?? regionId,
+        region,
+        blocks: context.schema.blocks,
+        fields: isBlocksRegion(region) ? undefined : region.fields,
+        document,
+      }),
+    );
+  });
+
+  app.post("/sites/:id/collections/:name/:slug/preview", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const name = c.req.param("name");
+
+    const context = await clientFor(site).context();
+    const collection = context.schema.collections[name];
+    if (!collection) return c.notFound();
+
+    const form = await c.req.formData();
+    const entries: Array<[string, string]> = [...form.entries()].map(
+      ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
+    );
+
+    return c.html(
+      previewDocument({
+        title: collection.label ?? name,
+        fields: collection.fields,
+        document: decodeForm(entries, collection.fields),
+      }),
+    );
   });
 
   app.get("/sites/:id/regions/:regionId", async (c) => {
@@ -783,13 +841,16 @@ function thanksPage(): string {
   );
 }
 
-let editorBundle: string | null | undefined;
+const CLIENT_ASSETS = new Set(["editor.js", "preview.js"]);
+const assetCache = new Map<string, string | null>();
 
 /** Resolved next to the built server bundle, and beside the source in dev. */
-async function editorAsset(): Promise<string | null> {
-  if (editorBundle !== undefined) return editorBundle;
+async function clientAsset(file: string): Promise<string | null> {
+  const cached = assetCache.get(file);
+  if (cached !== undefined) return cached;
+
   const found = await Promise.all(
-    ["../public/editor.js", "./public/editor.js"].map(async (candidate) => {
+    [`../public/${file}`, `./public/${file}`].map(async (candidate) => {
       try {
         return await readFile(new URL(candidate, import.meta.url), "utf8");
       } catch {
@@ -797,8 +858,10 @@ async function editorAsset(): Promise<string | null> {
       }
     }),
   );
-  editorBundle = found.find((content) => content !== null) ?? null;
-  return editorBundle;
+
+  const content = found.find((value) => value !== null) ?? null;
+  assetCache.set(file, content);
+  return content;
 }
 
 function describeError(error: unknown): string {
