@@ -1,0 +1,51 @@
+# The GreatCMS site is managed by GreatCMS. Editing the landing page copy is a
+# commit to this repository, exactly like editing any other managed site.
+
+version: 1
+
+site:
+  name: GreatCMS
+
+blocks:
+  claim:
+    label: Claim
+    fields:
+      title: { type: text, required: true, max: 60 }
+      body: { type: text, multiline: true, required: true }
+      proof: { type: text, max: 90 }
+
+regions:
+  home.hero:
+    label: Landing hero
+    fields:
+      eyebrow: { type: text, max: 40 }
+      heading: { type: text, required: true, max: 90 }
+      subtitle: { type: text, max: 200 }
+      cta: { type: link }
+    default:
+      heading: A CMS your site does not depend on
+
+  home.claims:
+    label: Landing claims
+    type: blocks
+    allow: [claim]
+    max: 8
+
+  home.closing:
+    label: Closing note
+    fields:
+      heading: { type: text, required: true, max: 80 }
+      body: { type: text, multiline: true, required: true }
+
+collections:
+  docs:
+    label: Documentation
+    path: content/docs
+    format: markdown
+    body: content
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 80 }
+      summary: { type: text, max: 200 }
+      order: { type: number, integer: true, default: 50 }
+      content: { type: richtext }

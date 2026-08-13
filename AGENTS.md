@@ -35,6 +35,7 @@ studio and the packages are implementations of `SPEC.md`. When the two disagree,
 ```
 SPEC.md                 the standard — the actual product
 apps/studio/            the CMS: auth, editor, publishing, inbox
+apps/docs/              the website: landing page and docs, managed by GreatCMS
 packages/spec/          schema parsing, validation, resolution rules
 packages/git/           atomic commits and pull requests
 packages/reader/        build-time reader for JS frameworks

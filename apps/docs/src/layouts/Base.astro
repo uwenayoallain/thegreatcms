@@ -1,0 +1,66 @@
+---
+import "../styles/site.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const path = Astro.url.pathname.replace(/\/+$/, "") || "/";
+const nav = [
+  { href: "/docs/", label: "Docs" },
+  { href: "/spec/", label: "Standard" },
+  { href: "https://github.com/greatcms/greatcms", label: "Source" },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <a class="wordmark" href="/">GreatCMS</a>
+      <nav aria-label="Main">
+        <ul>
+          {
+            nav.map((item) => (
+              <li>
+                <a
+                  href={item.href}
+                  aria-current={path.startsWith(item.href.replace(/\/$/, "")) && item.href.startsWith("/") ? "page" : undefined}
+                >
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="colophon">
+      <div class="inner">
+        <p>Content standard v1 · MIT</p>
+        <ul>
+          <li><a href="/llms.txt">llms.txt</a></li>
+          <li><a href="/docs.json">docs.json</a></li>
+          <li><a href="/spec/">The standard</a></li>
+        </ul>
+        <p>This site ships no JavaScript.</p>
+      </div>
+    </footer>
+  </body>
+</html>

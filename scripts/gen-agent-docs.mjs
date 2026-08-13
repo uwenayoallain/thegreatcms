@@ -12,11 +12,11 @@
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const outDir = join(root, "docs");
+const outDirs = [join(root, "docs"), join(root, "apps/docs/public")];
 
 const SITE = "https://greatcms.dev";
 
@@ -148,19 +148,24 @@ const artifacts = [
 ];
 
 const check = process.argv.includes("--check");
-await mkdir(outDir, { recursive: true });
+await Promise.all(outDirs.map((dir) => mkdir(dir, { recursive: true })));
+
+const targets = outDirs.flatMap((dir) =>
+  artifacts.map(([name, content]) => [join(dir, name), content]),
+);
 
 const results = await Promise.all(
-  artifacts.map(async ([name, content]) => {
-    const path = join(outDir, name);
+  targets.map(async ([path, content]) => {
     if (!check) {
       await writeFile(path, content);
-      process.stdout.write(`wrote docs/${name}\n`);
+      process.stdout.write(`wrote ${relative(root, path)}\n`);
       return true;
     }
     const existing = await readFile(path, "utf8").catch(() => null);
     if (existing === content) return true;
-    process.stderr.write(`docs/${name} is out of date.\n  fix: run \`pnpm run docs:build\`\n`);
+    process.stderr.write(
+      `${relative(root, path)} is out of date.\n  fix: run \`pnpm run docs:build\`\n`,
+    );
     return false;
   }),
 );

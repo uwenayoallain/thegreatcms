@@ -1,0 +1,12 @@
+version: 1
+
+content:
+  regions: content/cms
+  media: public/media
+
+mediaUrlPrefix: /media
+
+publish:
+  branch: main
+  draftBranchPrefix: cms/draft
+  commitMessage: "content: update {summary}"

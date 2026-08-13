@@ -1,0 +1,39 @@
+{
+  "name": "GreatCMS",
+  "url": "https://greatcms.dev",
+  "description": "GreatCMS is a Git-backed CMS for sites that should not depend on one at runtime. It manages only the regions of a page you opt in; everything else stays hand-written code. Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.",
+  "specVersion": 1,
+  "agentEntrypoints": {
+    "manifest": "/docs.json",
+    "llms": "/llms.txt",
+    "llmsFull": "/llms-full.txt",
+    "schemaJsonSchema": "/json-schema/schema.schema.json",
+    "configJsonSchema": "/json-schema/config.schema.json"
+  },
+  "integration": {
+    "steps": [
+      "Add .cms/schema.yaml describing the regions you want managed.",
+      "Read <regions dir>/<region-id>.json at build time, layered over the schema's defaults.",
+      "A missing content file is not an error; it resolves to those defaults."
+    ],
+    "requiresSdk": false,
+    "requiresRuntime": false,
+    "languages": "any that can read JSON"
+  },
+  "pages": [
+    {
+      "title": "The GreatCMS Content Standard",
+      "description": "The file format a site must contain to be managed: schema, content layout, and resolution rules. This document is the product.",
+      "source": "SPEC.md",
+      "url": "/spec",
+      "markdownUrl": "/spec.md"
+    },
+    {
+      "title": "GreatCMS Overview",
+      "description": "What GreatCMS is, what it deliberately does not do, and the design decisions behind it.",
+      "source": "README.md",
+      "url": "/",
+      "markdownUrl": "/index.md"
+    }
+  ]
+}

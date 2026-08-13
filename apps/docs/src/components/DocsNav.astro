@@ -1,0 +1,29 @@
+---
+import { docsPages } from "../lib/cms";
+
+interface Props {
+  current?: string;
+}
+
+const { current } = Astro.props;
+const pages = docsPages();
+---
+
+<nav class="docs-nav" aria-label="Documentation">
+  <p class="stamp">Contents</p>
+  <ul>
+    <li>
+      <a href="/docs/" aria-current={current === undefined ? "page" : undefined}>Overview</a>
+    </li>
+    {
+      pages.map((page) => (
+        <li>
+          <a href={`/docs/${page.slug}/`} aria-current={current === page.slug ? "page" : undefined}>
+            {page.title}
+          </a>
+        </li>
+      ))
+    }
+    <li><a href="/spec/">The standard</a></li>
+  </ul>
+</nav>

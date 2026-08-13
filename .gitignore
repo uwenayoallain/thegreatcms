@@ -13,3 +13,4 @@ test-results/
 playwright-report/
 public/uploads/
 .astro/
+apps/docs/dist/

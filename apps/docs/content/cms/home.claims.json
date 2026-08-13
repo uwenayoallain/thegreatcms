@@ -1,0 +1,33 @@
+{
+  "blocks": [
+    {
+      "_type": "claim",
+      "title": "Nothing at runtime",
+      "body": "Pages are built from files on disk. The CMS is never in the request path, so it can never be the reason a page is slow, or down, or wrong.",
+      "proof": "Zero script tags in the built output"
+    },
+    {
+      "_type": "claim",
+      "title": "Hybrid by default",
+      "body": "A region is any slice of a page you opt in — one hero, or the whole site. Everything else stays hand-written code the studio never sees.",
+      "proof": "A missing content file renders schema defaults"
+    },
+    {
+      "_type": "claim",
+      "title": "Not a framework plugin",
+      "body": "The integration surface is a schema file and some JSON. Astro, Hugo, Eleventy, Next, Jekyll, and Laravel consume it identically.",
+      "proof": "A 120-line Python reader passes the same suite"
+    },
+    {
+      "_type": "claim",
+      "title": "One commit, or none",
+      "body": "An image and the content referencing it land together through the Git Data API. Half-applied content is how a main branch stops building.",
+      "proof": "Blob, tree, commit, ref — never one commit per file"
+    }
+  ],
+  "_meta": {
+    "updatedAt": "2026-08-13T09:02:00.000Z",
+    "updatedBy": "studio",
+    "version": 1
+  }
+}

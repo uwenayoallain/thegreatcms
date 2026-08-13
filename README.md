@@ -36,6 +36,7 @@ site land in one inbox.
 
 ```
 apps/studio/            The CMS: sign in, connect repos, edit regions, publish
+apps/docs/              The website — landing page and docs, managed by GreatCMS itself
 packages/cli/           `greatcms preview` and `doctor` — the local half
 packages/spec/          The standard: schema parsing, validation, resolution rules
 packages/git/           Atomic multi-file commits via the GitHub Git Data API
@@ -250,6 +251,21 @@ is an error — failing loudly beats quietly rendering empty regions.
 Git Data API, so a region and its images land together or not at all. Repeated
 `PUT /contents` calls can half-apply, and half-applied content is how `main`
 stops building.
+
+## The website
+
+`apps/docs` is the project's site: a landing page and the documentation. Its
+landing copy — the headline, the four claims, the closing note — is **managed by
+GreatCMS**, stored as JSON in this repository and edited in the studio like any
+other site. The layout around it is ordinary Astro the CMS has never seen.
+
+The standard page renders `SPEC.md` directly, so the published standard and the
+one the code implements cannot drift. It builds to 111 KB across nine pages,
+ships no JavaScript, and holds the same axe and weight gates as everything else.
+
+```bash
+pnpm --filter @greatcms/docs dev
+```
 
 ## For agents
 

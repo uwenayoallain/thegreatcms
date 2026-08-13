@@ -1,0 +1,14 @@
+{
+  "cta": {
+    "href": "/docs/getting-started/",
+    "label": "Read the standard"
+  },
+  "eyebrow": "Content standard v1",
+  "heading": "A CMS your site does not depend on",
+  "subtitle": "Manage the hero and leave the rest as code. Publishing writes files to your repository; the commit triggers the deploy pipeline you already had.",
+  "_meta": {
+    "updatedAt": "2026-08-13T09:00:00.000Z",
+    "updatedBy": "studio",
+    "version": 1
+  }
+}

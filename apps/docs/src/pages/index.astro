@@ -1,0 +1,61 @@
+---
+import Base from "../layouts/Base.astro";
+import { cms, type Closing, type Hero } from "../lib/cms";
+
+// Every word below the fold markers is managed content, resolved at build time.
+const hero = cms.region<Hero>("home.hero");
+const claims = cms.blocks<{ title: string; body: string; proof?: string }>("home.claims");
+const closing = cms.region<Closing>("home.closing");
+---
+
+<Base title={`GreatCMS — ${hero.heading}`} description={hero.subtitle}>
+  <section class="hero">
+    <div class="reveal">
+      {hero.eyebrow && <p class="stamp">{hero.eyebrow}</p>}
+      <h1>{hero.heading}</h1>
+      {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
+      {
+        hero.cta?.href && (
+          <a class="cta" href={hero.cta.href}>
+            {hero.cta.label ?? "Read the docs"} →
+          </a>
+        )
+      }
+    </div>
+
+    <!-- Hand-written: a diagram of what the CMS does and does not touch. -->
+    <div class="plate reveal">
+      <div>your-site/</div>
+      <div><span class="managed">├── .cms/schema.yaml</span> <span class="plain">← what may be edited</span></div>
+      <div><span class="managed">├── content/cms/</span></div>
+      <div><span class="managed">│&nbsp;&nbsp; └── home.hero.json</span> <span class="plain">← the CMS writes this</span></div>
+      <div><span class="plain">└── src/pages/index.astro</span></div>
+      <div>
+        <span class="plain">&nbsp;&nbsp;&nbsp;&nbsp; ├── {"<Hero {...hero} />"}</span>
+        <span class="managed">managed</span>
+      </div>
+      <div><span class="plain">&nbsp;&nbsp;&nbsp;&nbsp; └── everything else</span> <span class="plain">yours</span></div>
+      <span class="caption">One repository · one commit per publish</span>
+    </div>
+  </section>
+
+  <section class="claims" aria-labelledby="claims-heading">
+    <h2 id="claims-heading" class="stamp">What it does</h2>
+    <ol>
+      {
+        claims.map((claim) => (
+          <li>
+            <h2>{claim.title}</h2>
+            <p>{claim.body}</p>
+            {claim.proof && <span class="proof">{claim.proof}</span>}
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section class="closing">
+    <h2>{closing.heading}</h2>
+    <p>{closing.body}</p>
+  </section>
+</Base>

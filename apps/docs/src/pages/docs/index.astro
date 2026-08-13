@@ -1,0 +1,38 @@
+---
+import DocsNav from "../../components/DocsNav.astro";
+import Base from "../../layouts/Base.astro";
+import { docsPages } from "../../lib/cms";
+
+const pages = docsPages();
+---
+
+<Base
+  title="Documentation — GreatCMS"
+  description="What GreatCMS does, how a site integrates with it, and what it deliberately will not do."
+>
+  <div class="docs">
+    <DocsNav />
+
+    <article class="prose">
+      <p class="stamp">Documentation</p>
+      <h1>Everything it does</h1>
+      <p class="summary">
+        Short pages, one per part of the system. For the file format itself — the thing another tool
+        would implement — read <a href="/spec/">the standard</a>.
+      </p>
+
+      <ul class="index-list">
+        {
+          pages.map((page) => (
+            <li>
+              <h2>
+                <a href={`/docs/${page.slug}/`}>{page.title}</a>
+              </h2>
+              {page.summary && <p>{page.summary}</p>}
+            </li>
+          ))
+        }
+      </ul>
+    </article>
+  </div>
+</Base>

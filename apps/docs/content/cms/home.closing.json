@@ -1,0 +1,9 @@
+{
+  "heading": "This page is managed by the thing it describes",
+  "body": "The headline, the four claims above, and this paragraph are stored as JSON in this repository and edited in the studio. The layout around them is ordinary Astro that the CMS has never seen.",
+  "_meta": {
+    "updatedAt": "2026-08-13T09:05:00.000Z",
+    "updatedBy": "studio",
+    "version": 1
+  }
+}
