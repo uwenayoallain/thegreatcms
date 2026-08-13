@@ -6,15 +6,13 @@
  * it testable and means the same logic can run against a remote repo later.
  */
 
-export type FrameworkId =
-  | "astro"
-  | "next"
-  | "nuxt"
-  | "sveltekit"
-  | "eleventy"
-  | "hugo"
-  | "jekyll"
-  | "generic";
+/**
+ * The frameworks `init` scaffolds for. JavaScript ones, deliberately: the
+ * *standard* stays language-agnostic — it is JSON on disk, and the conformance
+ * kit proves a Python reader handles it — but the scaffolder only claims what
+ * it is actually exercised against.
+ */
+export type FrameworkId = "astro" | "next" | "nuxt" | "sveltekit" | "eleventy" | "generic";
 
 export interface Framework {
   id: FrameworkId;
@@ -115,32 +113,6 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
         `<h1>{{ cms["${regionId}"].heading }}</h1>`,
       ].join("\n"),
   },
-  hugo: {
-    id: "hugo",
-    label: "Hugo",
-    // Hugo exposes data/ as site.Data with no configuration.
-    regionsDir: "data/cms",
-    collectionsDir: "content/blog",
-    mediaDir: "static/media",
-    mediaUrlPrefix: "/media",
-    snippet: (regionId) =>
-      [`{{ $hero := index site.Data.cms "${regionId}" }}`, "<h1>{{ $hero.heading }}</h1>"].join(
-        "\n",
-      ),
-  },
-  jekyll: {
-    id: "jekyll",
-    label: "Jekyll",
-    regionsDir: "_data/cms",
-    collectionsDir: "_posts",
-    mediaDir: "assets/media",
-    mediaUrlPrefix: "/assets/media",
-    snippet: (regionId) =>
-      [
-        "<!-- _data is site.data in Jekyll: -->",
-        `<h1>{{ site.data.cms["${regionId}"].heading }}</h1>`,
-      ].join("\n"),
-  },
   generic: {
     id: "generic",
     label: "Something else",
@@ -182,8 +154,6 @@ export function detectFramework(input: DetectionInput): Detection {
   // Config files are stronger evidence than a dependency, which can linger in a
   // package.json long after the thing was removed.
   const byFile: Array<[FrameworkId, string[]]> = [
-    ["hugo", ["hugo.toml", "hugo.yaml", "hugo.json", "config.toml"]],
-    ["jekyll", ["_config.yml", "_config.yaml"]],
     ["astro", ["astro.config.mjs", "astro.config.ts", "astro.config.js"]],
     ["next", ["next.config.js", "next.config.mjs", "next.config.ts"]],
     ["nuxt", ["nuxt.config.ts", "nuxt.config.js"]],

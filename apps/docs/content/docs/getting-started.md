@@ -10,10 +10,10 @@ order: 10
 npx greatcms init
 ```
 
-It detects what you build with — Astro, Next, Nuxt, SvelteKit, Eleventy, Hugo,
-or Jekyll — and puts content where that generator already looks for it. Hugo
-gets `data/cms`, Eleventy and Jekyll get `_data/cms`, Astro gets
-`src/content/cms`. No wiring is needed afterwards in any of them.
+It detects what you build with — Astro, Next, Nuxt, SvelteKit, or Eleventy — and
+puts content where that generator already looks for it. Eleventy gets
+`_data/cms`, Astro gets `src/content/cms`, Next gets `content/cms`. No wiring is
+needed afterwards in any of them.
 
 You end up with two commented files: `.cms/schema.yaml` describing what may be
 edited, and `.cms/config.yaml` describing where it goes.
@@ -26,10 +26,10 @@ A region resolves to a plain JSON file. In Astro:
 import hero from "../../src/content/cms/home.hero.json";
 ```
 
-In Hugo, with no import at all:
+In Eleventy, with no import at all, because `_data` is global data:
 
-```go
-{{ $hero := index site.Data.cms "home.hero" }}
+```njk
+<h1>{{ cms["home.hero"].heading }}</h1>
 ```
 
 Or with schema defaults applied and types inferred:
@@ -42,9 +42,12 @@ const hero = cms.region("home.hero");
 
 ## Connect it
 
-Run the studio, add the repository, and paste a token with `contents: write` on
-it. The studio reads your schema and builds the editor from it. It never runs
-any code from your repository.
+Run the studio and add the site. Point it at **a folder on this machine** and it
+reads and writes that working copy directly — no token, no network. Give it your
+dev server's URL and the editor shows your real components beside the form.
+
+The studio reads your schema and builds the editor from it. It never runs any
+code from your repository.
 
 ## Check it
 

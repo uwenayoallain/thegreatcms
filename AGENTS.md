@@ -52,6 +52,17 @@ examples/               a real Astro site, and a Python reader
 docs/                   generated agent surface — never edit by hand
 ```
 
+## Current focus
+
+Local sites — a folder on this machine — are the path in use. The GitHub
+publishing path (commits, pull requests, AI titles) is built, tested, and
+deliberately parked until deployment is picked up; keep it working, do not build
+on it. The submissions runtime is kept for work in progress.
+
+`greatcms init` scaffolds JavaScript frameworks only. The _standard_ remains
+language-agnostic and the conformance kit still proves it with a Python reader —
+that distinction is deliberate, so do not soften either half.
+
 ## Working here
 
 ```sh

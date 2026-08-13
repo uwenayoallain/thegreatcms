@@ -181,14 +181,14 @@ describe("greatcms init", () => {
   });
 
   it("tells you how to read the region in the framework it found", async () => {
-    writeFileSync(join(fresh, "hugo.toml"), "baseURL = '/'\n");
+    writeFileSync(join(fresh, ".eleventy.js"), "module.exports = () => {};\n");
 
     await initIn(fresh, ["init", "--yes"]);
 
     const text = out.join("");
-    expect(text).toContain("Detected Hugo");
-    expect(text).toContain("site.Data.cms");
-    expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain("regions: data/cms");
+    expect(text).toContain("Detected Eleventy");
+    expect(text).toContain("global data in Eleventy");
+    expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain("regions: _data/cms");
   });
 
   it("honours explicit flags over detection", async () => {

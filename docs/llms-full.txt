@@ -343,8 +343,11 @@ collects the things Git can't hold — form submissions, comments — into a sin
 inbox.
 
 **It is not a framework plugin.** The integration surface is a schema file and
-some JSON. Astro, Hugo, Eleventy, Next, Jekyll, Laravel, or a hand-rolled Go
-generator all consume it the same way, in whatever language they're written in.
+some JSON, so a site consumes it with an import and no dependency. `greatcms
+init` scaffolds for Astro, Next, Nuxt, SvelteKit, and Eleventy. The format
+itself stays language-agnostic — it is JSON on disk, and a Python reader passes
+the same conformance suite — but the tooling claims only what it is exercised
+against.
 
 Read [SPEC.md](./SPEC.md) — that document is the actual product.
 
@@ -418,10 +421,10 @@ nobody has ever edited it.
 npx greatcms init
 ```
 
-It detects what you build with — Astro, Next, Nuxt, SvelteKit, Eleventy, Hugo,
-Jekyll, or nothing in particular — and puts content where that generator already
-looks for it: `data/cms` for Hugo, `_data/cms` for Eleventy and Jekyll,
-`src/content/cms` for Astro. Then it asks what you want managed (one hero, a
+It detects what you build with — Astro, Next, Nuxt, SvelteKit, Eleventy, or
+nothing in particular — and puts content where that generator already looks for
+it: `_data/cms` for Eleventy, `src/content/cms` for Astro, `content/cms` for
+Next. Then it asks what you want managed (one hero, a
 landing page with reorderable blocks, a blog, or nothing yet), writes a
 commented `.cms/schema.yaml` and `.cms/config.yaml` with the editor's
 `$schema` line for autocomplete, and prints the snippet for reading your first
@@ -446,11 +449,16 @@ The studio needs exactly seven operations from a repository, and nothing about
 them is specific to GitHub — which is why a folder works without a second code
 path through the editor, the validation, or the publish.
 
-## Publishing: straight to the branch, or as a pull request
+## Publishing
 
-Chosen per site when you connect it.
+Local sites write to the working copy and commit there — that is the path in
+active use.
 
-**Direct** commits to your publish branch. Fastest path from edit to live.
+The GitHub path below is built and tested, but is not the current focus:
+deployment is a later milestone. It is documented so it is not a surprise, not
+because you need it yet.
+
+**Direct** commits to your publish branch.
 
 **Pull request** commits to a draft branch and opens a PR against it, so a
 content change gets the same review, CI preview build, and revert-to-roll-back
@@ -562,8 +570,8 @@ reaches the repository, and a branch that moved while you were editing gets a
 
 **The studio never runs your code.** It reads your schema and writes content —
 that is the whole interaction. Preview builds happen on your CI or your laptop,
-which is also why one studio can manage an Astro site, a Hugo site, and a
-Laravel site without carrying three toolchains.
+which is also why one studio can manage several sites without carrying a
+toolchain for each of them.
 
 **Form submissions need nothing on the site.** A plain HTML `<form>` posting to
 the studio is the whole integration — no JavaScript, no third-party form

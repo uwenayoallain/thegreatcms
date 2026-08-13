@@ -448,7 +448,7 @@ const HELP = `greatcms — local tools for a Git-backed site
   greatcms init [options]        set up .cms/schema.yaml and .cms/config.yaml
     --yes                        accept every default, no prompts
     --name <name>                site name
-    --framework <id>             astro | next | nuxt | sveltekit | eleventy | hugo | jekyll | generic
+    --framework <id>             astro | next | nuxt | sveltekit | eleventy | generic
     --template <id>              hero | landing | blog | blank
     --dir <path>                 where content files live
     --branch <name>              publish branch (default: current branch)

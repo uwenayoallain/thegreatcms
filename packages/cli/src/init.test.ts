@@ -30,8 +30,6 @@ describe("detecting a framework", () => {
       ["nuxt.config.ts", "nuxt"],
       ["svelte.config.js", "sveltekit"],
       [".eleventy.js", "eleventy"],
-      ["hugo.toml", "hugo"],
-      ["_config.yml", "jekyll"],
     ];
     for (const [configFile, id] of cases) {
       expect(detectFramework({ files: [configFile] }).framework.id, configFile).toBe(id);
@@ -49,10 +47,10 @@ describe("detecting a framework", () => {
 
   it("prefers a config file over a stale dependency", () => {
     const detection = detectFramework({
-      files: ["hugo.toml", "package.json"],
+      files: ["astro.config.mjs", "package.json"],
       packageJson: { dependencies: { next: "^15.0.0" } },
     });
-    expect(detection.framework.id).toBe("hugo");
+    expect(detection.framework.id).toBe("astro");
   });
 
   it("says so plainly when it cannot tell", () => {
@@ -62,10 +60,9 @@ describe("detecting a framework", () => {
   });
 
   it("puts content where each generator already looks for it", () => {
-    expect(FRAMEWORKS.hugo.regionsDir).toBe("data/cms");
     expect(FRAMEWORKS.eleventy.regionsDir).toBe("_data/cms");
-    expect(FRAMEWORKS.jekyll.regionsDir).toBe("_data/cms");
     expect(FRAMEWORKS.astro.regionsDir).toBe("src/content/cms");
+    expect(FRAMEWORKS.next.regionsDir).toBe("content/cms");
   });
 });
 
@@ -124,9 +121,8 @@ describe("what init generates", () => {
 
 describe("next steps", () => {
   it("shows how to read the region in the detected framework", () => {
-    const hugo = answers({ framework: FRAMEWORKS.hugo, regionsDir: "data/cms" });
-    const text = nextSteps(hugo, planInit(hugo));
-    expect(text).toContain("site.Data.cms");
+    const eleventy = answers({ framework: FRAMEWORKS.eleventy, regionsDir: "_data/cms" });
+    expect(nextSteps(eleventy, planInit(eleventy))).toContain("global data in Eleventy");
 
     const astro = answers();
     expect(nextSteps(astro, planInit(astro))).toContain("import hero from");
