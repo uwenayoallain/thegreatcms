@@ -36,6 +36,7 @@ site land in one inbox.
 
 ```
 apps/studio/            The CMS: sign in, connect repos, edit regions, publish
+packages/cli/           `greatcms preview` and `doctor` — the local half
 packages/spec/          The standard: schema parsing, validation, resolution rules
 packages/git/           Atomic multi-file commits via the GitHub Git Data API
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
@@ -77,6 +78,29 @@ The home page shows a managed hero next to a hand-written section — both end u
 in the same static HTML. The about page renders from schema defaults, because
 nobody has ever edited it.
 
+## Previewing a draft
+
+Two ways, and neither runs your code on our server.
+
+**Your CI builds it.** "Save draft & preview" commits to `cms/draft-<region>`;
+set `preview.urlTemplate` in `.cms/config.yaml` and the studio iframes the
+resulting URL.
+
+**Or your own dev server builds it, right now:**
+
+```bash
+npx greatcms preview --branch cms/draft-home.hero --run "npm run dev"
+```
+
+That overlays the draft's content files onto your working copy, starts your dev
+server, and restores the working copy exactly when you stop it — including
+deleting files that did not exist before. It refuses to run on top of
+uncommitted content changes, and refuses any draft branch carrying changes
+outside your content directories, because a draft is content, not code.
+
+`npx greatcms doctor` prints what a repository's setup looks like: regions,
+where each one's file lives, and which are still rendering schema defaults.
+
 ## Proofs, not claims
 
 Each of these is an automated test, not a bullet point in a pitch:
@@ -106,6 +130,11 @@ construction rather than by patching ARIA onto custom widgets.
 **A publish is one commit, or nothing.** Invalid content is refused before it
 reaches the repository, and a branch that moved while you were editing gets a
 409 rather than an overwrite.
+
+**The studio never runs your code.** It reads your schema and writes content —
+that is the whole interaction. Preview builds happen on your CI or your laptop,
+which is also why one studio can manage an Astro site, a Hugo site, and a
+Laravel site without carrying three toolchains.
 
 **Form submissions need nothing on the site.** A plain HTML `<form>` posting to
 the studio is the whole integration — no JavaScript, no third-party form

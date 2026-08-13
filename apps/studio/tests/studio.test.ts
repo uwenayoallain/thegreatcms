@@ -470,3 +470,19 @@ describe("draft previews", () => {
     expect(github.commits).toHaveLength(1);
   });
 });
+
+describe("local preview", () => {
+  it("hands you the exact command to preview the draft with your own dev server", async () => {
+    const response = await post("/sites/site-1/regions/home.hero", {
+      headSha: "head-1",
+      action: "draft",
+      "f[heading]": "Draft",
+      "f[image][src]": "/media/a.webp",
+      "f[image][alt]": "Alt",
+    });
+
+    const body = await response.text();
+    expect(body).toContain("npx greatcms preview --branch cms/draft-home.hero");
+    expect(body).toContain("Your build runs on your machine");
+  });
+});

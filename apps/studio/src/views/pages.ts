@@ -276,9 +276,21 @@ export function editRegionPage(options: EditPageOptions): string {
                     `
                   : html`<p class="muted">
                       Set <code>preview.urlTemplate</code> in <code>.cms/config.yaml</code> — for
-                      example <code>https://{branch}--site.pages.dev</code> — to see it inline here.
+                      example <code>https://{branch}--site.pages.dev</code> — to see your CI's build
+                      inline here.
                     </p>`
               }
+
+              <h3>Or preview it locally, right now</h3>
+              <p>
+                Run this in your checkout. It overlays this draft onto your working copy, starts
+                your own dev server, and puts everything back when you stop it.
+              </p>
+              <pre><code>npx greatcms preview --branch ${preview.branch} --run "npm run dev"</code></pre>
+              <p class="muted">
+                Your build runs on your machine, with your toolchain. The studio never executes
+                anything from your repository.
+              </p>
             `
           : ""
       }

@@ -83,6 +83,16 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
+  packages/cli:
+    dependencies:
+      '@greatcms/spec':
+        specifier: workspace:*
+        version: link:../spec
+    devDependencies:
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+
   packages/conformance:
     dependencies:
       '@greatcms/spec':
