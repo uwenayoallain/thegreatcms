@@ -3,7 +3,7 @@ import { isBlocksRegion } from "@greatcms/spec";
 import { html } from "hono/html";
 import type { Publish, Site, Submission } from "../db.js";
 import { fieldName } from "../form.js";
-import { type ErrorsByPath, renderFields } from "./fields.js";
+import { type ErrorsByPath, hasRichText, renderFields } from "./fields.js";
 import { page, type PageOptions } from "./layout.js";
 
 export function signInPage(options: { error?: string } = {}): string {
@@ -290,6 +290,10 @@ export function editRegionPage(options: EditPageOptions): string {
     options;
   const title = region.label ?? regionId;
 
+  const editor = isBlocksRegion(region)
+    ? region.allow.some((type) => hasRichText(schema.blocks[type]?.fields ?? {}))
+    : hasRichText(region.fields);
+
   return page(
     {
       title,
@@ -299,6 +303,7 @@ export function editRegionPage(options: EditPageOptions): string {
         { href: `/sites/${site.id}/regions/${regionId}`, label: title },
       ],
       flash,
+      editor,
     },
     html`
       <h1>${title}</h1>
@@ -660,6 +665,7 @@ export function editEntryPage(options: {
         { href: action, label: slug ?? "New entry" },
       ],
       flash,
+      editor: hasRichText(fields),
     },
     html`
       <h1>${slug ?? `New ${label} entry`}</h1>

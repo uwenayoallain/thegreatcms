@@ -524,10 +524,13 @@ node packages/conformance/bin/greatcms-conformance.mjs verify /tmp/out
 every screen of the studio, every form control is labelled, and errors are
 attached with `aria-invalid` and `aria-describedby` rather than colour alone.
 
-**The admin needs no JavaScript either.** The studio is server-rendered and
-every mutation is a form POST — including adding, removing, and reordering
-blocks. That is what makes it keyboard- and screen-reader-navigable by
-construction rather than by patching ARIA onto custom widgets.
+**The admin degrades to plain HTML.** Every mutation is a form POST — including
+adding, removing, and reordering blocks — so the studio is keyboard- and
+screen-reader-navigable by construction rather than by patching ARIA onto custom
+widgets. Rich text gets a visual editor built directly on **ProseMirror** (MIT,
+no commercial tier), loaded only on screens that have a richtext field. It is an
+enhancement over a real textarea: if the bundle never loads, you can still edit
+and publish.
 
 **A publish is one commit, or nothing.** Invalid content is refused before it
 reaches the repository, and a branch that moved while you were editing gets a

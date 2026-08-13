@@ -20,13 +20,18 @@ export interface PageOptions {
   crumbs?: Crumb[];
   /** Announced to screen readers on arrival, e.g. after a publish. */
   flash?: { kind: "success" | "error"; message: string; detail?: string[] };
+  /**
+   * Load the visual editor. Set only by screens that render a richtext field,
+   * so no other page pays for the bundle.
+   */
+  editor?: boolean;
 }
 
 export function page(
   options: PageOptions,
   body: HtmlEscapedString | Promise<HtmlEscapedString> | string,
 ): string {
-  const { title, crumbs = [], flash } = options;
+  const { title, crumbs = [], flash, editor = false } = options;
 
   return `<!doctype html>${html`
     <html lang="en">
@@ -95,6 +100,7 @@ export function page(
           }
           ${body}
         </main>
+        ${editor ? html`<script type="module" src="/assets/editor.js"></script>` : ""}
       </body>
     </html>
   `}`;
@@ -216,6 +222,19 @@ iframe.preview { width: 100%; height: 34rem; border: 1px solid var(--line); bord
 table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+/* Visual editor. The toolbar is buttons, the surface is a real textbox to
+   assistive technology, and both are absent until the script runs. */
+.editor { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
+.editor-toolbar { display: flex; flex-wrap: wrap; gap: .25rem; padding: .4rem; border-bottom: 1px solid var(--line); background: var(--raised); }
+.editor-toolbar button { padding: .25rem .6rem; min-width: 2.1rem; font-size: .85rem; font-weight: 600; background: transparent; color: inherit; border: 1px solid transparent; border-radius: 6px; }
+.editor-toolbar button:hover { border-color: var(--line); }
+.editor-toolbar button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.editor-surface .ProseMirror { min-height: 12rem; padding: .9rem 1rem; outline: none; }
+.editor-surface .ProseMirror:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.editor-surface .ProseMirror > :first-child { margin-top: 0; }
+.editor-surface .ProseMirror :is(h2, h3) { margin: 1.2rem 0 .4rem; }
+.editor-surface .ProseMirror blockquote { margin: .8rem 0; padding-left: .9rem; border-left: 3px solid var(--line); color: var(--ink-soft); }
+.editor-surface .ProseMirror code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; background: var(--paper-raised); padding: .05em .3em; border-radius: 4px; }
 .error-text { color: var(--danger); font-size: .88rem; margin: .3rem 0 0; font-weight: 600; }
 /* Present to assistive technology, absent visually — never display:none, which
    removes it from the accessibility tree as well. */

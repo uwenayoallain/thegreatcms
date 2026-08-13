@@ -86,7 +86,7 @@ function renderField(
 
     case "richtext":
       return shell(html`
-        <textarea ${shared} rows="10">${asText((value as { html?: string })?.html)}</textarea>
+        <textarea ${shared} rows="10" data-richtext>${asText(readRichText(value))}</textarea>
         <span class="hint"
           >HTML. Stored as written, so any language can render it without a library.</span
         >
@@ -295,6 +295,16 @@ function renderField(
   }
 }
 
+/** True when any field, at any depth, is rich text. */
+export function hasRichText(fields: Record<string, FieldDef>): boolean {
+  return Object.values(fields).some((def) => {
+    if (def.type === "richtext") return true;
+    if (def.type === "group") return hasRichText(def.fields);
+    if (def.type === "list") return hasRichText({ item: def.of });
+    return false;
+  });
+}
+
 /** Maps validation issue paths (`seo.title`, `tags[0]`) onto control ids. */
 export function errorsByPath(
   issues: ReadonlyArray<{ path?: string; message: string }>,
@@ -333,6 +343,12 @@ function dotted(path: Array<string | number>): string {
 
 function idFor(path: Array<string | number>): string {
   return `f-${path.join("-")}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+/** A richtext value is an object; a collection body may arrive as a string. */
+function readRichText(value: unknown): string {
+  if (typeof value === "string") return value;
+  return (value as { html?: string })?.html ?? "";
 }
 
 function asText(value: unknown): string {

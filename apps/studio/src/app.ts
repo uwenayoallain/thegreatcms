@@ -7,6 +7,7 @@
  * the client payload at zero.
  */
 
+import { readFile } from "node:fs/promises";
 import { ConflictError, GitHubError } from "@greatcms/git";
 import {
   isBlocksRegion,
@@ -144,6 +145,19 @@ export function createApp(options: AppOptions) {
     }
     c.set("actor", session.actor);
     return next();
+  });
+
+  /**
+   * The editor bundle. Read once and held, because it never changes while the
+   * process runs, and hashed so a new build busts a cached copy.
+   */
+  app.get("/assets/editor.js", async (c) => {
+    const asset = await editorAsset();
+    if (!asset) return c.notFound();
+    return c.body(asset, 200, {
+      "content-type": "text/javascript; charset=utf-8",
+      "cache-control": "public, max-age=300",
+    });
   });
 
   app.get("/sign-in", (c) => c.html(signInPage()));
@@ -767,6 +781,24 @@ function thanksPage(): string {
     { title: "Message received" },
     "<h1>Thank you</h1><p>Your message has been received.</p>",
   );
+}
+
+let editorBundle: string | null | undefined;
+
+/** Resolved next to the built server bundle, and beside the source in dev. */
+async function editorAsset(): Promise<string | null> {
+  if (editorBundle !== undefined) return editorBundle;
+  const found = await Promise.all(
+    ["../public/editor.js", "./public/editor.js"].map(async (candidate) => {
+      try {
+        return await readFile(new URL(candidate, import.meta.url), "utf8");
+      } catch {
+        return null;
+      }
+    }),
+  );
+  editorBundle = found.find((content) => content !== null) ?? null;
+  return editorBundle;
 }
 
 function describeError(error: unknown): string {

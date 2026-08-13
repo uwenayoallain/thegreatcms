@@ -22,9 +22,16 @@ studio and the packages are implementations of `SPEC.md`. When the two disagree,
   commit per file.
 - **A missing content file resolves to schema defaults**, so a site is correct
   before the CMS has ever run. A missing _schema_ file is a loud error.
-- **The admin ships zero JavaScript.** Every mutation is a form POST, including
-  adding and reordering blocks. This is what makes it accessible by
-  construction, and it is asserted by tests.
+- **Every mutation works as a plain form POST**, including adding and reordering
+  blocks. The visual editor is a progressive enhancement over a real textarea
+  that already submits correctly: if the bundle fails, editing still works. Only
+  screens with a richtext field load it; the rest still ship zero JavaScript,
+  and tests assert both halves.
+- **Public sites ship zero JavaScript.** That one is not negotiable — it is the
+  product claim, and it is budgeted and tested.
+- **Client dependencies must be genuinely open.** ProseMirror over wrappers with
+  a commercial tier: convenient abstractions are exactly what migrate behind a
+  licence later.
 - **Alt text is structurally required.** Only a field marked
   `alt: decorative-allowed` may store an empty one.
 - **Nothing in a publish path may block on a model.** AI titles are opt-in,

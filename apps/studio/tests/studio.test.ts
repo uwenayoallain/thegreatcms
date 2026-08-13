@@ -453,9 +453,41 @@ describe("accessibility", () => {
     expect(results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)).toEqual([]);
   });
 
-  it("ships no JavaScript", async () => {
+  it("ships no JavaScript on pages that do not need it", async () => {
+    const paths = ["/", "/sites/new", "/sites/site-1", "/inbox"];
+    const bodies = await Promise.all(
+      paths.map(async (path) => [path, await (await get(path)).text()] as const),
+    );
+    for (const [path, body] of bodies) {
+      expect(body, path).not.toMatch(/<script/i);
+    }
+  });
+
+  it("loads the visual editor only where there is rich text to edit", async () => {
+    // home.hero has no richtext field; home.body allows a block that does.
+    expect(await (await get("/sites/site-1/regions/home.hero")).text()).not.toMatch(/<script/i);
+    expect(await (await get("/sites/site-1/regions/home.body")).text()).toContain(
+      "/assets/editor.js",
+    );
+  });
+
+  it("keeps a working textarea underneath the editor", async () => {
     const body = await (await get("/sites/site-1/regions/home.body")).text();
-    expect(body).not.toMatch(/<script/i);
+    const { document } = new JSDOM(body).window;
+
+    // The enhancement hides this; without JavaScript it is the field, and it is
+    // always the value the form posts.
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-richtext]");
+    expect(textarea).toBeTruthy();
+    expect(textarea?.name).toMatch(/^f\[blocks\]\[\d+\]\[body\]$/);
+    expect(textarea?.hidden).toBe(false);
+  });
+
+  it("serves the editor bundle", async () => {
+    const response = await get("/assets/editor.js");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("javascript");
+    expect((await response.text()).length).toBeGreaterThan(1000);
   });
 });
 
