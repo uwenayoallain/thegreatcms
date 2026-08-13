@@ -7,7 +7,7 @@
  * site, and a Laravel site with the same code path.
  */
 
-import { GitHubClient, type CommitResult, type PullRequest } from "@greatcms/git";
+import type { CommitResult, PullRequest } from "@greatcms/git";
 import type { FileChange } from "@greatcms/git";
 import {
   collectionEntryPath,
@@ -28,6 +28,7 @@ import {
   type RegionDocument,
 } from "@greatcms/spec";
 import type { Site } from "./db.js";
+import { GitHubRepository, LocalRepository, type Repository } from "./repo.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
@@ -56,15 +57,21 @@ export class SiteNotConfiguredError extends Error {
 }
 
 export class SiteClient {
-  private readonly github: GitHubClient;
-  private readonly repo: { owner: string; repo: string };
+  private readonly repo: Repository;
 
   constructor(
     private readonly site: Site,
     fetchImpl?: typeof globalThis.fetch,
   ) {
-    this.github = new GitHubClient({ token: site.token, fetch: fetchImpl });
-    this.repo = { owner: site.owner, repo: site.repo };
+    this.repo =
+      site.kind === "local"
+        ? new LocalRepository(site.path)
+        : new GitHubRepository({ owner: site.owner, repo: site.repo }, site.token, fetchImpl);
+  }
+
+  /** Where the files are, for messages that need to say. */
+  get location(): string {
+    return this.site.kind === "local" ? this.site.path : `${this.site.owner}/${this.site.repo}`;
   }
 
   /**
@@ -76,7 +83,7 @@ export class SiteClient {
     const [schemaFile, configFile, headSha] = await Promise.all([
       this.firstFile(SCHEMA_CANDIDATES),
       this.firstFile(CONFIG_CANDIDATES),
-      this.github.getBranchHead(this.repo, this.site.branch),
+      this.repo.getBranchHead(this.site.branch),
     ]);
 
     if (!schemaFile) throw new SiteNotConfiguredError(this.site);
@@ -96,7 +103,7 @@ export class SiteClient {
   /** The stored document for a region, or null when nobody has edited it yet. */
   async readRegion(context: SiteContext, regionId: string): Promise<RegionDocument | null> {
     const path = regionFilePath(context.config, regionId);
-    const file = await this.github.getFile(this.repo, path, this.site.branch);
+    const file = await this.repo.getFile(path, this.site.branch);
     return file ? parseRegionFile(file.content, path) : null;
   }
 
@@ -113,14 +120,14 @@ export class SiteClient {
    */
   async listEntries(context: SiteContext, name: string): Promise<CollectionEntry[]> {
     const collection = this.collection(context, name);
-    const paths = await this.github.listDirectory(this.repo, collection.path, this.site.branch);
+    const paths = await this.repo.listDirectory(collection.path, this.site.branch);
     const extension = collection.format === "markdown" ? ".md" : ".json";
 
     const entries = await Promise.all(
       paths
         .filter((path) => path.endsWith(extension))
         .map(async (path) => {
-          const file = await this.github.getFile(this.repo, path, this.site.branch);
+          const file = await this.repo.getFile(path, this.site.branch);
           if (!file) return null;
           return this.parseEntry(collection, path, file.content);
         }),
@@ -142,7 +149,7 @@ export class SiteClient {
   ): Promise<CollectionEntry | null> {
     const collection = this.collection(context, name);
     const path = collectionEntryPath(context.config, collection, slug);
-    const file = await this.github.getFile(this.repo, path, this.site.branch);
+    const file = await this.repo.getFile(path, this.site.branch);
     return file ? this.parseEntry(collection, path, file.content) : null;
   }
 
@@ -231,7 +238,7 @@ export class SiteClient {
     const { context, name, slug, document, expectedHeadSha } = options;
     const file = this.entryFile(context, name, slug, document);
 
-    return this.github.commitFiles(this.repo, {
+    return this.repo.commitFiles({
       branch: this.site.branch,
       message: context.config.publish.commitMessage.replace("{summary}", `${name}/${slug}`),
       files: [file],
@@ -247,7 +254,7 @@ export class SiteClient {
   }): Promise<CommitResult> {
     const { context, name, slug } = options;
     const collection = this.collection(context, name);
-    return this.github.commitFiles(this.repo, {
+    return this.repo.commitFiles({
       branch: this.site.branch,
       message: `content: remove ${name}/${slug}`,
       files: [{ path: collectionEntryPath(context.config, collection, slug), delete: true }],
@@ -274,9 +281,9 @@ export class SiteClient {
       "-",
     );
 
-    await this.github.ensureBranch(this.repo, branch, this.site.branch);
+    await this.repo.ensureBranch(branch, this.site.branch);
 
-    const commit = await this.github.commitFiles(this.repo, {
+    const commit = await this.repo.commitFiles({
       branch,
       message: `content(draft): ${regionId}`,
       files: [
@@ -323,7 +330,7 @@ export class SiteClient {
       media: options.media,
     });
 
-    const pullRequest = await this.github.openOrUpdatePullRequest(this.repo, {
+    const pullRequest = await this.repo.openOrUpdatePullRequest({
       head: draft.branch,
       base: this.site.branch,
       title: options.title,
@@ -353,7 +360,7 @@ export class SiteClient {
 
     const message = context.config.publish.commitMessage.replace("{summary}", regionId);
 
-    const result = await this.github.commitFiles(this.repo, {
+    const result = await this.repo.commitFiles({
       branch: this.site.branch,
       message,
       // One commit: the image and the JSON pointing at it land together, or
@@ -366,7 +373,7 @@ export class SiteClient {
     // line here, and neither is required for the site to rebuild.
     const dispatchEvent = context.config.publish.dispatchEvent;
     if (dispatchEvent) {
-      await this.github.dispatch(this.repo, dispatchEvent, { region: regionId });
+      await this.repo.dispatch(dispatchEvent, { region: regionId });
     }
 
     return result;
@@ -381,7 +388,7 @@ export class SiteClient {
   private async firstFile(candidates: string[]): Promise<{ path: string; content: string } | null> {
     const found = await Promise.all(
       candidates.map(async (path) => {
-        const file = await this.github.getFile(this.repo, path, this.site.branch);
+        const file = await this.repo.getFile(path, this.site.branch);
         return file ? { path, content: file.content } : null;
       }),
     );

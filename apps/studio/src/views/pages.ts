@@ -90,6 +90,61 @@ export function newSitePage(
           <label for="name">Name</label>
           <input type="text" id="name" name="name" value="${values.name ?? ""}" required />
         </div>
+
+        <fieldset class="field">
+          <legend>Where does this site live?</legend>
+          <div class="checkbox">
+            <input type="radio" id="kind-local" name="kind" value="local" checked />
+            <label for="kind-local">
+              A folder on this machine
+              <span class="hint">
+                Reads and writes the working copy directly. No token, no network, and your dev
+                server shows the change immediately.
+              </span>
+            </label>
+          </div>
+          <div class="checkbox">
+            <input type="radio" id="kind-github" name="kind" value="github" />
+            <label for="kind-github">
+              A GitHub repository
+              <span class="hint"
+                >Publishing commits over the API and your pipeline deploys it.</span
+              >
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="path">Folder path</label>
+          <input
+            type="text"
+            id="path"
+            name="path"
+            value="${values.path ?? ""}"
+            placeholder="/home/you/projects/my-site"
+            aria-describedby="path-hint"
+          />
+          <span class="hint" id="path-hint">
+            The directory containing <code>.cms/schema.yaml</code>. Publishing writes the files and
+            commits them if it is a Git repository.
+          </span>
+        </div>
+
+        <div class="field">
+          <label for="devUrl">Dev server URL <span class="hint">optional</span></label>
+          <input
+            type="text"
+            id="devUrl"
+            name="devUrl"
+            value="${values.devUrl ?? ""}"
+            placeholder="http://localhost:4321"
+            aria-describedby="dev-hint"
+          />
+          <span class="hint" id="dev-hint">
+            If set, the editor shows your real site here — your own components, updating when you
+            publish.
+          </span>
+        </div>
         <div class="row">
           <div class="field">
             <label for="owner">Owner</label>
@@ -185,7 +240,12 @@ export function sitePage(
     html`
       <h1>${site.name}</h1>
       <p class="muted">
-        <code>${site.owner}/${site.repo}</code> ·
+        ${
+          site.kind === "local"
+            ? html`<code>${site.path}</code>`
+            : html`<code>${site.owner}/${site.repo}</code>`
+        }
+        ·
         ${
           site.publishMode === "pull-request"
             ? html`proposing changes as pull requests against ${site.branch}`
@@ -362,8 +422,30 @@ export function editRegionPage(options: EditPageOptions): string {
         </form>
 
         <aside class="live" aria-labelledby="live-heading">
+          ${
+            site.kind === "local" && site.devUrl
+              ? html`
+                  <div class="live-bar">
+                    <h2>Your site</h2>
+                    <p class="muted"><code>${site.devUrl}</code></p>
+                  </div>
+                  <iframe
+                    title="Your site, running locally"
+                    class="live-frame real"
+                    src="${site.devUrl}"
+                  ></iframe>
+                  <p class="hint">
+                    Your real components, from your own dev server. Publishing writes files to
+                    <code>${site.path}</code>, so this updates as soon as your dev server reloads.
+                  </p>
+                `
+              : ""
+          }
+
           <div class="live-bar">
-            <h2 id="live-heading">Live preview</h2>
+            <h2 id="live-heading">
+              ${site.kind === "local" && site.devUrl ? "Unsaved content" : "Live preview"}
+            </h2>
             <p class="muted" id="preview-status" role="status">Not yet rendered</p>
           </div>
           <iframe
@@ -743,8 +825,30 @@ export function editEntryPage(options: {
         </form>
 
         <aside class="live" aria-labelledby="live-heading">
+          ${
+            site.kind === "local" && site.devUrl
+              ? html`
+                  <div class="live-bar">
+                    <h2>Your site</h2>
+                    <p class="muted"><code>${site.devUrl}</code></p>
+                  </div>
+                  <iframe
+                    title="Your site, running locally"
+                    class="live-frame real"
+                    src="${site.devUrl}"
+                  ></iframe>
+                  <p class="hint">
+                    Your real components, from your own dev server. Publishing writes files to
+                    <code>${site.path}</code>, so this updates as soon as your dev server reloads.
+                  </p>
+                `
+              : ""
+          }
+
           <div class="live-bar">
-            <h2 id="live-heading">Live preview</h2>
+            <h2 id="live-heading">
+              ${site.kind === "local" && site.devUrl ? "Unsaved content" : "Live preview"}
+            </h2>
             <p class="muted" id="preview-status" role="status">Not yet rendered</p>
           </div>
           <iframe

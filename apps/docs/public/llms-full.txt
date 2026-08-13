@@ -431,6 +431,21 @@ region **in your framework's own syntax**.
 `--branch` override individually, so it scripts as well as it prompts. It
 refuses to overwrite an existing setup without `--force`.
 
+## Two kinds of site
+
+**A folder on this machine.** Point the studio at a checkout and it reads and
+writes the working copy directly — no token, no network, no push. Publishing
+writes the files and commits them if the folder is a Git repository. Give it your
+dev server's URL and the editor shows **your real components**, from your own
+build, updating as soon as your dev server reloads.
+
+**A GitHub repository.** Publishing commits over the API and your pipeline
+deploys it, as below.
+
+The studio needs exactly seven operations from a repository, and nothing about
+them is specific to GitHub — which is why a folder works without a second code
+path through the editor, the validation, or the publish.
+
 ## Publishing: straight to the branch, or as a pull request
 
 Chosen per site when you connect it.

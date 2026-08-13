@@ -23,7 +23,7 @@ import {
   isSameOrigin,
   readSession,
 } from "./auth.js";
-import type { Site, Store } from "./db.js";
+import type { Site, SiteKind, Store } from "./db.js";
 import { decodeBlocks, decodeForm, fieldName, MEDIA_ROOT, parsePath } from "./form.js";
 import { prepareUpload, UploadError } from "./media.js";
 import { deterministicSummarizer, diffDocuments, type Summarizer } from "./summarize.js";
@@ -223,23 +223,40 @@ export function createApp(options: AppOptions) {
 
   app.post("/sites", async (c) => {
     const form = await c.req.formData();
+    const kind: SiteKind = form.get("kind") === "local" ? "local" : "github";
     const values = {
+      kind,
       name: String(form.get("name") ?? "").trim(),
+      path: String(form.get("path") ?? "").trim(),
+      devUrl: String(form.get("devUrl") ?? "").trim(),
       owner: String(form.get("owner") ?? "").trim(),
       repo: String(form.get("repo") ?? "").trim(),
       branch: String(form.get("branch") ?? "main").trim() || "main",
     };
     const token = String(form.get("token") ?? "").trim();
 
-    if (!values.name || !values.owner || !values.repo || !token) {
-      return c.html(newSitePage({ error: "Every field is required.", values }), 422);
+    const missing =
+      !values.name || (kind === "local" ? !values.path : !values.owner || !values.repo || !token);
+    if (missing) {
+      return c.html(
+        newSitePage({
+          error:
+            kind === "local"
+              ? "A name and the folder's path are required."
+              : "Name, owner, repository, and token are all required.",
+          values,
+        }),
+        422,
+      );
     }
 
     const candidate: Site = {
       id: crypto.randomUUID(),
       ...values,
       token,
-      publishMode: form.get("publishMode") === "pull-request" ? "pull-request" : "direct",
+      // A folder has no pull requests to open.
+      publishMode:
+        kind === "github" && form.get("publishMode") === "pull-request" ? "pull-request" : "direct",
       aiTitles: form.get("aiTitles") === "yes",
       createdAt: new Date().toISOString(),
     };

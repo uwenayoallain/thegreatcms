@@ -170,6 +170,7 @@ body {
 .live-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .5rem; }
 .live-bar h2 { margin: 0; font-size: 1rem; }
 .live-bar p { margin: 0; font-size: .8rem; }
+.live-frame.real { height: 22rem; margin-bottom: 1.2rem; }
 .live-frame { width: 100%; height: 30rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); }
 main { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 h1 { font-size: 1.6rem; margin: .25rem 0 1rem; letter-spacing: -.02em; }

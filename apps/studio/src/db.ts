@@ -10,13 +10,24 @@ import { dirname } from "node:path";
 
 export type PublishMode = "direct" | "pull-request";
 
+/** A GitHub repository, or a checkout on the machine running the studio. */
+export type SiteKind = "github" | "local";
+
 export interface Site {
   id: string;
   name: string;
+  kind: SiteKind;
+  /** Absolute path to the working copy. Local sites only. */
+  path: string;
+  /**
+   * Where the site's dev server is listening, so the editor can show the real
+   * components rendering. Local sites only.
+   */
+  devUrl: string;
   owner: string;
   repo: string;
   branch: string;
-  /** Token with `contents: write` on this repository. */
+  /** Token with `contents: write` on this repository. GitHub sites only. */
   token: string;
   /** Whether a publish commits straight to the branch or opens a pull request. */
   publishMode: PublishMode;
@@ -83,6 +94,16 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE publishes ADD COLUMN pull_request_url TEXT;
     `,
   },
+  {
+    name: "005-local-sites",
+    sql: `
+      ALTER TABLE sites ADD COLUMN kind TEXT NOT NULL DEFAULT 'github';
+      ALTER TABLE sites ADD COLUMN path TEXT NOT NULL DEFAULT '';
+      ALTER TABLE sites ADD COLUMN dev_url TEXT NOT NULL DEFAULT '';
+      -- A folder has no owner/repo, so that uniqueness no longer holds.
+      DROP INDEX IF EXISTS sites_repo;
+    `,
+  },
 ];
 
 export interface Submission {
@@ -139,15 +160,18 @@ export class Store {
   addSite(site: NewSite): Site {
     this.db
       .prepare(
-        "INSERT INTO sites (id, name, owner, repo, branch, token, publish_mode, ai_titles) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sites (id, name, kind, path, dev_url, owner, repo, branch, token, publish_mode, ai_titles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         site.id,
         site.name,
-        site.owner,
-        site.repo,
+        site.kind ?? "github",
+        site.path ?? "",
+        site.devUrl ?? "",
+        site.owner ?? "",
+        site.repo ?? "",
         site.branch,
-        site.token,
+        site.token ?? "",
         site.publishMode ?? "direct",
         site.aiTitles ? 1 : 0,
       );
@@ -306,6 +330,9 @@ function safeParse<T>(value: string, fallback: T): T {
 interface RawSite {
   id: string;
   name: string;
+  kind: string;
+  path: string;
+  dev_url: string;
   owner: string;
   repo: string;
   branch: string;
@@ -319,6 +346,9 @@ function toSite(row: RawSite): Site {
   return {
     id: row.id,
     name: row.name,
+    kind: row.kind === "local" ? "local" : "github",
+    path: row.path ?? "",
+    devUrl: row.dev_url ?? "",
     owner: row.owner,
     repo: row.repo,
     branch: row.branch,
