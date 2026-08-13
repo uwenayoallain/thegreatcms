@@ -19,6 +19,7 @@ import {
 } from "./auth.js";
 import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
+import { deterministicSummarizer, diffDocuments, type Summarizer } from "./summarize.js";
 import {
   assessSpam,
   contentFields,
@@ -47,6 +48,8 @@ export interface AppOptions {
   fetch?: typeof globalThis.fetch;
   /** Optional email notifier for new submissions. */
   notifier?: Notifier;
+  /** Names pull requests. Defaults to the deterministic, model-free one. */
+  summarizer?: Summarizer;
   rateLimiter?: RateLimiter;
 }
 
@@ -209,6 +212,8 @@ export function createApp(options: AppOptions) {
       id: crypto.randomUUID(),
       ...values,
       token,
+      publishMode: form.get("publishMode") === "pull-request" ? "pull-request" : "direct",
+      aiTitles: form.get("aiTitles") === "yes",
       createdAt: new Date().toISOString(),
     };
 
@@ -355,6 +360,62 @@ export function createApp(options: AppOptions) {
             flash: {
               kind: "success",
               message: `Saved to ${draft.branch}. Nothing on ${site.branch} has changed.`,
+            },
+          }),
+        );
+      } catch (error) {
+        return c.html(errorPage(site.name, describeError(error)), 502);
+      }
+    }
+
+    if (site.publishMode === "pull-request") {
+      try {
+        const published = await client.readRegion(context, regionId);
+        const changes = diffDocuments(published, document);
+        const summarizer =
+          site.aiTitles && options.summarizer ? options.summarizer : deterministicSummarizer;
+
+        const summary = await summarizer.summarize({
+          siteName: site.name,
+          regionId,
+          regionLabel: region.label ?? regionId,
+          changes,
+        });
+
+        const proposal = await client.proposeRegion({
+          context,
+          regionId,
+          document,
+          title: summary.title,
+          body: summary.body,
+          actor,
+        });
+
+        store.recordPublish({
+          siteId: site.id,
+          regionId,
+          commitSha: proposal.commit.commitSha,
+          commitUrl: proposal.commit.url,
+          actor,
+          pullRequestUrl: proposal.pullRequest.url,
+        });
+
+        return c.html(
+          editRegionPage({
+            site,
+            schema: context.schema,
+            regionId,
+            region,
+            document,
+            errors: new Map(),
+            headSha,
+            preview: { url: proposal.previewUrl, branch: proposal.commit.branch },
+            pullRequest: { ...proposal.pullRequest, fromModel: summary.fromModel },
+            flash: {
+              kind: "success",
+              message: proposal.pullRequest.created
+                ? `Opened pull request #${proposal.pullRequest.number}. Nothing is live until it is merged.`
+                : `Updated pull request #${proposal.pullRequest.number}. Nothing is live until it is merged.`,
             },
           }),
         );

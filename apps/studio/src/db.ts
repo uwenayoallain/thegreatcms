@@ -8,6 +8,8 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
+export type PublishMode = "direct" | "pull-request";
+
 export interface Site {
   id: string;
   name: string;
@@ -16,6 +18,10 @@ export interface Site {
   branch: string;
   /** Token with `contents: write` on this repository. */
   token: string;
+  /** Whether a publish commits straight to the branch or opens a pull request. */
+  publishMode: PublishMode;
+  /** Opt-in: send this site's content to a model to name its pull requests. */
+  aiTitles: boolean;
   createdAt: string;
 }
 
@@ -69,6 +75,14 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX submissions_unread ON submissions (read_at) WHERE read_at IS NULL;
     `,
   },
+  {
+    name: "004-publish-mode",
+    sql: `
+      ALTER TABLE sites ADD COLUMN publish_mode TEXT NOT NULL DEFAULT 'direct';
+      ALTER TABLE sites ADD COLUMN ai_titles INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE publishes ADD COLUMN pull_request_url TEXT;
+    `,
+  },
 ];
 
 export interface Submission {
@@ -109,19 +123,34 @@ export class Store {
 
   listSites(): Site[] {
     return (
-      this.db.prepare("SELECT * FROM sites ORDER BY name COLLATE NOCASE").all() as RawSite[]
+      this.db
+        .prepare("SELECT * FROM sites ORDER BY name COLLATE NOCASE")
+        .all() as unknown as RawSite[]
     ).map(toSite);
   }
 
   getSite(id: string): Site | null {
-    const row = this.db.prepare("SELECT * FROM sites WHERE id = ?").get(id) as RawSite | undefined;
+    const row = this.db.prepare("SELECT * FROM sites WHERE id = ?").get(id) as unknown as
+      | RawSite
+      | undefined;
     return row ? toSite(row) : null;
   }
 
   addSite(site: NewSite): Site {
     this.db
-      .prepare("INSERT INTO sites (id, name, owner, repo, branch, token) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(site.id, site.name, site.owner, site.repo, site.branch, site.token);
+      .prepare(
+        "INSERT INTO sites (id, name, owner, repo, branch, token, publish_mode, ai_titles) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        site.id,
+        site.name,
+        site.owner,
+        site.repo,
+        site.branch,
+        site.token,
+        site.publishMode ?? "direct",
+        site.aiTitles ? 1 : 0,
+      );
     const created = this.getSite(site.id);
     if (!created) throw new Error(`Site "${site.id}" vanished immediately after insert.`);
     return created;
@@ -137,20 +166,28 @@ export class Store {
     commitSha: string;
     commitUrl: string;
     actor?: string;
+    pullRequestUrl?: string;
   }): void {
     this.db
       .prepare(
-        "INSERT INTO publishes (site_id, region_id, commit_sha, commit_url, actor) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO publishes (site_id, region_id, commit_sha, commit_url, actor, pull_request_url) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(entry.siteId, entry.regionId, entry.commitSha, entry.commitUrl, entry.actor ?? null);
+      .run(
+        entry.siteId,
+        entry.regionId,
+        entry.commitSha,
+        entry.commitUrl,
+        entry.actor ?? null,
+        entry.pullRequestUrl ?? null,
+      );
   }
 
   recentPublishes(siteId: string, limit = 10): Publish[] {
     return this.db
       .prepare(
-        "SELECT region_id, commit_sha, commit_url, actor, created_at FROM publishes WHERE site_id = ? ORDER BY id DESC LIMIT ?",
+        "SELECT region_id, commit_sha, commit_url, actor, pull_request_url, created_at FROM publishes WHERE site_id = ? ORDER BY id DESC LIMIT ?",
       )
-      .all(siteId, limit) as Publish[];
+      .all(siteId, limit) as unknown as Publish[];
   }
 
   addSubmission(entry: {
@@ -191,12 +228,12 @@ export class Store {
     return (
       this.db
         .prepare(`SELECT * FROM submissions ${where} ORDER BY id DESC LIMIT ?`)
-        .all(...params) as RawSubmission[]
+        .all(...params) as unknown as RawSubmission[]
     ).map(toSubmission);
   }
 
   getSubmission(id: number): Submission | null {
-    const row = this.db.prepare("SELECT * FROM submissions WHERE id = ?").get(id) as
+    const row = this.db.prepare("SELECT * FROM submissions WHERE id = ?").get(id) as unknown as
       | RawSubmission
       | undefined;
     return row ? toSubmission(row) : null;
@@ -205,7 +242,7 @@ export class Store {
   countUnread(): number {
     const row = this.db
       .prepare("SELECT COUNT(*) AS n FROM submissions WHERE read_at IS NULL AND spam_score < 3")
-      .get() as { n: number };
+      .get() as unknown as { n: number };
     return row.n;
   }
 
@@ -229,6 +266,7 @@ export interface Publish {
   commit_sha: string;
   commit_url: string;
   actor: string | null;
+  pull_request_url: string | null;
   created_at: string;
 }
 
@@ -272,6 +310,8 @@ interface RawSite {
   repo: string;
   branch: string;
   token: string;
+  publish_mode: string;
+  ai_titles: number;
   created_at: string;
 }
 
@@ -283,6 +323,8 @@ function toSite(row: RawSite): Site {
     repo: row.repo,
     branch: row.branch,
     token: row.token,
+    publishMode: row.publish_mode === "pull-request" ? "pull-request" : "direct",
+    aiTitles: row.ai_titles === 1,
     createdAt: row.created_at,
   };
 }

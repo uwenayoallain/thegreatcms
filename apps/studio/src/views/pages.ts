@@ -124,6 +124,39 @@ export function newSitePage(
             Needs <code>contents: write</code> on this repository only. Stored on this server.
           </span>
         </div>
+        <fieldset class="field">
+          <legend>How should publishing work?</legend>
+          <div class="checkbox">
+            <input type="radio" id="mode-direct" name="publishMode" value="direct" checked />
+            <label for="mode-direct">
+              Commit straight to the branch
+              <span class="hint"
+                >Fastest. Publishing is a commit, and your pipeline deploys it.</span
+              >
+            </label>
+          </div>
+          <div class="checkbox">
+            <input type="radio" id="mode-pr" name="publishMode" value="pull-request" />
+            <label for="mode-pr">
+              Open a pull request
+              <span class="hint">
+                Review before it goes live, a CI preview build per change, and revert-to-roll-back.
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="field checkbox">
+          <input type="checkbox" id="aiTitles" name="aiTitles" value="yes" />
+          <label for="aiTitles">
+            Let the configured model name pull requests
+            <span class="hint">
+              Sends the changed field names and values to that provider. Off by default; without it,
+              titles are generated from the diff.
+            </span>
+          </label>
+        </div>
+
         <div class="actions">
           <button type="submit">Connect</button>
           <a class="button secondary" href="/">Cancel</a>
@@ -151,7 +184,14 @@ export function sitePage(
     },
     html`
       <h1>${site.name}</h1>
-      <p class="muted"><code>${site.owner}/${site.repo}</code> · publishing to ${site.branch}</p>
+      <p class="muted">
+        <code>${site.owner}/${site.repo}</code> ·
+        ${
+          site.publishMode === "pull-request"
+            ? html`proposing changes as pull requests against ${site.branch}`
+            : html`publishing straight to ${site.branch}`
+        }
+      </p>
 
       <h2>Regions</h2>
       <ul class="cards">
@@ -183,7 +223,14 @@ export function sitePage(
                       <tr>
                         <td><code>${entry.region_id}</code></td>
                         <td>${entry.created_at}</td>
-                        <td><a href="${entry.commit_url}">${entry.commit_sha.slice(0, 7)}</a></td>
+                        <td>
+                          <a href="${entry.commit_url}">${entry.commit_sha.slice(0, 7)}</a>
+                          ${
+                            entry.pull_request_url
+                              ? html` · <a href="${entry.pull_request_url}">pull request</a>`
+                              : ""
+                          }
+                        </td>
                       </tr>
                     `,
                   )}
@@ -214,10 +261,12 @@ export interface EditPageOptions {
   headSha: string;
   flash?: PageOptions["flash"];
   preview?: { url: string | null; branch: string };
+  pullRequest?: { number: number; url: string; title: string; fromModel: boolean };
 }
 
 export function editRegionPage(options: EditPageOptions): string {
-  const { site, schema, regionId, region, document, errors, headSha, flash, preview } = options;
+  const { site, schema, regionId, region, document, errors, headSha, flash, preview, pullRequest } =
+    options;
   const title = region.label ?? regionId;
 
   return page(
@@ -237,6 +286,27 @@ export function editRegionPage(options: EditPageOptions): string {
         <code>${site.owner}/${site.repo}</code> on ${site.branch}.
       </p>
 
+      ${
+        pullRequest
+          ? html`
+              <section class="card" aria-labelledby="pr">
+                <h2 id="pr">Pull request #${pullRequest.number}</h2>
+                <p>
+                  <a href="${pullRequest.url}">${pullRequest.title}</a>
+                </p>
+                <p class="muted">
+                  ${
+                    pullRequest.fromModel
+                      ? "Title written by the configured model; the change list below it is generated from the diff."
+                      : "Title generated from the diff — no model involved."
+                  }
+                  Nothing reaches ${site.branch} until this is merged.
+                </p>
+              </section>
+            `
+          : ""
+      }
+
       <form method="POST" action="/sites/${site.id}/regions/${regionId}">
         <input type="hidden" name="headSha" value="${headSha}" />
 
@@ -247,7 +317,9 @@ export function editRegionPage(options: EditPageOptions): string {
         }
 
         <div class="actions">
-          <button type="submit" name="action" value="publish">Publish</button>
+          <button type="submit" name="action" value="publish">
+            ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
+          </button>
           <button class="secondary" type="submit" name="action" value="draft">
             Save draft &amp; preview
           </button>

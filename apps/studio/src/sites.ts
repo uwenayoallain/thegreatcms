@@ -7,7 +7,7 @@
  * site, and a Laravel site with the same code path.
  */
 
-import { GitHubClient, type CommitResult } from "@greatcms/git";
+import { GitHubClient, type CommitResult, type PullRequest } from "@greatcms/git";
 import {
   DEFAULT_CONFIG,
   type CmsConfig,
@@ -133,6 +133,37 @@ export class SiteClient {
       commit,
       previewUrl: template ? template.replaceAll("{branch}", branch) : null,
     };
+  }
+
+  /**
+   * Publishes by proposing rather than committing: the change lands on a draft
+   * branch and a pull request asks for it. Review, a CI preview build, and
+   * revert-to-roll-back all come from the pull request rather than being
+   * features this studio has to grow.
+   */
+  async proposeRegion(options: {
+    context: SiteContext;
+    regionId: string;
+    document: RegionDocument;
+    title: string;
+    body: string;
+    actor?: string;
+  }): Promise<{ commit: CommitResult; pullRequest: PullRequest; previewUrl: string | null }> {
+    const draft = await this.saveDraft({
+      context: options.context,
+      regionId: options.regionId,
+      document: options.document,
+      actor: options.actor,
+    });
+
+    const pullRequest = await this.github.openOrUpdatePullRequest(this.repo, {
+      head: draft.branch,
+      base: this.site.branch,
+      title: options.title,
+      body: options.body,
+    });
+
+    return { commit: draft.commit, pullRequest, previewUrl: draft.previewUrl };
   }
 
   async publishRegion(options: {

@@ -40,6 +40,29 @@ export interface CommitRequest {
   author?: { name: string; email: string };
 }
 
+export interface PullRequest {
+  number: number;
+  url: string;
+  title: string;
+  /** False when an already-open pull request was updated instead. */
+  created: boolean;
+}
+
+interface RawPullRequest {
+  number: number;
+  html_url?: string;
+  title?: string;
+}
+
+function toPullRequest(raw: RawPullRequest, created: boolean): PullRequest {
+  return {
+    number: raw.number,
+    url: raw.html_url ?? "",
+    title: raw.title ?? "",
+    created,
+  };
+}
+
 export interface CommitResult {
   commitSha: string;
   treeSha: string;
@@ -227,6 +250,50 @@ export class GitHubClient {
       branch: request.branch,
       url: commit.html_url ?? `https://github.com/${repo.owner}/${repo.repo}/commit/${commit.sha}`,
     };
+  }
+
+  /**
+   * Opens a pull request, or updates the one already open for this branch.
+   *
+   * Reusing an open PR matters: an editor who saves five times should get one
+   * reviewable pull request, not five. GitHub itself refuses a duplicate, so
+   * this checks first rather than treating that error as normal.
+   */
+  async openOrUpdatePullRequest(
+    repo: RepoRef,
+    request: { head: string; base: string; title: string; body: string },
+  ): Promise<PullRequest> {
+    const existing = await this.findOpenPullRequest(repo, request.head);
+
+    if (existing) {
+      const updated = (await this.request(
+        "PATCH",
+        `/repos/${repo.owner}/${repo.repo}/pulls/${existing.number}`,
+        { title: request.title, body: request.body },
+      )) as RawPullRequest;
+      return toPullRequest(updated, false);
+    }
+
+    const created = (await this.request("POST", `/repos/${repo.owner}/${repo.repo}/pulls`, {
+      head: request.head,
+      base: request.base,
+      title: request.title,
+      body: request.body,
+      maintainer_can_modify: true,
+    })) as RawPullRequest;
+    return toPullRequest(created, true);
+  }
+
+  async findOpenPullRequest(repo: RepoRef, head: string): Promise<PullRequest | null> {
+    const results = await this.request(
+      "GET",
+      `/repos/${repo.owner}/${repo.repo}/pulls?state=open&head=${encodeURIComponent(`${repo.owner}:${head}`)}`,
+      undefined,
+      { allow404: true },
+    );
+    const list = Array.isArray(results) ? (results as RawPullRequest[]) : [];
+    const first = list[0];
+    return first ? toPullRequest(first, false) : null;
   }
 
   /** Creates a branch from another branch, or returns the existing head. */

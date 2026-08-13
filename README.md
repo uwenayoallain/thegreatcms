@@ -97,6 +97,38 @@ region **in your framework's own syntax**.
 `--branch` override individually, so it scripts as well as it prompts. It
 refuses to overwrite an existing setup without `--force`.
 
+## Publishing: straight to the branch, or as a pull request
+
+Chosen per site when you connect it.
+
+**Direct** commits to your publish branch. Fastest path from edit to live.
+
+**Pull request** commits to a draft branch and opens a PR against it, so a
+content change gets the same review, CI preview build, and revert-to-roll-back
+that a code change does. Saving again updates the open pull request rather than
+opening a second one.
+
+Pull request titles are generated **from the actual field diff**:
+
+> Update heading in Home hero on Example
+
+with a table of every changed field in the body. That is the default, it needs
+no model, and it is always accurate.
+
+A site can opt in to having a model write the title instead. Point the studio at
+any OpenAI-compatible endpoint and it works — Groq, Google's Gemini, Cloudflare
+Workers AI, Mistral, or a local Ollama:
+
+```bash
+AI_BASE_URL=https://api.groq.com/openai/v1 AI_API_KEY=... AI_MODEL=llama-3.3-70b-versatile
+```
+
+Two things hold regardless: **publishing never waits on a model** — the call is
+time-boxed and every failure falls back to the generated title — and the PR body
+stays machine-generated, because a reviewer needs the change list to be true
+rather than fluent. It is off by default per site, since it sends your content to
+a third party.
+
 ## Previewing a draft
 
 Two ways, and neither runs your code on our server.

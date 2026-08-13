@@ -10,6 +10,9 @@
 import { type FieldDef, selectOptions } from "@greatcms/spec";
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
+
+/** What `html` actually returns: sync unless an interpolation is a promise. */
+type Html = HtmlEscapedString | Promise<HtmlEscapedString>;
 import { fieldName } from "../form.js";
 
 export type ErrorsByPath = Map<string, string>;
@@ -19,7 +22,7 @@ export function renderFields(
   values: Record<string, unknown>,
   errors: ErrorsByPath,
   basePath: Array<string | number> = [],
-): HtmlEscapedString[] {
+): Html[] {
   return Object.entries(fields).map(([name, def]) =>
     renderField(def, [...basePath, name], values?.[name], errors),
   );
@@ -30,7 +33,7 @@ function renderField(
   path: Array<string | number>,
   value: unknown,
   errors: ErrorsByPath,
-): HtmlEscapedString {
+): Html {
   const name = fieldName(path);
   const id = idFor(path);
   const label = def.label ?? humanize(String(path.at(-1)));
@@ -39,7 +42,7 @@ function renderField(
     .filter(Boolean)
     .join(" ");
 
-  const shell = (control: HtmlEscapedString, labelled = true) => html`
+  const shell = (control: Html, labelled = true) => html`
     <div class="field">
       ${
         labelled

@@ -6,6 +6,8 @@ const REPO = { owner: "ada", repo: "site" };
 interface Call {
   method: string;
   path: string;
+  /** Kept separate from `path` so responses stay keyed on the route alone. */
+  query: string;
   body?: Record<string, unknown>;
 }
 
@@ -28,10 +30,11 @@ function fakeGitHub(overrides: Record<string, unknown> = {}) {
   };
 
   const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
-    const path = new URL(String(url)).pathname;
+    const parsed = new URL(String(url));
+    const path = parsed.pathname;
     const method = init?.method ?? "GET";
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-    calls.push({ method, path, body });
+    calls.push({ method, path, query: parsed.search, body });
 
     if (method === "POST" && path.endsWith("/git/blobs")) {
       blobCounter += 1;
@@ -268,5 +271,64 @@ describe("ensureBranch", () => {
 
     expect(await client(fetchImpl).ensureBranch(REPO, "cms/draft-1", "main")).toBe("draft-head");
     expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+});
+
+describe("pull requests", () => {
+  it("opens one when none is open for the branch", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "POST /repos/ada/site/pulls": {
+        number: 7,
+        html_url: "https://gh/pr/7",
+        title: "Update hero",
+      },
+    });
+
+    const pr = await client(fetchImpl).openOrUpdatePullRequest(REPO, {
+      head: "cms/draft-home.hero",
+      base: "main",
+      title: "Update hero",
+      body: "Changed heading.",
+    });
+
+    expect(pr).toEqual({
+      number: 7,
+      url: "https://gh/pr/7",
+      title: "Update hero",
+      created: true,
+    });
+    const opened = calls.find((c) => c.method === "POST" && c.path.endsWith("/pulls"));
+    expect(opened?.body).toMatchObject({ head: "cms/draft-home.hero", base: "main" });
+  });
+
+  it("updates the open pull request instead of opening a second one", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/ada/site/pulls": [{ number: 7, html_url: "https://gh/pr/7", title: "Old title" }],
+      "PATCH /repos/ada/site/pulls/7": {
+        number: 7,
+        html_url: "https://gh/pr/7",
+        title: "New title",
+      },
+    });
+
+    const pr = await client(fetchImpl).openOrUpdatePullRequest(REPO, {
+      head: "cms/draft-home.hero",
+      base: "main",
+      title: "New title",
+      body: "Changed again.",
+    });
+
+    expect(pr.created).toBe(false);
+    expect(pr.title).toBe("New title");
+    expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/pulls"))).toBe(false);
+  });
+
+  it("looks for the open pull request scoped to this repository's branch", async () => {
+    const { calls, fetchImpl } = fakeGitHub({ "GET /repos/ada/site/pulls": [] });
+    expect(await client(fetchImpl).findOpenPullRequest(REPO, "cms/draft-home.hero")).toBeNull();
+    const lookup = calls.find((c) => c.path.includes("/pulls"));
+    expect(lookup?.query).toContain("state=open");
+    // Scoped to this owner, so a fork's branch of the same name cannot match.
+    expect(decodeURIComponent(lookup?.query ?? "")).toContain("ada:cms/draft-home.hero");
   });
 });

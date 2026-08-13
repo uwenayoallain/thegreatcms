@@ -20,6 +20,8 @@ const SITE = {
   repo: "site",
   branch: "main",
   token: "token",
+  publishMode: "direct" as const,
+  aiTitles: false,
   createdAt: "2026-08-12",
 };
 

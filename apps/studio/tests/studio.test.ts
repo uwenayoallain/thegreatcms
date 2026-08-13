@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { FIXTURES_DIR } from "@greatcms/conformance";
 import axe from "axe-core";
 import { JSDOM } from "jsdom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { createSessionCookie } from "../src/auth.js";
 import { Store } from "../src/db.js";
@@ -23,6 +23,8 @@ const SITE = {
   repo: "site",
   branch: "main",
   token: "token",
+  publishMode: "direct" as const,
+  aiTitles: false,
   createdAt: "2026-08-12",
 };
 
@@ -43,6 +45,14 @@ function fakeGitHub() {
   ]);
   const commits: Committed[] = [];
   const refUpdates: Array<{ branch: string }> = [];
+  const pulls: Array<{
+    number: number;
+    url: string;
+    title: string;
+    base?: string;
+    head?: string;
+    body?: string;
+  }> = [];
   const state = { head: "head-1", blobs: new Map<string, string>() };
 
   const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
@@ -88,6 +98,29 @@ function fakeGitHub() {
       state.head = `commit-${commits.length + 1}`;
       return json({ sha: state.head, html_url: `https://gh/${state.head}` });
     }
+    if (method === "GET" && pathname.endsWith("/pulls")) {
+      return json(pulls.map((pr) => ({ number: pr.number, html_url: pr.url, title: pr.title })));
+    }
+    if (method === "POST" && pathname.endsWith("/pulls")) {
+      const pr = {
+        number: pulls.length + 1,
+        url: `https://gh/pr/${pulls.length + 1}`,
+        title: String(body.title),
+        base: String(body.base),
+        head: String(body.head),
+        body: String(body.body),
+      };
+      pulls.push(pr);
+      return json({ number: pr.number, html_url: pr.url, title: pr.title });
+    }
+    if (method === "PATCH" && pathname.includes("/pulls/")) {
+      const pr = pulls[0];
+      if (pr) {
+        pr.title = String(body.title);
+        pr.body = String(body.body);
+      }
+      return json({ number: pr?.number, html_url: pr?.url, title: pr?.title });
+    }
     if (method === "PATCH" && pathname.includes("/git/refs/heads/")) {
       refUpdates.push({ branch: pathname.split("/git/refs/heads/")[1] ?? "" });
       return json({ ok: true });
@@ -98,7 +131,7 @@ function fakeGitHub() {
     return json({ message: `unhandled ${method} ${pathname}` }, 500);
   }) as unknown as typeof globalThis.fetch;
 
-  return { fetchImpl, commits, refUpdates, files, state };
+  return { fetchImpl, commits, refUpdates, pulls, files, state };
 }
 
 function json(value: unknown, status = 200): Response {
@@ -484,5 +517,138 @@ describe("local preview", () => {
     const body = await response.text();
     expect(body).toContain("npx greatcms preview --branch cms/draft-home.hero");
     expect(body).toContain("Your build runs on your machine");
+  });
+});
+
+describe("publishing as a pull request", () => {
+  const prSite = {
+    ...SITE,
+    id: "site-pr",
+    name: "Reviewed",
+    publishMode: "pull-request" as const,
+  };
+
+  function prApp(summarizer?: { summarize: () => Promise<never> } | undefined) {
+    const prStore = new Store(":memory:");
+    prStore.addSite(prSite);
+    return {
+      store: prStore,
+      prApp: createApp({
+        store: prStore,
+        password: PASSWORD,
+        secret: SECRET,
+        fetch: github.fetchImpl,
+        ...(summarizer ? { summarizer: summarizer as never } : {}),
+      }),
+    };
+  }
+
+  const propose = (target: ReturnType<typeof createApp>, fields: Record<string, string>) =>
+    target.request("/sites/site-pr/regions/home.hero", {
+      method: "POST",
+      headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        headSha: "head-1",
+        action: "publish",
+        "f[image][src]": "/media/a.webp",
+        "f[image][alt]": "Alt",
+        ...fields,
+      }),
+    });
+
+  it("opens a pull request instead of committing to the publish branch", async () => {
+    const { prApp: underTest } = prApp();
+    const response = await propose(underTest, { "f[heading]": "Proposed heading" });
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("Opened pull request #1");
+    expect(body).toContain("Nothing is live until it is merged");
+
+    // The commit went to the draft branch; main was never touched.
+    expect(github.refUpdates.map((ref) => ref.branch)).toEqual(["cms/draft-home.hero"]);
+    expect(github.pulls[0]).toMatchObject({ base: "main", head: "cms/draft-home.hero" });
+  });
+
+  it("names the pull request from the diff, with no model involved", async () => {
+    const { prApp: underTest } = prApp();
+    await propose(underTest, { "f[heading]": "Proposed heading" });
+
+    const pr = github.pulls[0];
+    expect(pr?.title).toContain("Home hero");
+    expect(pr?.body).toContain("| `heading` |");
+    expect(pr?.body).toContain("Merging this publishes the change");
+  });
+
+  it("updates the open pull request rather than opening a second one", async () => {
+    const { prApp: underTest } = prApp();
+    await propose(underTest, { "f[heading]": "First attempt" });
+    const response = await propose(underTest, { "f[heading]": "Second attempt" });
+
+    expect(await response.text()).toContain("Updated pull request #1");
+    expect(github.pulls).toHaveLength(1);
+  });
+
+  it("records the pull request alongside the commit", async () => {
+    const { prApp: underTest, store: prStore } = prApp();
+    await propose(underTest, { "f[heading]": "Recorded" });
+
+    const [entry] = prStore.recentPublishes("site-pr");
+    expect(entry?.pull_request_url).toBe("https://gh/pr/1");
+  });
+
+  it("still refuses invalid content, before opening anything", async () => {
+    const { prApp: underTest } = prApp();
+    const response = await propose(underTest, { "f[heading]": "" });
+
+    expect(response.status).toBe(422);
+    expect(github.pulls).toHaveLength(0);
+  });
+
+  it("labels the publish button as proposing, so nobody expects it to go live", async () => {
+    const { prApp: underTest } = prApp();
+    const body = await (
+      await underTest.request("/sites/site-pr/regions/home.hero", { headers: signedIn })
+    ).text();
+    expect(body).toContain("Propose change");
+    expect(body).not.toContain(">Publish<");
+  });
+
+  it("does not send content to a model unless the site opted in", async () => {
+    const summarize = vi.fn();
+    const { prApp: underTest } = prApp({ summarize } as never);
+    await propose(underTest, { "f[heading]": "Private content" });
+    expect(summarize).not.toHaveBeenCalled();
+  });
+
+  it("uses the model when the site opted in, and says so", async () => {
+    const optedIn = new Store(":memory:");
+    optedIn.addSite({ ...prSite, aiTitles: true });
+    const optedInApp = createApp({
+      store: optedIn,
+      password: PASSWORD,
+      secret: SECRET,
+      fetch: github.fetchImpl,
+      summarizer: {
+        async summarize() {
+          return { title: "Freshen up the homepage hero", body: "Body", fromModel: true };
+        },
+      },
+    });
+
+    const response = await optedInApp.request("/sites/site-pr/regions/home.hero", {
+      method: "POST",
+      headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        headSha: "head-1",
+        "f[heading]": "Model named",
+        "f[image][src]": "/media/a.webp",
+        "f[image][alt]": "Alt",
+      }),
+    });
+
+    const body = await response.text();
+    expect(github.pulls[0]?.title).toBe("Freshen up the homepage hero");
+    expect(body).toContain("Title written by the configured model");
   });
 });

@@ -22,7 +22,10 @@ export interface PageOptions {
   flash?: { kind: "success" | "error"; message: string; detail?: string[] };
 }
 
-export function page(options: PageOptions, body: HtmlEscapedString | string): string {
+export function page(
+  options: PageOptions,
+  body: HtmlEscapedString | Promise<HtmlEscapedString> | string,
+): string {
   const { title, crumbs = [], flash } = options;
 
   return `<!doctype html>${html`
