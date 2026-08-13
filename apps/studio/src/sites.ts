@@ -92,6 +92,49 @@ export class SiteClient {
     return resolveRegion(context.schema, regionId, stored) ?? {};
   }
 
+  /**
+   * Saves to a draft branch instead of the publish branch, so the site's own CI
+   * builds a preview. This is the only preview approach that works for every
+   * stack — the studio cannot render a Hugo site, and pretending otherwise
+   * would mean a preview that lies.
+   */
+  async saveDraft(options: {
+    context: SiteContext;
+    regionId: string;
+    document: RegionDocument;
+    actor?: string;
+  }): Promise<{ branch: string; commit: CommitResult; previewUrl: string | null }> {
+    const { context, regionId, document, actor } = options;
+    const branch = `${context.config.publish.draftBranchPrefix}-${regionId}`.replace(
+      /[^\w./-]/g,
+      "-",
+    );
+
+    await this.github.ensureBranch(this.repo, branch, this.site.branch);
+
+    const commit = await this.github.commitFiles(this.repo, {
+      branch,
+      message: `content(draft): ${regionId}`,
+      files: [
+        {
+          path: regionFilePath(context.config, regionId),
+          content: serializeRegion(document, {
+            updatedAt: new Date().toISOString(),
+            updatedBy: actor ?? "studio",
+            version: context.schema.version,
+          }),
+        },
+      ],
+    });
+
+    const template = context.config.preview?.urlTemplate;
+    return {
+      branch,
+      commit,
+      previewUrl: template ? template.replaceAll("{branch}", branch) : null,
+    };
+  }
+
   async publishRegion(options: {
     context: SiteContext;
     regionId: string;

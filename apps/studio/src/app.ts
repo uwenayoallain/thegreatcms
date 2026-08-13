@@ -301,7 +301,7 @@ export function createApp(options: AppOptions) {
 
     // Block list edits round-trip through the server so add, remove, and
     // reorder work without a line of client JavaScript.
-    if (action !== "publish" && isBlocksRegion(region)) {
+    if (action !== "publish" && action !== "draft" && isBlocksRegion(region)) {
       const blocks = document.blocks as Array<Record<string, unknown>>;
       applyBlockAction(action, blocks, String(form.get("addType") ?? ""), region.allow);
       return c.html(
@@ -337,6 +337,30 @@ export function createApp(options: AppOptions) {
         }),
         422,
       );
+    }
+
+    if (action === "draft") {
+      try {
+        const draft = await client.saveDraft({ context, regionId, document, actor });
+        return c.html(
+          editRegionPage({
+            site,
+            schema: context.schema,
+            regionId,
+            region,
+            document,
+            errors: new Map(),
+            headSha,
+            preview: { url: draft.previewUrl, branch: draft.branch },
+            flash: {
+              kind: "success",
+              message: `Saved to ${draft.branch}. Nothing on ${site.branch} has changed.`,
+            },
+          }),
+        );
+      } catch (error) {
+        return c.html(errorPage(site.name, describeError(error)), 502);
+      }
     }
 
     try {

@@ -213,10 +213,11 @@ export interface EditPageOptions {
   errors: ErrorsByPath;
   headSha: string;
   flash?: PageOptions["flash"];
+  preview?: { url: string | null; branch: string };
 }
 
 export function editRegionPage(options: EditPageOptions): string {
-  const { site, schema, regionId, region, document, errors, headSha, flash } = options;
+  const { site, schema, regionId, region, document, errors, headSha, flash, preview } = options;
   const title = region.label ?? regionId;
 
   return page(
@@ -247,9 +248,40 @@ export function editRegionPage(options: EditPageOptions): string {
 
         <div class="actions">
           <button type="submit" name="action" value="publish">Publish</button>
+          <button class="secondary" type="submit" name="action" value="draft">
+            Save draft &amp; preview
+          </button>
           <a class="button secondary" href="/sites/${site.id}">Back to site</a>
         </div>
       </form>
+
+      ${
+        preview
+          ? html`
+              <h2>Preview</h2>
+              <p>
+                Saved to <code>${preview.branch}</code>. Your own pipeline builds it — exactly the
+                real site, because it is the real build.
+              </p>
+              ${
+                preview.url
+                  ? html`
+                      <p><a href="${preview.url}">Open the preview</a></p>
+                      <iframe
+                        src="${preview.url}"
+                        title="Preview of ${regionId} on branch ${preview.branch}"
+                        class="preview"
+                        loading="lazy"
+                      ></iframe>
+                    `
+                  : html`<p class="muted">
+                      Set <code>preview.urlTemplate</code> in <code>.cms/config.yaml</code> — for
+                      example <code>https://{branch}--site.pages.dev</code> — to see it inline here.
+                    </p>`
+              }
+            `
+          : ""
+      }
     `,
   );
 }

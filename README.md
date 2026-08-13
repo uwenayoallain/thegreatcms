@@ -19,7 +19,7 @@ Read [SPEC.md](./SPEC.md) — that document is the actual product.
 
 ## Status
 
-Milestone 4 of 5. The standard is proven from two languages, the studio edits
+Milestone 4 of 5 (M3 and M4 both done). The standard is proven from two languages, the studio edits
 and publishes real content to a real repository, and form submissions from any
 site land in one inbox.
 
@@ -28,7 +28,7 @@ site land in one inbox.
 | ✅ **M0** Foundation    | pnpm + Turborepo, oxlint + oxfmt (Rust), tsdown/Rolldown, Vitest             |
 | ✅ **M1** The standard  | `@greatcms/spec`, conformance kit, Node reader, Astro example, Python reader |
 | ✅ **M2** Studio        | Auth, multi-site registry, schema-generated editor, atomic publishes         |
-| ⬜ **M3** Preview       | Draft branch + your own CI, iframed                                          |
+| ✅ **M3** Preview       | Draft branch + your own CI, iframed                                          |
 | ⬜ **M4** Dynamic layer | Forms, comments, inbox, email                                                |
 | ⬜ **M5** Hardening     | Full a11y pass, perf budgets, CLI, docs                                      |
 

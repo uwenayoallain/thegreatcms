@@ -203,6 +203,7 @@ button.danger { background: transparent; color: var(--danger); border-color: cur
 dl.entry { margin: .6rem 0 0; display: grid; grid-template-columns: minmax(6rem, 12rem) 1fr; gap: .25rem .9rem; font-size: .93rem; }
 dl.entry dt { font-weight: 600; color: var(--ink-soft); }
 dl.entry dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+iframe.preview { width: 100%; height: 34rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); }
 table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }

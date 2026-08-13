@@ -42,6 +42,7 @@ function fakeGitHub() {
     ["content/cms/home.body.json", fixture("content/cms/home.body.json")],
   ]);
   const commits: Committed[] = [];
+  const refUpdates: Array<{ branch: string }> = [];
   const state = { head: "head-1", blobs: new Map<string, string>() };
 
   const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
@@ -88,12 +89,16 @@ function fakeGitHub() {
       return json({ sha: state.head, html_url: `https://gh/${state.head}` });
     }
     if (method === "PATCH" && pathname.includes("/git/refs/heads/")) {
+      refUpdates.push({ branch: pathname.split("/git/refs/heads/")[1] ?? "" });
       return json({ ok: true });
+    }
+    if (method === "POST" && pathname.endsWith("/git/refs")) {
+      return json({ ref: String(body.ref) });
     }
     return json({ message: `unhandled ${method} ${pathname}` }, 500);
   }) as unknown as typeof globalThis.fetch;
 
-  return { fetchImpl, commits, files, state };
+  return { fetchImpl, commits, refUpdates, files, state };
 }
 
 function json(value: unknown, status = 200): Response {
@@ -410,5 +415,58 @@ describe("accessibility", () => {
   it("ships no JavaScript", async () => {
     const body = await (await get("/sites/site-1/regions/home.body")).text();
     expect(body).not.toMatch(/<script/i);
+  });
+});
+
+describe("draft previews", () => {
+  it("commits to a draft branch and leaves the publish branch alone", async () => {
+    const response = await post("/sites/site-1/regions/home.hero", {
+      headSha: "head-1",
+      action: "draft",
+      "f[heading]": "Not live yet",
+      "f[image][src]": "/media/a.webp",
+      "f[image][alt]": "Alt",
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("Nothing on main has changed");
+    expect(body).toContain("cms/draft-home.hero");
+
+    // The commit went to the draft branch, never to main.
+    expect(github.commits).toHaveLength(1);
+    expect(github.refUpdates.map((ref) => ref.branch)).toEqual(["cms/draft-home.hero"]);
+  });
+
+  it("validates a draft too, because a preview of invalid content is useless", async () => {
+    const response = await post("/sites/site-1/regions/home.hero", {
+      headSha: "head-1",
+      action: "draft",
+      "f[heading]": "",
+    });
+    expect(response.status).toBe(422);
+    expect(github.commits).toHaveLength(0);
+  });
+
+  it("explains how to get an inline preview when no URL template is configured", async () => {
+    const response = await post("/sites/site-1/regions/home.hero", {
+      headSha: "head-1",
+      action: "draft",
+      "f[heading]": "Draft",
+      "f[image][src]": "/media/a.webp",
+      "f[image][alt]": "Alt",
+    });
+    expect(await response.text()).toContain("preview.urlTemplate");
+  });
+
+  it("treats draft as a save, not a block-list edit", async () => {
+    const response = await post("/sites/site-1/regions/home.body", {
+      headSha: "head-1",
+      action: "draft",
+      "f[blocks][0][_type]": "hero",
+      "f[blocks][0][heading]": "Drafted",
+    });
+    expect(response.status).toBe(200);
+    expect(github.commits).toHaveLength(1);
   });
 });
