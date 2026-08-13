@@ -652,3 +652,112 @@ describe("publishing as a pull request", () => {
     expect(body).toContain("Title written by the configured model");
   });
 });
+
+function pngBytes(width = 800, height = 600): Uint8Array {
+  const bytes = new Uint8Array(33);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(8, 13);
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
+}
+
+describe("uploading an image", () => {
+  function publishWithFile(file: File, fields: Record<string, string> = {}) {
+    const body = new FormData();
+    body.set("headSha", "head-1");
+    body.set("action", "publish");
+    body.set("f[heading]", "With a picture");
+    body.set("f[image][alt]", "A described picture");
+    for (const [key, value] of Object.entries(fields)) body.set(key, value);
+    body.set("m[image]", file);
+
+    return app.request("/sites/site-1/regions/home.hero", {
+      method: "POST",
+      headers: signedIn,
+      body,
+    });
+  }
+
+  it("commits the image and the content that references it in one commit", async () => {
+    const file = new File([pngBytes()], "Hero Shot.png", { type: "image/png" });
+    const response = await publishWithFile(file);
+
+    expect(response.status).toBe(200);
+    expect(github.commits).toHaveLength(1);
+
+    const paths = github.commits[0]?.files.map((f) => f.path) ?? [];
+    expect(paths).toHaveLength(2);
+    expect(paths.some((path) => /^public\/media\/hero-shot-[0-9a-f]{8}\.png$/.test(path))).toBe(
+      true,
+    );
+    expect(paths).toContain("content/cms/home.hero.json");
+  });
+
+  it("stores the dimensions it read from the file, so pages do not jump", async () => {
+    await publishWithFile(new File([pngBytes(1440, 960)], "wide.png", { type: "image/png" }));
+
+    const written = github.commits[0]?.files.find((f) => f.path.endsWith(".json"))?.content ?? "{}";
+    expect(JSON.parse(written).image).toMatchObject({ width: 1440, height: 960 });
+  });
+
+  it("keeps the alt text typed alongside the upload", async () => {
+    await publishWithFile(new File([pngBytes()], "a.png", { type: "image/png" }));
+
+    const written = github.commits[0]?.files.find((f) => f.path.endsWith(".json"))?.content ?? "{}";
+    expect(JSON.parse(written).image.alt).toBe("A described picture");
+  });
+
+  it("still refuses an upload with no alt text", async () => {
+    const response = await publishWithFile(new File([pngBytes()], "a.png", { type: "image/png" }), {
+      "f[image][alt]": "",
+    });
+
+    expect(response.status).toBe(422);
+    expect(github.commits).toHaveLength(0);
+  });
+
+  it("refuses a file that is not an image, without committing anything", async () => {
+    const response = await publishWithFile(
+      new File(["not an image"], "invoice.pdf", { type: "application/pdf" }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("cannot be uploaded");
+    expect(github.commits).toHaveLength(0);
+  });
+
+  it("ignores an empty file input, so an unchanged image is left alone", async () => {
+    const body = new FormData();
+    body.set("headSha", "head-1");
+    body.set("f[heading]", "No new picture");
+    body.set("f[image][src]", "/media/existing.webp");
+    body.set("f[image][alt]", "Existing");
+    body.set("m[image]", new File([], "", { type: "application/octet-stream" }));
+
+    const response = await app.request("/sites/site-1/regions/home.hero", {
+      method: "POST",
+      headers: signedIn,
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(github.commits[0]?.files.map((f) => f.path)).toEqual(["content/cms/home.hero.json"]);
+    const written = github.commits[0]?.files[0]?.content ?? "{}";
+    expect(JSON.parse(written).image.src).toBe("/media/existing.webp");
+  });
+
+  it("offers a file input on the edit form, in a multipart form", async () => {
+    const body = await (await get("/sites/site-1/regions/home.hero")).text();
+    const { document } = new JSDOM(body).window;
+
+    const form = document.querySelector("form[action*='regions']");
+    expect(form?.getAttribute("enctype")).toBe("multipart/form-data");
+
+    const fileInput = document.querySelector<HTMLInputElement>('input[name="m[image]"]');
+    expect(fileInput?.type).toBe("file");
+    expect(document.querySelector(`label[for="${fileInput?.id}"]`)).toBeTruthy();
+  });
+});

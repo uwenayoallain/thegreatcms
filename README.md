@@ -129,6 +129,23 @@ stays machine-generated, because a reviewer needs the change list to be true
 rather than fluent. It is off by default per site, since it sends your content to
 a third party.
 
+## Images
+
+Upload one in the editor and it is committed **in the same commit** as the
+content that points at it. That is what the hand-built Git tree was for: if the
+picture and the JSON referencing it landed separately, every deploy in between
+would build a page with a broken image.
+
+Width and height are read from the file's own header — no dependency, no
+trusting the browser — so the stored value carries the intrinsic size and pages
+do not reflow as images load. Files are content-addressed
+(`hero-shot-a1b2c3d4.png`), so re-uploading identical bytes reuses the path
+while an edited image gets a fresh URL that busts any cache holding the old one.
+
+SVG is deliberately not accepted: it is a script-bearing document, and an editor
+uploading one would be a stored-XSS vector on the published site. Alt text stays
+required — uploading does not bypass validation.
+
 ## Previewing a draft
 
 Two ways, and neither runs your code on our server.

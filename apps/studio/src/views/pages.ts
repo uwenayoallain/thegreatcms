@@ -307,7 +307,11 @@ export function editRegionPage(options: EditPageOptions): string {
           : ""
       }
 
-      <form method="POST" action="/sites/${site.id}/regions/${regionId}">
+      <form
+        method="POST"
+        action="/sites/${site.id}/regions/${regionId}"
+        enctype="multipart/form-data"
+      >
         <input type="hidden" name="headSha" value="${headSha}" />
 
         ${

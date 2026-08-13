@@ -8,6 +8,7 @@
  */
 
 import { GitHubClient, type CommitResult, type PullRequest } from "@greatcms/git";
+import type { FileChange } from "@greatcms/git";
 import {
   DEFAULT_CONFIG,
   type CmsConfig,
@@ -103,6 +104,8 @@ export class SiteClient {
     regionId: string;
     document: RegionDocument;
     actor?: string;
+    /** Uploads that must land in the same commit as the content. */
+    media?: FileChange[];
   }): Promise<{ branch: string; commit: CommitResult; previewUrl: string | null }> {
     const { context, regionId, document, actor } = options;
     const branch = `${context.config.publish.draftBranchPrefix}-${regionId}`.replace(
@@ -116,6 +119,7 @@ export class SiteClient {
       branch,
       message: `content(draft): ${regionId}`,
       files: [
+        ...(options.media ?? []),
         {
           path: regionFilePath(context.config, regionId),
           content: serializeRegion(document, {
@@ -148,12 +152,14 @@ export class SiteClient {
     title: string;
     body: string;
     actor?: string;
+    media?: FileChange[];
   }): Promise<{ commit: CommitResult; pullRequest: PullRequest; previewUrl: string | null }> {
     const draft = await this.saveDraft({
       context: options.context,
       regionId: options.regionId,
       document: options.document,
       actor: options.actor,
+      media: options.media,
     });
 
     const pullRequest = await this.github.openOrUpdatePullRequest(this.repo, {
@@ -172,6 +178,8 @@ export class SiteClient {
     document: RegionDocument;
     actor?: string;
     expectedHeadSha?: string;
+    /** Uploads, committed atomically with the content that references them. */
+    media?: FileChange[];
   }): Promise<CommitResult> {
     const { context, regionId, document, actor, expectedHeadSha } = options;
     const path = regionFilePath(context.config, regionId);
@@ -187,7 +195,9 @@ export class SiteClient {
     const result = await this.github.commitFiles(this.repo, {
       branch: this.site.branch,
       message,
-      files: [{ path, content }],
+      // One commit: the image and the JSON pointing at it land together, or
+      // neither does. A deploy between the two would build a broken page.
+      files: [...(options.media ?? []), { path, content }],
       expectedHeadSha,
     });
 

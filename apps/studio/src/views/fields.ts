@@ -13,7 +13,7 @@ import type { HtmlEscapedString } from "hono/utils/html";
 
 /** What `html` actually returns: sync unless an interpolation is a promise. */
 type Html = HtmlEscapedString | Promise<HtmlEscapedString>;
-import { fieldName } from "../form.js";
+import { fieldName, MEDIA_ROOT } from "../form.js";
 
 export type ErrorsByPath = Map<string, string>;
 
@@ -186,8 +186,32 @@ function renderField(
       return html`
         <fieldset class="field">
           <legend>${label}</legend>
+          ${
+            image.src
+              ? html`<p class="preview-thumb">
+                  <img src="${asText(image.src)}" alt="" width="160" />
+                  <span class="hint">${asText(image.src)}</span>
+                </p>`
+              : ""
+          }
+
           <div class="field">
-            <label for="${id}-src">Image URL</label>
+            <label for="${id}-file">Upload an image</label>
+            <input
+              type="file"
+              id="${id}-file"
+              name="${fieldName(path, MEDIA_ROOT)}"
+              accept="${(def.accept ?? ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]).join(",")}"
+              aria-describedby="${id}-file-hint"
+            />
+            <span class="hint" id="${id}-file-hint">
+              Committed with your content in the same change. Width and height are read from the
+              file, so pages do not jump while it loads.
+            </span>
+          </div>
+
+          <div class="field">
+            <label for="${id}-src">Or use an image URL</label>
             <input type="text" id="${id}-src" name="${name}[src]" value="${asText(image.src)}" />
           </div>
           <div class="field">

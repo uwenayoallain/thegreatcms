@@ -131,6 +131,10 @@ beginning with `_` is machinery and may be ignored by consumers.
 
 ### Images and accessibility
 
+Uploads are committed alongside content, into `content.media`, and served from
+`mediaUrlPrefix`. Names are content-addressed so identical bytes reuse a path
+and edited bytes get a new one.
+
 `alt` is required by default. A field may set `alt: decorative-allowed`, which
 is the only way an empty `alt` validates — making an inaccessible image a
 deliberate choice rather than an oversight. `width` and `height` are recorded on

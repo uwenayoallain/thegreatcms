@@ -18,7 +18,8 @@ import {
   readSession,
 } from "./auth.js";
 import type { Site, Store } from "./db.js";
-import { decodeBlocks, decodeForm } from "./form.js";
+import { decodeBlocks, decodeForm, fieldName, MEDIA_ROOT, parsePath } from "./form.js";
+import { prepareUpload, UploadError } from "./media.js";
 import { deterministicSummarizer, diffDocuments, type Summarizer } from "./summarize.js";
 import {
   assessSpam,
@@ -292,17 +293,73 @@ export function createApp(options: AppOptions) {
     if (!region) return c.notFound();
 
     const form = await c.req.formData();
-    const entries = [...form.entries()].map(
+    const entries: Array<[string, string]> = [...form.entries()].map(
       ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
     );
     const action = String(form.get("action") ?? "publish");
     const headSha = String(form.get("headSha") ?? "");
+
+    // Uploads ride along in the same form, keyed by the field they belong to,
+    // so an image and the content referencing it are one submission and one
+    // commit. Each upload is turned into ordinary form entries before decoding,
+    // so an uploaded image travels the same path as a pasted URL — and the alt
+    // text typed beside it is picked up with everything else.
+    let media: Array<{ path: string; base64: string }> = [];
+    try {
+      const files = [...form.entries()].flatMap(([key, value]) => {
+        if (typeof value === "string" || value.size === 0) return [];
+        const path = parsePath(key, MEDIA_ROOT);
+        return path ? [{ path, file: value }] : [];
+      });
+
+      // Reading the uploads runs at once; a publish with three images should
+      // not cost three sequential reads before it even starts committing.
+      const prepared = await Promise.all(
+        files.map(async ({ path, file }) => ({
+          path,
+          upload: prepareUpload(context.config, {
+            fileName: file.name,
+            type: file.type,
+            bytes: new Uint8Array(await file.arrayBuffer()),
+          }),
+        })),
+      );
+
+      for (const { path, upload } of prepared) {
+        media.push({ path: upload.path, base64: upload.base64 });
+
+        const field = fieldName(path);
+        entries.push([`${field}[src]`, upload.src]);
+        if (upload.width) entries.push([`${field}[width]`, String(upload.width)]);
+        if (upload.height) entries.push([`${field}[height]`, String(upload.height)]);
+      }
+    } catch (error) {
+      if (!(error instanceof UploadError)) throw error;
+      return c.html(
+        editRegionPage({
+          site,
+          schema: context.schema,
+          regionId,
+          region,
+          document: isBlocksRegion(region)
+            ? { blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields) }
+            : decodeForm(entries, region.fields),
+          errors: new Map(),
+          headSha,
+          flash: { kind: "error", message: error.message },
+        }),
+        422,
+      );
+    }
 
     const document: RegionDocument = isBlocksRegion(region)
       ? {
           blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields),
         }
       : decodeForm(entries, region.fields);
+
+    // Nothing is uploaded for a block-list shuffle; those never reach a commit.
+    if (action !== "publish" && action !== "draft") media = [];
 
     // Block list edits round-trip through the server so add, remove, and
     // reorder work without a line of client JavaScript.
@@ -346,7 +403,7 @@ export function createApp(options: AppOptions) {
 
     if (action === "draft") {
       try {
-        const draft = await client.saveDraft({ context, regionId, document, actor });
+        const draft = await client.saveDraft({ context, regionId, document, actor, media });
         return c.html(
           editRegionPage({
             site,
@@ -389,6 +446,7 @@ export function createApp(options: AppOptions) {
           title: summary.title,
           body: summary.body,
           actor,
+          media,
         });
 
         store.recordPublish({
@@ -431,6 +489,7 @@ export function createApp(options: AppOptions) {
         document,
         actor,
         expectedHeadSha: headSha || undefined,
+        media,
       });
       store.recordPublish({
         siteId: site.id,

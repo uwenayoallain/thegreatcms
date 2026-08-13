@@ -13,19 +13,21 @@
 import type { FieldDef } from "@greatcms/spec";
 
 export const ROOT = "f";
+/** Namespace for file inputs, kept separate from text so decoding stays simple. */
+export const MEDIA_ROOT = "m";
 
 /** `f[seo][title]` → ['seo', 'title'] */
-export function parsePath(name: string): string[] | null {
+export function parsePath(name: string, root: string = ROOT): string[] | null {
   const match = /^([^[\]]+)((\[[^[\]]*\])*)$/.exec(name);
   if (!match) return null;
   const [, head = "", rest = ""] = match;
-  if (head !== ROOT) return null;
+  if (head !== root) return null;
   const segments = [...rest.matchAll(/\[([^[\]]*)\]/g)].map((m) => m[1] ?? "");
   return segments.every((segment) => segment !== "") ? segments : null;
 }
 
-export function fieldName(path: Array<string | number>): string {
-  return ROOT + path.map((segment) => `[${segment}]`).join("");
+export function fieldName(path: Array<string | number>, root: string = ROOT): string {
+  return root + path.map((segment) => `[${segment}]`).join("");
 }
 
 /**

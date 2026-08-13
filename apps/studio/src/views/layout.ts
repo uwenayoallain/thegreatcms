@@ -206,6 +206,9 @@ button.danger { background: transparent; color: var(--danger); border-color: cur
 dl.entry { margin: .6rem 0 0; display: grid; grid-template-columns: minmax(6rem, 12rem) 1fr; gap: .25rem .9rem; font-size: .93rem; }
 dl.entry dt { font-weight: 600; color: var(--ink-soft); }
 dl.entry dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.preview-thumb { margin: 0 0 .8rem; }
+.preview-thumb img { max-width: 10rem; height: auto; border-radius: 8px; border: 1px solid var(--line); display: block; }
+input[type=file] { width: 100%; font: inherit; color: inherit; padding: .4rem 0; }
 pre { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: .8rem .9rem; overflow-x: auto; font-size: .9rem; }
 pre code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 h3 { font-size: 1rem; margin: 1.5rem 0 .5rem; }
