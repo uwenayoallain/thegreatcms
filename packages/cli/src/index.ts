@@ -9,8 +9,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { readFile, rm, writeFile, mkdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
@@ -22,6 +22,16 @@ import {
   type CmsConfig,
   type CmsSchema,
 } from "@greatcms/spec";
+import { detectFramework, FRAMEWORKS, type Framework, type FrameworkId } from "./detect.js";
+import {
+  DEFAULT_SCHEMA_URL,
+  nextSteps,
+  planInit,
+  TEMPLATES,
+  type InitAnswers,
+  type TemplateId,
+} from "./init.js";
+import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } from "./prompt.js";
 import {
   applyOverlay,
   assertContentIsClean,
@@ -115,6 +125,8 @@ async function firstReadable(
 export interface RunOptions {
   argv: string[];
   cwd: string;
+  /** Injected by tests so the interactive flow can be driven without a TTY. */
+  prompt?: PromptPort;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
 }
@@ -126,6 +138,8 @@ export async function run(options: RunOptions): Promise<number> {
 
   try {
     switch (command) {
+      case "init":
+        return await initCommand({ ...options, flags });
       case "preview":
         return await previewCommand({ ...options, flags });
       case "doctor":
@@ -140,12 +154,153 @@ export async function run(options: RunOptions): Promise<number> {
         return 1;
     }
   } catch (error) {
+    if (error instanceof PromptCancelled) return 130;
     if (error instanceof PreviewError || error instanceof SpecError) {
       stderr(`${error.message}\n`);
       return 1;
     }
     throw error;
   }
+}
+
+export interface InitDeps {
+  prompt?: PromptPort;
+}
+
+async function initCommand(options: RunOptions & { flags: Flags }): Promise<number> {
+  const { cwd, stdout, flags } = options;
+  const root = resolve(cwd);
+
+  const prompt =
+    options.prompt ??
+    (flags.boolean("yes") || !process.stdin.isTTY
+      ? defaultsOnlyPrompt(stdout)
+      : terminalPrompt({ input: process.stdin, output: process.stdout }));
+
+  const existing = await Promise.all(
+    [".cms/schema.yaml", ".cms/config.yaml"].map(async (name) => ({
+      name,
+      exists: (await nodeFiles(root).read(name)) !== null,
+    })),
+  );
+  const clashes = existing.filter((file) => file.exists).map((file) => file.name);
+  if (clashes.length > 0 && !flags.boolean("force")) {
+    throw new PreviewError(
+      `This repository is already set up: ${clashes.join(", ")}.`,
+      "Edit those files directly, run `greatcms doctor` to check them, or pass --force to start over.",
+    );
+  }
+
+  const detection = detectFramework({
+    files: await listRoot(root),
+    packageJson: await readPackageJson(root),
+  });
+
+  stdout(`\nSetting up GreatCMS in ${root}\n\n`);
+  prompt.note(
+    detection.confident
+      ? `Detected ${detection.framework.label} (${detection.evidence}).`
+      : `No framework detected (${detection.evidence}).`,
+  );
+
+  const name =
+    flags.string("name") ??
+    (await prompt.text("Site name?", (await readPackageName(root)) ?? basename(root)));
+
+  const framework = flags.string("framework")
+    ? frameworkFromFlag(flags.string("framework") as string)
+    : await prompt.select<Framework>(
+        "What is this site built with?",
+        Object.values(FRAMEWORKS).map((entry) => ({
+          value: entry,
+          label: entry.label,
+          hint: entry.id === detection.framework.id ? "detected" : undefined,
+        })),
+        Object.values(FRAMEWORKS).findIndex((entry) => entry.id === detection.framework.id),
+      );
+
+  const template = flags.string("template")
+    ? templateFromFlag(flags.string("template") as string)
+    : await prompt.select<TemplateId>(
+        "What should the CMS manage to begin with?",
+        TEMPLATES.map((entry) => ({ value: entry.id, label: entry.label, hint: entry.hint })),
+      );
+
+  const regionsDir =
+    flags.string("dir") ??
+    (await prompt.text("Where should content files live?", framework.regionsDir));
+
+  const branch = flags.string("branch") ?? (await currentBranch(root)) ?? "main";
+
+  const answers: InitAnswers = {
+    name,
+    framework,
+    template,
+    regionsDir,
+    mediaDir: framework.mediaDir,
+    mediaUrlPrefix: framework.mediaUrlPrefix,
+    collectionsDir: framework.collectionsDir,
+    branch,
+    schemaUrl: DEFAULT_SCHEMA_URL,
+  };
+
+  const plan = planInit(answers);
+  const files = nodeFiles(root);
+  await Promise.all(plan.files.map((file) => files.write(file.path, file.content)));
+
+  stdout(nextSteps(answers, plan));
+  return 0;
+}
+
+async function listRoot(root: string): Promise<string[]> {
+  try {
+    return await readdir(root);
+  } catch {
+    return [];
+  }
+}
+
+async function readPackageJson(root: string): Promise<Record<string, never> | undefined> {
+  try {
+    return JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+async function readPackageName(root: string): Promise<string | undefined> {
+  const pkg = (await readPackageJson(root)) as { name?: string } | undefined;
+  return pkg?.name?.replace(/^@[^/]+\//, "");
+}
+
+async function currentBranch(root: string): Promise<string | null> {
+  try {
+    return (await nodeGit(root).run(["rev-parse", "--abbrev-ref", "HEAD"])).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function frameworkFromFlag(value: string): Framework {
+  const framework = FRAMEWORKS[value as FrameworkId];
+  if (!framework) {
+    throw new PreviewError(
+      `Unknown framework "${value}".`,
+      `Choose one of: ${Object.keys(FRAMEWORKS).join(", ")}.`,
+    );
+  }
+  return framework;
+}
+
+function templateFromFlag(value: string): TemplateId {
+  const template = TEMPLATES.find((entry) => entry.id === value);
+  if (!template) {
+    throw new PreviewError(
+      `Unknown template "${value}".`,
+      `Choose one of: ${TEMPLATES.map((entry) => entry.id).join(", ")}.`,
+    );
+  }
+  return template.id;
 }
 
 async function previewCommand(options: RunOptions & { flags: Flags }): Promise<number> {
@@ -289,6 +444,15 @@ export function parseFlags(argv: string[]): Flags {
 }
 
 const HELP = `greatcms — local tools for a Git-backed site
+
+  greatcms init [options]        set up .cms/schema.yaml and .cms/config.yaml
+    --yes                        accept every default, no prompts
+    --name <name>                site name
+    --framework <id>             astro | next | nuxt | sveltekit | eleventy | hugo | jekyll | generic
+    --template <id>              hero | landing | blog | blank
+    --dir <path>                 where content files live
+    --branch <name>              publish branch (default: current branch)
+    --force                      overwrite an existing setup
 
   greatcms preview [options]     overlay draft content and run your dev server
     --run "<command>"            dev server to run; restored when it exits

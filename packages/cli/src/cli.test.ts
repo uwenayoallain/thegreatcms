@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { run } from "./index.js";
 
 let repo: string;
@@ -141,5 +141,105 @@ describe("unknown input", () => {
 
   it("does not leave a stray overlay behind after all of that", () => {
     expect(existsSync(join(repo, "content/cms/about.intro.json"))).toBe(false);
+  });
+});
+
+describe("greatcms init", () => {
+  let fresh: string;
+
+  const initIn = (dir: string, argv: string[]) => {
+    out.length = 0;
+    err.length = 0;
+    return run({
+      argv,
+      cwd: dir,
+      stdout: (text) => out.push(text),
+      stderr: (text) => err.push(text),
+    });
+  };
+
+  beforeEach(() => {
+    fresh = mkdtempSync(join(tmpdir(), "greatcms-init-"));
+  });
+
+  afterEach(() => {
+    rmSync(fresh, { recursive: true, force: true });
+  });
+
+  it("scaffolds a working setup with no questions asked", async () => {
+    writeFileSync(join(fresh, "astro.config.mjs"), "export default {};\n");
+
+    expect(await initIn(fresh, ["init", "--yes"])).toBe(0);
+
+    const schema = readFileSync(join(fresh, ".cms/schema.yaml"), "utf8");
+    const config = readFileSync(join(fresh, ".cms/config.yaml"), "utf8");
+
+    expect(schema).toContain("yaml-language-server");
+    // Astro was detected, so content lands where Astro already looks.
+    expect(config).toContain("regions: src/content/cms");
+    expect(out.join("")).toContain("Detected Astro");
+  });
+
+  it("tells you how to read the region in the framework it found", async () => {
+    writeFileSync(join(fresh, "hugo.toml"), "baseURL = '/'\n");
+
+    await initIn(fresh, ["init", "--yes"]);
+
+    const text = out.join("");
+    expect(text).toContain("Detected Hugo");
+    expect(text).toContain("site.Data.cms");
+    expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain("regions: data/cms");
+  });
+
+  it("honours explicit flags over detection", async () => {
+    writeFileSync(join(fresh, "astro.config.mjs"), "export default {};\n");
+
+    await initIn(fresh, [
+      "init",
+      "--yes",
+      "--framework",
+      "eleventy",
+      "--template",
+      "landing",
+      "--name",
+      "Flagged Site",
+      "--dir",
+      "_data/managed",
+    ]);
+
+    const schema = readFileSync(join(fresh, ".cms/schema.yaml"), "utf8");
+    expect(schema).toContain("Flagged Site");
+    expect(schema).toContain("type: blocks");
+    expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain(
+      "regions: _data/managed",
+    );
+  });
+
+  it("refuses to clobber an existing setup, and says how to proceed", async () => {
+    await initIn(fresh, ["init", "--yes"]);
+    const original = readFileSync(join(fresh, ".cms/schema.yaml"), "utf8");
+
+    expect(await initIn(fresh, ["init", "--yes", "--name", "Overwritten"])).toBe(1);
+    expect(err.join("")).toContain("already set up");
+    expect(err.join("")).toContain("--force");
+    expect(readFileSync(join(fresh, ".cms/schema.yaml"), "utf8")).toBe(original);
+
+    expect(await initIn(fresh, ["init", "--yes", "--force", "--name", "Overwritten"])).toBe(0);
+    expect(readFileSync(join(fresh, ".cms/schema.yaml"), "utf8")).toContain("Overwritten");
+  });
+
+  it("rejects an unknown framework by name, listing the real ones", async () => {
+    expect(await initIn(fresh, ["init", "--yes", "--framework", "wordpress"])).toBe(1);
+    expect(err.join("")).toContain("astro");
+  });
+
+  it("leaves a repository ready for doctor to confirm", async () => {
+    writeFileSync(join(fresh, "astro.config.mjs"), "export default {};\n");
+    await initIn(fresh, ["init", "--yes", "--template", "blog"]);
+
+    expect(await initIn(fresh, ["doctor"])).toBe(0);
+    const text = out.join("");
+    expect(text).toContain("home.hero");
+    expect(text).toContain("Collections: blog");
   });
 });

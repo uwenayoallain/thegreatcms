@@ -17,37 +17,51 @@ const relPath = z
     message: "Must be a repo-relative path that does not escape the repository.",
   });
 
+/**
+ * A YAML key with nothing but comments under it parses as `null`. Treating that
+ * as absent means `preview:` followed by three commented-out lines behaves the
+ * way anyone would expect, instead of failing validation.
+ */
+const optionalSection = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => value ?? undefined, schema);
+
 export const ConfigFileSchema = z.object({
   version: z.number().int().positive(),
-  content: z
-    .object({
-      /** Directory for structured region JSON. */
-      regions: relPath.default("content/cms"),
-      /** Directory uploads are committed into. */
-      media: relPath.default("public/media"),
-    })
-    .default({ regions: "content/cms", media: "public/media" }),
+  content: optionalSection(
+    z
+      .object({
+        /** Directory for structured region JSON. */
+        regions: relPath.default("content/cms"),
+        /** Directory uploads are committed into. */
+        media: relPath.default("public/media"),
+      })
+      .default({ regions: "content/cms", media: "public/media" }),
+  ),
   /** URL prefix the site serves `content.media` from. */
   mediaUrlPrefix: z.string().default("/media"),
-  publish: z
-    .object({
-      branch: z.string().default("main"),
-      draftBranchPrefix: z.string().default("cms/draft"),
-      commitMessage: z.string().default("content: update {summary}"),
-      /** Fire a repository_dispatch after publishing, for CI that needs a nudge. */
-      dispatchEvent: z.string().optional(),
-    })
-    .default({
-      branch: "main",
-      draftBranchPrefix: "cms/draft",
-      commitMessage: "content: update {summary}",
-    }),
-  preview: z
-    .object({
-      /** `{branch}` is substituted; used to iframe the site's own CI preview. */
-      urlTemplate: z.string().optional(),
-    })
-    .optional(),
+  publish: optionalSection(
+    z
+      .object({
+        branch: z.string().default("main"),
+        draftBranchPrefix: z.string().default("cms/draft"),
+        commitMessage: z.string().default("content: update {summary}"),
+        /** Fire a repository_dispatch after publishing, for CI that needs a nudge. */
+        dispatchEvent: z.string().optional(),
+      })
+      .default({
+        branch: "main",
+        draftBranchPrefix: "cms/draft",
+        commitMessage: "content: update {summary}",
+      }),
+  ),
+  preview: optionalSection(
+    z
+      .object({
+        /** `{branch}` is substituted; used to iframe the site's own CI preview. */
+        urlTemplate: z.string().optional(),
+      })
+      .optional(),
+  ),
 });
 
 export type CmsConfig = z.infer<typeof ConfigFileSchema>;

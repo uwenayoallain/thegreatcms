@@ -78,6 +78,25 @@ The home page shows a managed hero next to a hand-written section — both end u
 in the same static HTML. The about page renders from schema defaults, because
 nobody has ever edited it.
 
+## Setting up a site
+
+```bash
+npx greatcms init
+```
+
+It detects what you build with — Astro, Next, Nuxt, SvelteKit, Eleventy, Hugo,
+Jekyll, or nothing in particular — and puts content where that generator already
+looks for it: `data/cms` for Hugo, `_data/cms` for Eleventy and Jekyll,
+`src/content/cms` for Astro. Then it asks what you want managed (one hero, a
+landing page with reorderable blocks, a blog, or nothing yet), writes a
+commented `.cms/schema.yaml` and `.cms/config.yaml` with the editor's
+`$schema` line for autocomplete, and prints the snippet for reading your first
+region **in your framework's own syntax**.
+
+`--yes` takes every default; `--framework`, `--template`, `--name`, `--dir`, and
+`--branch` override individually, so it scripts as well as it prompts. It
+refuses to overwrite an existing setup without `--force`.
+
 ## Previewing a draft
 
 Two ways, and neither runs your code on our server.

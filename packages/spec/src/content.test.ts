@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG } from "./config.js";
+import { DEFAULT_CONFIG, parseConfig } from "./config.js";
 import { parseRegionFile, regionDefaults, resolveRegion, serializeRegion } from "./content.js";
 import { parseFrontmatter, serializeFrontmatter } from "./markdown.js";
 import { collectionEntryPath, regionFilePath, regionIdFromPath, slugify } from "./paths.js";
@@ -134,5 +134,26 @@ describe("markdown collections", () => {
 
   it("drops undefined values instead of emitting `null`", () => {
     expect(serializeFrontmatter({ title: "A", draft: undefined }, "x")).not.toContain("draft");
+  });
+});
+
+describe("a config section with only comments", () => {
+  it("is treated as absent, not as an error", () => {
+    // What `greatcms init` writes when preview is left unconfigured.
+    const config = parseConfig(`version: 1
+content:
+  regions: content/cms
+preview:
+  # urlTemplate: "https://{branch}--site.pages.dev"
+`);
+    expect(config.preview).toBeUndefined();
+    expect(config.publish.branch).toBe("main");
+    expect(config.content.regions).toBe("content/cms");
+  });
+
+  it("still applies defaults when whole sections are omitted", () => {
+    const config = parseConfig("version: 1\n");
+    expect(config.content.media).toBe("public/media");
+    expect(config.publish.draftBranchPrefix).toBe("cms/draft");
   });
 });
