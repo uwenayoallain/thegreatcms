@@ -19,8 +19,9 @@ Read [SPEC.md](./SPEC.md) — that document is the actual product.
 
 ## Status
 
-Milestone 2 of 5. The standard is proven from two languages, and the studio can
-edit and publish real content to a real repository.
+Milestone 4 of 5. The standard is proven from two languages, the studio edits
+and publishes real content to a real repository, and form submissions from any
+site land in one inbox.
 
 |                         |                                                                              |
 | ----------------------- | ---------------------------------------------------------------------------- |
@@ -60,7 +61,10 @@ STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
 ```
 
 Connect a repository containing a `.cms/schema.yaml` and a token with
-`contents: write`, and it builds the editor from your schema. Or run it as a
+`contents: write`, and it builds the editor from your schema. Point any site's
+contact form at `https://your-studio/f/{siteId}/contact` and the messages arrive
+in the inbox — set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emailed
+about them too. Or run it as a
 container — `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
 
 Then look at the example site:
@@ -102,6 +106,12 @@ construction rather than by patching ARIA onto custom widgets.
 **A publish is one commit, or nothing.** Invalid content is refused before it
 reaches the repository, and a branch that moved while you were editing gets a
 409 rather than an overwrite.
+
+**Form submissions need nothing on the site.** A plain HTML `<form>` posting to
+the studio is the whole integration — no JavaScript, no third-party form
+service, no per-site backend. Spam is scored with a honeypot, submission timing,
+and a rate limit rather than a CAPTCHA, which is an accessibility tax paid by
+every legitimate visitor to inconvenience a bot that solves them anyway.
 
 **The awkward cases are covered.** The conformance fixture includes a region
 with no content file, a region edited before a field was added to the schema, a

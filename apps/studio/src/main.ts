@@ -6,6 +6,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
 import { Store } from "./db.js";
+import { ResendNotifier } from "./submissions.js";
 
 const password = process.env.STUDIO_PASSWORD;
 if (!password) {
@@ -21,12 +22,28 @@ const secret = process.env.STUDIO_SECRET ?? randomSecret();
 const databaseFile = process.env.STUDIO_DB ?? "data/studio.sqlite";
 const port = Number(process.env.PORT ?? 8787);
 
+// Email is optional. Without it, submissions still arrive in the inbox — you
+// just have to go and look.
+const notifier =
+  process.env.RESEND_API_KEY && process.env.NOTIFY_FROM && process.env.NOTIFY_TO
+    ? new ResendNotifier({
+        apiKey: process.env.RESEND_API_KEY,
+        from: process.env.NOTIFY_FROM,
+        to: process.env.NOTIFY_TO,
+      })
+    : undefined;
+
 const store = new Store(databaseFile);
-const app = createApp({ store, password, secret });
+const app = createApp({ store, password, secret, notifier });
 
 serve({ fetch: app.fetch, port }, (info) => {
   process.stdout.write(`GreatCMS studio on http://localhost:${info.port}\n`);
   process.stdout.write(`  database: ${databaseFile}\n`);
+  process.stdout.write(
+    notifier
+      ? "  submissions: stored and emailed\n"
+      : "  submissions: stored (set RESEND_API_KEY, NOTIFY_FROM, NOTIFY_TO to email them)\n",
+  );
   if (!process.env.STUDIO_SECRET) {
     process.stdout.write("  sessions reset on restart (set STUDIO_SECRET to persist them)\n");
   }

@@ -91,6 +91,12 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
         <textarea id="message" name="message" rows="5" required></textarea>
       </div>
 
+      <!-- Machinery: where to land after posting, and when the form was
+           rendered. The timestamp is how a submission filled in under a second
+           gets scored as a bot without ever showing anyone a CAPTCHA. -->
+      <input type="hidden" name="_redirect" value="/thanks/" />
+      <input type="hidden" name="_t" value={String(Date.now())} />
+
       <!-- Spam trap: real people never fill this in. -->
       <div class="trap" aria-hidden="true">
         <label for="company">Company</label>

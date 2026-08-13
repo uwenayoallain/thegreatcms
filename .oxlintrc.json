@@ -19,7 +19,7 @@
     "no-underscore-dangle": [
       "error",
       {
-        "allow": ["_meta", "_type", "_ast"]
+        "allow": ["_meta", "_type", "_ast", "_redirect", "_t", "_form"]
       }
     ]
   },

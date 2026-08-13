@@ -247,6 +247,43 @@ Consumers are unaffected by all of this. They read files.
 
 ---
 
+## 8a. Form submissions
+
+Git cannot hold a message someone typed on your site, so the studio accepts one
+directly:
+
+```html
+<form method="POST" action="https://studio.example.com/f/{siteId}/contact">
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required />
+
+  <input type="hidden" name="_redirect" value="/thanks/" />
+  <input type="hidden" name="_t" value="1755024000000" />
+
+  <div class="trap" aria-hidden="true">
+    <label for="company">Company</label>
+    <input id="company" name="company" tabindex="-1" autocomplete="off" />
+  </div>
+
+  <button>Send</button>
+</form>
+```
+
+Reserved names, stripped before storage:
+
+| Field       | Meaning                                                     |
+| ----------- | ----------------------------------------------------------- |
+| `_redirect` | Where to send the visitor afterwards. Same-site paths only. |
+| `_t`        | When the form was rendered, in epoch milliseconds.          |
+| `company`   | Honeypot. Hide it visually _and_ from assistive technology. |
+
+Everything else is stored as the submission. Spam is scored from the honeypot,
+the time between render and submit, and link density — never a CAPTCHA, which
+taxes every legitimate visitor to inconvenience a bot that solves them anyway.
+Suspected spam is kept, not discarded, so nothing is lost silently.
+
+---
+
 ## 9. Conformance
 
 ```bash

@@ -19,6 +19,7 @@ const PAGES = [
   { name: "about", file: "about/index.html" },
   { name: "blog index", file: "blog/index.html" },
   { name: "blog post", file: "blog/publish-from-anywhere/index.html" },
+  { name: "thanks", file: "thanks/index.html" },
 ];
 
 beforeAll(() => {
@@ -78,7 +79,7 @@ describe("the contact form", () => {
     expect(form?.getAttribute("method")?.toLowerCase()).toBe("post");
     expect(form?.getAttribute("action")).toBeTruthy();
 
-    for (const control of form?.querySelectorAll("input, textarea") ?? []) {
+    for (const control of form?.querySelectorAll("input:not([type=hidden]), textarea") ?? []) {
       const id = control.getAttribute("id");
       expect(id, "every control needs an id to be labelled").toBeTruthy();
       expect(

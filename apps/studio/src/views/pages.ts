@@ -1,7 +1,7 @@
 import type { CmsSchema, RegionDef } from "@greatcms/spec";
 import { isBlocksRegion } from "@greatcms/spec";
 import { html } from "hono/html";
-import type { Publish, Site } from "../db.js";
+import type { Publish, Site, Submission } from "../db.js";
 import { fieldName } from "../form.js";
 import { type ErrorsByPath, renderFields } from "./fields.js";
 import { page, type PageOptions } from "./layout.js";
@@ -32,7 +32,7 @@ export function signInPage(options: { error?: string } = {}): string {
   );
 }
 
-export function sitesPage(sites: Site[], flash?: PageOptions["flash"]): string {
+export function sitesPage(sites: Site[], unread = 0, flash?: PageOptions["flash"]): string {
   return page(
     { title: "Sites", flash },
     html`
@@ -56,7 +56,12 @@ export function sitesPage(sites: Site[], flash?: PageOptions["flash"]): string {
               </ul>
             `
       }
-      <div class="actions"><a class="button" href="/sites/new">Connect a site</a></div>
+      <div class="actions">
+        <a class="button" href="/sites/new">Connect a site</a>
+        <a class="button secondary" href="/inbox">
+          Inbox${unread > 0 ? html` (${unread} unread)` : ""}
+        </a>
+      </div>
     `,
   );
 }
@@ -320,4 +325,113 @@ function describeRegion(region: RegionDef): string {
   }
   const count = Object.keys(region.fields).length;
   return `${count} field${count === 1 ? "" : "s"}`;
+}
+
+export function inboxPage(options: {
+  submissions: Submission[];
+  sites: Site[];
+  siteId?: string;
+  includeSpam: boolean;
+  flash?: PageOptions["flash"];
+}): string {
+  const { submissions, sites, siteId, includeSpam, flash } = options;
+  const nameOf = (id: string) => sites.find((site) => site.id === id)?.name ?? id;
+
+  return page(
+    {
+      title: "Inbox",
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: "/inbox", label: "Inbox" },
+      ],
+      flash,
+    },
+    html`
+      <h1>Inbox</h1>
+      <p class="muted">
+        Form submissions from every connected site. Sites post a plain HTML form here — no
+        JavaScript, no third-party form service.
+      </p>
+
+      <form method="GET" action="/inbox" class="row">
+        <div class="field">
+          <label for="site">Site</label>
+          <select id="site" name="site">
+            <option value="">All sites</option>
+            ${sites.map(
+              (site) => html`
+                <option value="${site.id}" ${site.id === siteId ? "selected" : ""}>
+                  ${site.name}
+                </option>
+              `,
+            )}
+          </select>
+        </div>
+        <div class="field checkbox">
+          <input type="checkbox" id="spam" name="spam" value="1" ${includeSpam ? "checked" : ""} />
+          <label for="spam">Include suspected spam</label>
+        </div>
+        <div class="field">
+          <button class="secondary" type="submit">Filter</button>
+        </div>
+      </form>
+
+      ${
+        submissions.length === 0
+          ? html`<p class="muted">Nothing here yet.</p>`
+          : html`
+              <ul class="cards">
+                ${submissions.map(
+                  (submission) => html`
+                    <li class="card">
+                      <h2>
+                        ${submission.readAt ? "" : html`<span class="badge">New</span> `}
+                        ${nameOf(submission.siteId)} — ${submission.form}
+                      </h2>
+                      <p>
+                        <time datetime="${submission.createdAt}">${submission.createdAt}</time>
+                        ${
+                          submission.spamScore >= 3
+                            ? html` · <strong>suspected spam</strong>:
+                                ${submission.spamReasons.join("; ")}`
+                            : ""
+                        }
+                      </p>
+                      <dl class="entry">
+                        ${Object.entries(submission.data).map(
+                          ([key, value]) => html`
+                            <dt>${key}</dt>
+                            <dd>${value}</dd>
+                          `,
+                        )}
+                      </dl>
+                      <div class="actions">
+                        <form method="POST" action="/inbox/${submission.id}/read">
+                          <input
+                            type="hidden"
+                            name="read"
+                            value="${submission.readAt ? "0" : "1"}"
+                          />
+                          <button class="secondary" type="submit">
+                            Mark as ${submission.readAt ? "unread" : "read"}
+                          </button>
+                        </form>
+                        <form method="POST" action="/inbox/${submission.id}/delete">
+                          <button class="danger" type="submit">Delete</button>
+                        </form>
+                      </div>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `
+      }
+
+      <div class="actions">
+        <a class="button secondary" href="/inbox.csv${siteId ? `?site=${siteId}` : ""}">
+          Export as CSV
+        </a>
+      </div>
+    `,
+  );
 }

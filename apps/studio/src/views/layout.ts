@@ -199,6 +199,10 @@ button.danger { background: transparent; color: var(--danger); border-color: cur
 .block :is(h2, h3) { margin: 0; font-size: 1rem; }
 .block .tools { display: flex; gap: .4rem; }
 .block .tools button { padding: .3rem .6rem; font-size: .85rem; background: transparent; color: inherit; border-color: var(--line); }
+.badge { display: inline-block; padding: .1rem .45rem; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: .72rem; vertical-align: middle; }
+dl.entry { margin: .6rem 0 0; display: grid; grid-template-columns: minmax(6rem, 12rem) 1fr; gap: .25rem .9rem; font-size: .93rem; }
+dl.entry dt { font-weight: 600; color: var(--ink-soft); }
+dl.entry dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }

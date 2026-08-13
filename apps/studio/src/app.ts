@@ -19,10 +19,25 @@ import {
 } from "./auth.js";
 import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
+import {
+  assessSpam,
+  contentFields,
+  type Notifier,
+  RateLimiter,
+  SPAM_THRESHOLD,
+  toCsv,
+} from "./submissions.js";
 import { SiteClient, SiteNotConfiguredError, type SiteContext } from "./sites.js";
 import { errorsByPath } from "./views/fields.js";
 import { page } from "./views/layout.js";
-import { editRegionPage, newSitePage, signInPage, sitePage, sitesPage } from "./views/pages.js";
+import {
+  editRegionPage,
+  inboxPage,
+  newSitePage,
+  signInPage,
+  sitePage,
+  sitesPage,
+} from "./views/pages.js";
 
 export interface AppOptions {
   store: Store;
@@ -30,6 +45,9 @@ export interface AppOptions {
   secret: string;
   /** Injected in tests so routes can be driven without touching the network. */
   fetch?: typeof globalThis.fetch;
+  /** Optional email notifier for new submissions. */
+  notifier?: Notifier;
+  rateLimiter?: RateLimiter;
 }
 
 type Variables = { actor: string };
@@ -39,8 +57,67 @@ export function createApp(options: AppOptions) {
   const app = new Hono<{ Variables: Variables }>();
 
   const clientFor = (site: Site) => new SiteClient(site, options.fetch);
+  const limiter = options.rateLimiter ?? new RateLimiter();
+
+  /**
+   * The public submission endpoint. It sits before authentication and before
+   * the same-origin check on purpose: managed sites post here from their own
+   * domains, which is cross-origin by definition. It accepts only form data,
+   * writes only to the submissions table, and never reads a session.
+   */
+  app.post("/f/:siteId/:form", async (c) => {
+    const siteId = c.req.param("siteId");
+    const form = c.req.param("form").slice(0, 64);
+    const site = store.getSite(siteId);
+    if (!site) return c.text("Unknown site.", 404);
+
+    const address =
+      c.req.header("cf-connecting-ip") ??
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "unknown";
+    const limit = limiter.check(`${siteId}:${address}`);
+    if (!limit.allowed) {
+      return c.text("Too many submissions. Try again shortly.", 429, {
+        "retry-after": String(limit.retryAfterSeconds),
+      });
+    }
+
+    const body = await c.req.formData();
+    const fields: Record<string, string> = {};
+    for (const [key, value] of body.entries()) {
+      if (typeof value === "string") fields[key.slice(0, 64)] = value.slice(0, 10_000);
+    }
+
+    const spam = assessSpam(fields);
+    const data = contentFields(fields);
+    store.addSubmission({
+      siteId,
+      form,
+      data,
+      spamScore: spam.score,
+      spamReasons: spam.reasons,
+    });
+
+    if (options.notifier && spam.score < SPAM_THRESHOLD) {
+      // Not awaited: the visitor should not wait on an email provider, and the
+      // submission is already stored.
+      void options.notifier.notify({
+        subject: `${site.name}: new ${form} submission`,
+        lines: Object.entries(data).map(([key, value]) => `${key}: ${value}`),
+      });
+    }
+
+    // Send the visitor somewhere sensible with no JavaScript involved.
+    const redirect = fields._redirect;
+    if (redirect && isSafeRedirect(redirect)) return c.redirect(redirect, 303);
+    return c.html(thanksPage(), 200);
+  });
 
   app.use("*", async (c, next) => {
+    // Managed sites post submissions from their own domains, so this one route
+    // is exempt from both the origin check and the session requirement.
+    if (new URL(c.req.url).pathname.startsWith("/f/")) return next();
+
     if (c.req.method !== "GET" && !isSameOrigin(c.req.raw)) {
       return c.text("Cross-origin form posts are refused.", 403);
     }
@@ -77,7 +154,40 @@ export function createApp(options: AppOptions) {
     return c.redirect("/sign-in", 303);
   });
 
-  app.get("/", (c) => c.html(sitesPage(store.listSites())));
+  app.get("/", (c) => c.html(sitesPage(store.listSites(), store.countUnread())));
+
+  app.get("/inbox", (c) => {
+    const siteId = c.req.query("site") || undefined;
+    const includeSpam = c.req.query("spam") === "1";
+    return c.html(
+      inboxPage({
+        submissions: store.listSubmissions({ siteId, includeSpam }),
+        sites: store.listSites(),
+        siteId,
+        includeSpam,
+      }),
+    );
+  });
+
+  app.get("/inbox.csv", (c) => {
+    const siteId = c.req.query("site") || undefined;
+    const rows = store.listSubmissions({ siteId, includeSpam: false, limit: 5000 });
+    return c.body(toCsv(rows), 200, {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": 'attachment; filename="submissions.csv"',
+    });
+  });
+
+  app.post("/inbox/:id/read", async (c) => {
+    const form = await c.req.formData();
+    store.markRead(Number(c.req.param("id")), String(form.get("read") ?? "1") === "1");
+    return c.redirect("/inbox", 303);
+  });
+
+  app.post("/inbox/:id/delete", (c) => {
+    store.deleteSubmission(Number(c.req.param("id")));
+    return c.redirect("/inbox", 303);
+  });
 
   app.get("/sites/new", (c) => c.html(newSitePage()));
 
@@ -305,6 +415,18 @@ function applyBlockAction(
   if (target < 0 || target >= blocks.length) return;
   const [moved] = blocks.splice(index, 1);
   if (moved) blocks.splice(target, 0, moved);
+}
+
+/** Only same-site paths: an open redirect would make this a phishing tool. */
+function isSafeRedirect(target: string): boolean {
+  return target.startsWith("/") && !target.startsWith("//");
+}
+
+function thanksPage(): string {
+  return page(
+    { title: "Message received" },
+    "<h1>Thank you</h1><p>Your message has been received.</p>",
+  );
 }
 
 function describeError(error: unknown): string {
