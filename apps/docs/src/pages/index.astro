@@ -1,11 +1,11 @@
 ---
 import Base from "../layouts/Base.astro";
-import { cms, type Closing, type Hero } from "../lib/cms";
+import { cms } from "../lib/cms";
 
 // Every word below the fold markers is managed content, resolved at build time.
-const hero = cms.region<Hero>("home.hero");
+const hero = cms.region("home.hero");
 const claims = cms.blocks<{ title: string; body: string; proof?: string }>("home.claims");
-const closing = cms.region<Closing>("home.closing");
+const closing = cms.region("home.closing");
 ---
 
 <Base title={`GreatCMS — ${hero.heading}`} description={hero.subtitle}>

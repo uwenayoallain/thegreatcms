@@ -1,9 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
-import { type AboutIntro, cms } from '../lib/cms';
+import { cms } from '../lib/cms';
 
 // `about.intro` has no content file in this repo.
-const intro = cms.region<AboutIntro>('about.intro');
+const intro = cms.region('about.intro');
 ---
 
 <Base title={intro.heading}>

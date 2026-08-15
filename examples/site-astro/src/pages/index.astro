@@ -2,10 +2,10 @@
 import Feature from '../components/Feature.astro';
 import Quote from '../components/Quote.astro';
 import Base from '../layouts/Base.astro';
-import { type Hero, cms } from '../lib/cms';
+import { cms } from '../lib/cms';
 
 // Managed content: one function call, resolved at build time.
-const hero = cms.region<Hero>('home.hero');
+const hero = cms.region('home.hero');
 const features = cms.blocks('home.features');
 
 // Where form submissions go.

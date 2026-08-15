@@ -16,9 +16,12 @@
     "marked": "^15.0.4"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/jsdom": "^30.0.0",
     "axe-core": "^4.13.0",
     "jsdom": "^30.0.1",
     "playwright": "^1.62.1",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   }
 }
