@@ -83,8 +83,8 @@ regions: # at least one region or collection is required
 collections: # optional
   blog:
     path: content/blog
-    format: markdown # or json
-    body: content # which field becomes the Markdown body
+    format: markdown # markdown | mdx | json
+    body: content # which field becomes the prose body
     slug: title # which field derives the file name
     fields:
       title: { type: text, required: true }
@@ -96,6 +96,21 @@ collections: # optional
 used verbatim as file names, so this is enforced, not advisory.
 
 **Block and collection names** match `^[a-z0-9][a-z0-9_-]*$`.
+
+**Collection formats** decide the file extension and how an entry is stored:
+
+| `format`   | Extension | Stored as                          |
+| ---------- | --------- | ---------------------------------- |
+| `markdown` | `.md`     | YAML frontmatter over a prose body |
+| `mdx`      | `.mdx`    | YAML frontmatter over an MDX body  |
+| `json`     | `.json`   | one JSON object, no body           |
+
+`mdx` is `markdown` with a different extension, and the difference matters at
+both ends: a build treats `.mdx` as MDX rather than Markdown, and an editor must
+treat the body as **source rather than formatted prose**. An MDX body contains
+JSX, which is not HTML; parsing it into a rich-text editor and serializing it
+back would silently delete the components in it. A conforming editor edits an
+MDX body as text.
 
 A JSON Schema for this file ships at `@greatcms/spec/json-schema`, giving
 autocomplete and inline validation in any editor that supports it.
@@ -119,8 +134,40 @@ Every field accepts `label`, `description`, and `required`.
 | `file`     | `accept`, `default`                             | `{ "src": "…", "name"?: "…", "size"?: n }`              |
 | `list`     | `of`, `min`, `max`                              | array of the `of` type                                  |
 | `group`    | `fields`                                        | nested object                                           |
+| `blocks`   | `allow`, `min`, `max`, `default`                | array of block objects, each with `_type`               |
 
 `options` for `select` is either `[a, b]` or `[{ value: a, label: A }]`.
+
+### Nested blocks
+
+A `blocks` field holds the same shape a blocks region does — an ordered array
+whose entries each carry a `_type` naming a block defined at the top level:
+
+```yaml
+blocks:
+  card:
+    fields:
+      title: { type: text, required: true }
+  grid:
+    label: Card grid
+    fields:
+      heading: { type: text }
+      cards: { type: blocks, allow: [card], min: 1, max: 4 }
+```
+
+```json
+{
+  "_type": "grid",
+  "heading": "What you get",
+  "cards": [{ "_type": "card", "title": "Content lives in Git" }]
+}
+```
+
+This is what lets a managed section hold a composed component — a card grid, a
+tabbed panel, a set of columns — instead of only flat fields. Nesting is
+unbounded: a block reachable through `allow` may itself have a `blocks` field.
+A schema that nests a block inside itself is legal, and a consumer is expected
+to stop at the depth the content actually has, not to pre-expand the schema.
 
 ### Rich text
 
@@ -167,7 +214,7 @@ upload so consumers can prevent layout shift.
 
 Each block carries `_type`, naming a block defined in the schema.
 
-### Collection entry → `<collection path>/<slug>.md`
+### Collection entry → `<collection path>/<slug>.<ext>`
 
 ```markdown
 ---
@@ -178,6 +225,26 @@ tags: [release, git]
 
 Body text becomes the field named by the collection's `body` key.
 ```
+
+An `mdx` entry is the same file with an `.mdx` extension, and a body that may
+import and use components:
+
+```mdx
+---
+title: Latency after the migration
+date: 2026-08-12
+---
+
+import Chart from "../../components/Chart.astro";
+
+<Chart data={[1, 2, 3]} caption="p99 latency" />
+
+The prose around the component is ordinary Markdown.
+```
+
+The standard stores that body verbatim. It does not parse the JSX, resolve the
+imports, or care whether the components exist — that is the site's build, and
+it is deliberately none of the CMS's business.
 
 Files are written with two-space JSON indentation, keys sorted alphabetically
 with `_`-prefixed keys last, and a trailing newline — so diffs stay readable and
