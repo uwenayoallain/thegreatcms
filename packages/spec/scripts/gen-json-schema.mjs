@@ -1,8 +1,4 @@
-/**
- * Emits JSON Schema for `.cms/schema.yaml` and `.cms/config.yaml` from the Zod
- * definitions, so editors give authors autocomplete and inline validation
- * without this repo maintaining two descriptions of the same format.
- */
+/** Emits JSON Schema for `.cms/schema.yaml` and `.cms/config.yaml` from the Zod definitions, so editors give. */
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";

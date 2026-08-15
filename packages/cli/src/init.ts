@@ -1,14 +1,4 @@
-/**
- * `greatcms init` — scaffold a site's CMS configuration.
- *
- * The generated files are the ones a person would have written by hand if they
- * already knew the format: commented, with the editor's schema line at the top,
- * and with directories that suit the detected framework. Scaffolding that you
- * immediately have to rewrite is worse than none.
- *
- * Generation is pure — `planInit` takes answers and returns files. The prompting
- * lives in the CLI shell, so the interesting half is testable without a TTY.
- */
+/** `greatcms init` — scaffold a site's CMS configuration. */
 
 import { parseSchema, SPEC_VERSION } from "@greatcms/spec";
 import type { Framework } from "./detect.js";
@@ -72,8 +62,7 @@ export function planInit(answers: InitAnswers): InitPlan {
   const schema = renderSchema(answers);
   const config = renderConfig(answers);
 
-  // Generating something our own parser rejects would be an embarrassing way to
-  // start someone's project, so the template is validated before it is offered.
+  // Generating something our own parser rejects would be an embarrassing way to start someone's.
   parseSchema(schema, { file: ".cms/schema.yaml" });
 
   return {

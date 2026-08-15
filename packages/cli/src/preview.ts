@@ -1,15 +1,4 @@
-/**
- * Local draft preview.
- *
- * Drafts are already committed to a branch, so previewing them needs no API and
- * no service: fetch the branch, overlay its content files onto the working
- * copy, and run the dev server you already use. The preview is the real site
- * because it is your real build — the studio never has to render anything, and
- * never has to run code from your repository on its own server.
- *
- * Everything here is pure except the injected `git` and filesystem ports, which
- * is what lets the tests drive the whole flow without a repository.
- */
+/** Local draft preview. */
 
 import type { CmsConfig } from "@greatcms/spec";
 
@@ -70,13 +59,7 @@ export async function findDraftBranches(
     .toSorted();
 }
 
-/**
- * Works out which files the overlay would touch, without writing anything.
- *
- * Only files inside the configured content and media directories are eligible.
- * A draft branch is content, not code: if one carries a change to `src/`, that
- * is either a mistake or an attack, and either way this refuses to apply it.
- */
+/** Works out which files the overlay would touch, without writing anything. */
 export async function planPreview(
   git: GitPort,
   files: FilePort,
@@ -96,8 +79,7 @@ export async function planPreview(
   const allowed = [config.content.regions, config.content.media].map(trimSlashes);
   const planned = new Map<string, OverlayFile>();
 
-  // Fetches stay sequential because git takes a repository-wide lock; running
-  // them at once would just make the branches queue up behind an error.
+  // Fetches stay sequential because git takes a repository-wide lock; running them at once would.
   for (const branch of branches) {
     // oxlint-disable-next-line no-await-in-loop -- git repo lock, see above
     await git.run(["fetch", remote, `${branch}:refs/greatcms/${branch}`, "--force"]);
@@ -132,20 +114,14 @@ export async function planPreview(
   return { branches, files: [...planned.values()] };
 }
 
-/**
- * Applies the overlay and hands back a restore function. Callers are expected
- * to run it on exit — leaving someone's working copy full of draft content they
- * did not commit is a hostile way to end a preview.
- */
+/** Applies the overlay and hands back a restore function. */
 export async function applyOverlay(
   files: FilePort,
   plan: PreviewPlan,
 ): Promise<() => Promise<void>> {
   const applied: OverlayFile[] = [];
 
-  // Sequential on purpose, in both directions: `applied` must record exactly
-  // what reached the disk, so a failure halfway through still restores cleanly.
-  // Parallel writes would leave that list lying about the state of the tree.
+  // Sequential on purpose, in both directions: `applied` must record exactly what reached the disk.
   for (const file of plan.files) {
     // oxlint-disable-next-line no-await-in-loop -- ordered writes, see above
     await files.write(file.path, file.next);
@@ -165,10 +141,7 @@ export async function applyOverlay(
   };
 }
 
-/**
- * Refuses to overlay on top of uncommitted content changes, which would be
- * unrecoverable once restored. Code changes elsewhere are none of our business.
- */
+/** Refuses to overlay on top of uncommitted content changes, which would be unrecoverable once. */
 export async function assertContentIsClean(
   git: GitPort,
   config: CmsConfig,

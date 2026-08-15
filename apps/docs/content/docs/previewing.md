@@ -21,21 +21,37 @@ The reader reads content with the filesystem, which is what keeps it
 framework-neutral, and it also means Vite has no idea those files are
 dependencies. Without the watcher the file changes and the page does not.
 
-## As you type
+## As you type, in your own site
 
-The editor shows a live preview of the content in the form — before any save,
-commit, or branch. It updates as you type and needs nothing from your site.
+Connect a site as a folder on this machine, give it your dev server's URL, and
+the editor shows that dev server beside the form. Each edit is written to
+`.cms/draft/` in your working copy; your dev server notices and reloads, so your
+own components render content nobody has published.
 
-What it renders is your _content_, in the structure your schema describes, using
-the studio's own layout. It is deliberately not a mock-up of your design: an
-approximation that looks like your site but is not would be worse than one that
-plainly is not. It is the fastest way to check wording, block order, and whether
-an image is missing its alt text.
+There is no approximation of your design, because there is no approximation: it
+is your site. Publishing writes the real content file and clears the draft.
 
-Without JavaScript the pane becomes a button that renders the same preview in a
-new tab.
+Three rules keep drafts safe. The reader only reads them when `NODE_ENV` is
+`development`, so a build can never render one. `.cms/draft/` ignores itself, so
+one can never be committed. And publishing clears the draft it came from, so the
+site stops showing an edit that has already landed.
 
-For your real design, use one of the two below.
+Without JavaScript nothing is written as you type, and the editor still
+publishes — the frame simply shows the site as last published.
+
+## Getting rid of an unsaved edit
+
+"Discard unsaved edits" beside the frame throws the draft away and puts your dev
+server back to what is published. It is a plain form post, so it works with
+JavaScript switched off.
+
+Anything still unsaved is listed on the site's page in the studio, and
+`npx greatcms doctor` names it from the terminal — a draft you forgot is
+otherwise visible only in dev, which is exactly where you would stop noticing
+it.
+
+If your dev server is not Vite-based, the watcher plugin cannot reload it for
+you; **Reload the site** beside the frame does it by hand.
 
 ## Your CI builds it
 

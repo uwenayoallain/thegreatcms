@@ -339,8 +339,7 @@ You pick which parts of a page it manages — a hero here, a feature list there,
 an entire blog, or the whole site. Everything else stays hand-written code the
 CMS never sees. Publishing writes files to your repository; the commit triggers
 whatever deploy pipeline you already had. One studio manages many websites and
-collects the things Git can't hold — form submissions, comments — into a single
-inbox.
+collects the things Git can't hold — form submissions — into a single inbox.
 
 **It is not a framework plugin.** The integration surface is a schema file and
 some JSON, so a site consumes it with an import and no dependency. `greatcms
@@ -355,25 +354,25 @@ Read [SPEC.md](./SPEC.md) — that document is the actual product.
 
 ## Status
 
-Milestone 4 of 5 (M3 and M4 both done). The standard is proven from two languages, the studio edits
-and publishes real content to a real repository, and form submissions from any
-site land in one inbox.
+On M5 of 5. The standard is proven from two languages, the studio edits a folder
+on this machine and shows the result in your own site as you type, and form
+submissions from any site land in one inbox.
 
 |                         |                                                                              |
 | ----------------------- | ---------------------------------------------------------------------------- |
 | ✅ **M0** Foundation    | pnpm + Turborepo, oxlint + oxfmt (Rust), tsdown/Rolldown, Vitest             |
 | ✅ **M1** The standard  | `@greatcms/spec`, conformance kit, Node reader, Astro example, Python reader |
 | ✅ **M2** Studio        | Auth, multi-site registry, schema-generated editor, atomic publishes         |
-| ✅ **M3** Preview       | Draft branch + your own CI, iframed                                          |
-| ⬜ **M4** Dynamic layer | Forms, comments, inbox, email                                                |
-| 🔄 **M5** Hardening     | a11y gates, perf budgets, CLI, agent docs                                    |
+| ✅ **M3** Preview       | Live editing in your own dev server; draft branch + your CI                  |
+| ✅ **M4** Dynamic layer | Forms, inbox, email                                                          |
+| 🔄 **M5** Hardening     | a11y gates, perf budgets, CLI, browser tests, agent docs                     |
 
 ## What's here
 
 ```
 apps/studio/            The CMS: sign in, connect repos, edit regions, publish
 apps/docs/              The website — landing page and docs, managed by GreatCMS itself
-packages/cli/           `greatcms preview` and `doctor` — the local half
+packages/cli/           `greatcms init`, `preview`, `check`, `doctor` — the local half
 packages/spec/          The standard: schema parsing, validation, resolution rules
 packages/git/           Atomic multi-file commits via the GitHub Git Data API
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
@@ -445,7 +444,8 @@ build, updating as soon as your dev server reloads.
 **A GitHub repository.** Publishing commits over the API and your pipeline
 deploys it, as below.
 
-For a Vite-based site, add the dev-time watcher so an edit reloads the page:
+For a Vite-based site, add the dev-time watcher so an edit — published or still
+being typed — reloads the page:
 
 ```js
 import { greatcmsWatch } from "@greatcms/reader/vite";
@@ -519,18 +519,19 @@ required — uploading does not bypass validation.
 
 Three ways, at three speeds. None of them runs your code on our server.
 
-**As you type.** The editor has a live preview pane that renders the content
-currently in the form — before any save, commit, or branch. It updates while you
-type, flags an image with no alt text where you will actually see it, and needs
-nothing from your site. The layout is the studio's, not yours: it shows the
-content, honestly labelled as such. Without JavaScript it becomes a button that
-renders the same preview in a new tab.
+**As you type, in your own site.** For a folder on this machine, the editor
+shows your dev server beside the form. Each edit is written to `.cms/draft/` in
+your working copy, your dev server reloads, and your real components render
+content nobody has published. Nothing is committed, nothing leaves the machine,
+and a draft can never reach a live site: the reader only reads `.cms/draft/` in
+development, and the directory ignores itself in Git.
 
-The other two build your real site.
+Publishing writes the real file and clears the draft. There is no synthetic
+preview to disagree with your site, because the thing on screen _is_ your site.
 
-**Your CI builds it.** "Save draft & preview" commits to `cms/draft-<region>`;
-set `preview.urlTemplate` in `.cms/config.yaml` and the studio iframes the
-resulting URL.
+**Your CI builds it.** For a GitHub repository, "Save draft & preview" commits
+to `cms/draft-<region>`; set `preview.urlTemplate` in `.cms/config.yaml` and the
+studio iframes the resulting URL.
 
 **Or your own dev server builds it:**
 
@@ -545,7 +546,30 @@ uncommitted content changes, and refuses any draft branch carrying changes
 outside your content directories, because a draft is content, not code.
 
 `npx greatcms doctor` prints what a repository's setup looks like: regions,
-where each one's file lives, and which are still rendering schema defaults.
+where each one's file lives, which are still rendering schema defaults, and any
+unsaved edit left in `.cms/draft/` — the one thing that shows in your dev server
+and nowhere else.
+
+## Checking content in your own CI
+
+The studio validates before it commits, so nothing invalid arrives through the
+editor. But content is files in Git: you, a script, or an agent can edit them
+directly, and a schema change can invalidate content that was correct when it
+was written. Neither of those passes through the studio.
+
+```bash
+npx greatcms check
+# content: OK (3 regions, 6 entries, 1 media reference)
+```
+
+It exits non-zero, so it belongs in a build. It reports a required field left
+empty, a field the schema no longer has, a content file no region renders any
+more, an entry whose frontmatter will not parse, and an image pointing at a file
+nobody committed — each with the file, the field path, and what to do about it.
+`--json` gives the same report to a machine.
+
+A missing content file is never a failure. That resolves to schema defaults by
+design, and `check` says so rather than complaining about it.
 
 ## Proofs, not claims
 
@@ -567,6 +591,14 @@ node packages/conformance/bin/greatcms-conformance.mjs verify /tmp/out
 **It is accessible.** axe runs against every page of the example site _and_
 every screen of the studio, every form control is labelled, and errors are
 attached with `aria-invalid` and `aria-describedby` rather than colour alone.
+Colour contrast is judged in Chromium, against real layout, because that is the
+one failure a static check cannot see and a reader cannot miss.
+
+**The visual editor is tested in a browser.** Chromium loads the studio and
+asserts what a person gets: ProseMirror mounts over the textarea, the toolbar
+applies marks and reports its own pressed state, the preview updates as you type
+without committing anything — and with JavaScript switched off, the same screen
+still edits and publishes from a plain textarea.
 
 **The admin degrades to plain HTML.** Every mutation is a form POST — including
 adding, removing, and reordering blocks — so the studio is keyboard- and

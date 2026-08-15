@@ -57,3 +57,17 @@ npx greatcms doctor
 
 Prints every region, the file it resolves to, and which are still rendering
 schema defaults.
+
+To check the content itself — in a build, or before you push:
+
+```sh
+npx greatcms check
+```
+
+It validates every content file and collection entry against your schema, and
+exits non-zero if anything would not render: a required field left empty, a
+field the schema no longer has, a file no region renders, an image pointing at
+something nobody committed. `--json` reports the same to a machine.
+
+A region with no content file is not a failure — it renders schema defaults,
+which is the point.

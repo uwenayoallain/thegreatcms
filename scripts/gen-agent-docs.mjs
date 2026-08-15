@@ -1,15 +1,4 @@
-/**
- * Generates the agent-readable documentation surface: llms.txt, llms-full.txt,
- * and docs.json.
- *
- * The project's claim is that any tool can integrate from SPEC.md in under half
- * an hour. A coding agent is exactly that tool, and it does not browse — it
- * fetches. Publishing one file it can read end to end is the difference between
- * that claim being true for people and true for everyone.
- *
- *   node scripts/gen-agent-docs.mjs           write the files
- *   node scripts/gen-agent-docs.mjs --check   fail if they are stale (CI)
- */
+/** Generates the agent-readable documentation surface: llms.txt, llms-full.txt, and docs.json. */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";

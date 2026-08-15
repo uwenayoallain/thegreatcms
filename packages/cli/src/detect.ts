@@ -1,17 +1,6 @@
-/**
- * Working out what a site is built with, so `init` can propose the right
- * answers instead of asking you things it could have looked up.
- *
- * Detection is pure over a file listing plus package.json contents, which keeps
- * it testable and means the same logic can run against a remote repo later.
- */
+/** Working out what a site is built with, so `init` can propose the right. */
 
-/**
- * The frameworks `init` scaffolds for. JavaScript ones, deliberately: the
- * *standard* stays language-agnostic — it is JSON on disk, and the conformance
- * kit proves a Python reader handles it — but the scaffolder only claims what
- * it is actually exercised against.
- */
+/** The frameworks `init` scaffolds for. */
 export type FrameworkId = "astro" | "next" | "nuxt" | "sveltekit" | "eleventy" | "generic";
 
 export interface Framework {
@@ -101,8 +90,7 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
   eleventy: {
     id: "eleventy",
     label: "Eleventy",
-    // Anything under _data becomes global data automatically, so a managed
-    // region needs no wiring at all in Eleventy.
+    // Anything under _data becomes global data automatically, so a managed region needs no wiring.
     regionsDir: "_data/cms",
     collectionsDir: "content/blog",
     mediaDir: "public/media",
@@ -151,8 +139,7 @@ export function detectFramework(input: DetectionInput): Detection {
     ...input.packageJson?.devDependencies,
   };
 
-  // Config files are stronger evidence than a dependency, which can linger in a
-  // package.json long after the thing was removed.
+  // A config file is stronger evidence than a dependency, which can linger.
   const byFile: Array<[FrameworkId, string[]]> = [
     ["astro", ["astro.config.mjs", "astro.config.ts", "astro.config.js"]],
     ["next", ["next.config.js", "next.config.mjs", "next.config.ts"]],

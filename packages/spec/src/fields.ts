@@ -1,10 +1,4 @@
-/**
- * Field definitions — the vocabulary of `.cms/schema.yaml`.
- *
- * These describe *shape*, never presentation. A consumer in any language reads
- * the resulting JSON without needing this package; the definitions exist so the
- * studio can generate an editor and so content can be validated before commit.
- */
+/** Field definitions — the vocabulary of `.cms/schema.yaml`. */
 
 import { z } from "zod";
 
@@ -19,11 +13,7 @@ const selectOption = z.union([
   z.object({ value: z.string(), label: z.string().optional() }),
 ]);
 
-/**
- * Accessibility is structural here, not advisory: `alt` defaults to required,
- * and the only way to omit it is to explicitly mark an image decorative, which
- * is a deliberate authoring act rather than an oversight.
- */
+/** Accessibility is structural here, not advisory: `alt` defaults to required, and the only way. */
 const altPolicy = z.enum(["required", "decorative-allowed"]).default("required");
 
 export type FieldDef =
@@ -126,11 +116,7 @@ export const FIELD_TYPES: readonly FieldType[] = [
   "group",
 ] as const;
 
-/**
- * Rich text travels as sanitized HTML so a consumer can print it with no
- * library at all. `_ast` carries the editor's structured document for lossless
- * round-tripping and is safe to ignore — the underscore marks it as machinery.
- */
+/** Rich text travels as sanitized HTML so a consumer can print it with no library at all. */
 export interface RichTextValue {
   html: string;
   _ast?: unknown;

@@ -4,8 +4,7 @@ import { marked } from "marked";
 import DocsNav from "../components/DocsNav.astro";
 import Base from "../layouts/Base.astro";
 
-// Rendered from the repository's SPEC.md, so the published standard and the one
-// the code implements cannot drift apart.
+// Rendered from the repository's SPEC.md, so the published standard and the one the code.
 const source = readFileSync(new URL("../../../../SPEC.md", import.meta.url), "utf8");
 const html = marked.parse(source.replace(/^# .*\n/, "")) as string;
 ---

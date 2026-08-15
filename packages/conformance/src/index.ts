@@ -1,12 +1,4 @@
-/**
- * The conformance kit.
- *
- * "Works with any framework" is worth nothing as a claim, so it is a test here.
- * A tool proves it reads the standard by resolving the fixture site and handing
- * back the documents in `expected/`. Integrations written in other languages
- * dump their resolved regions as JSON and run the CLI verifier — no JavaScript
- * required on their side.
- */
+/** The conformance kit. */
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -48,11 +40,7 @@ export function expectedRegions(): Record<string, RegionDocument> {
   return out;
 }
 
-/**
- * Reference implementation: read the fixture site off disk the way the standard
- * says to. Adapters are compared against this, and it doubles as the shortest
- * possible description of "how do I read this content".
- */
+/** Reference implementation: read the fixture site off disk the way the standard says to. */
 export function readFixtureRegion(regionId: string): RegionDocument | null {
   const schema = fixtureSchema();
   const config = fixtureConfig();
@@ -80,11 +68,7 @@ export interface ConformanceResult {
   failures: Failure[];
 }
 
-/**
- * Compares resolved documents against the expected set. `_meta` is stripped
- * before comparison: it is machinery for the studio, and no consumer should be
- * required to reproduce it.
- */
+/** Compares resolved documents against the expected set. */
 export function verifyRegions(actual: Record<string, unknown>): ConformanceResult {
   const expected = expectedRegions();
   const failures: Failure[] = [];

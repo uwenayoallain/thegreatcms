@@ -1,7 +1,4 @@
-/**
- * The dynamic layer: what a managed site posts, what lands in the inbox, and
- * what never should.
- */
+/** The dynamic layer: what a managed site posts, what lands in the inbox, and what never should. */
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { JSDOM } from "jsdom";
@@ -50,8 +47,7 @@ const signedIn = { cookie: createSessionCookie(SECRET).split(";")[0] as string }
 function submit(fields: Record<string, string>, headers: Record<string, string> = {}) {
   return app.request("/f/site-1/contact", {
     method: "POST",
-    // A real browser posting from another origin — exactly the case the studio
-    // must accept here and refuse everywhere else.
+    // A real browser posting from another origin — exactly the case the studio must.
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       origin: "https://example.com",

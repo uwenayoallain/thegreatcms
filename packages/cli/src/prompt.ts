@@ -1,12 +1,4 @@
-/**
- * Minimal interactive prompts — arrow keys, enter, Ctrl-C — with no
- * dependencies. A scaffolder that pulls in a prompt library, a colour library,
- * and a spinner is slower to install than it is to use.
- *
- * Everything degrades cleanly: with no TTY (CI, piped input, an agent running
- * the command) every prompt returns its default instead of hanging forever
- * waiting for a keypress nobody will press.
- */
+/** Minimal interactive prompts — arrow keys, enter, Ctrl-C — with no dependencies. */
 
 import type { Interface as ReadlineInterface } from "node:readline";
 

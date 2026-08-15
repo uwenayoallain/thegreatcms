@@ -1,15 +1,5 @@
 #!/usr/bin/env node
-/**
- * Language-agnostic conformance verifier.
- *
- *   greatcms-conformance fixtures            # print the fixture site path
- *   greatcms-conformance verify ./out        # ./out holds <region-id>.json dumps
- *   greatcms-conformance verify --self       # check the reference reader
- *
- * A Hugo, Go, or PHP integration renders the fixture site, dumps each resolved
- * region as JSON, and runs `verify`. That is the whole contract — nothing about
- * the tool under test needs to be JavaScript.
- */
+/** Language-agnostic conformance verifier. */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";

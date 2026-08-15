@@ -1,9 +1,4 @@
-/**
- * `.cms/config.yaml` — where content lives in this repo and how publishing
- * behaves. Kept separate from `schema.yaml` because schema is about *what* the
- * content is, and config is about *where it goes* — they change for different
- * reasons and are often owned by different people.
- */
+/** `.cms/config.yaml` — where content lives in this repo and how publishing behaves. */
 
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -17,11 +12,7 @@ const relPath = z
     message: "Must be a repo-relative path that does not escape the repository.",
   });
 
-/**
- * A YAML key with nothing but comments under it parses as `null`. Treating that
- * as absent means `preview:` followed by three commented-out lines behaves the
- * way anyone would expect, instead of failing validation.
- */
+/** A YAML key with nothing but comments under it parses as `null`. */
 const optionalSection = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((value) => value ?? undefined, schema);
 

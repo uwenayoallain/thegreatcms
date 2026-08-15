@@ -1,9 +1,4 @@
-/**
- * Uploads, including the header parsing that recovers width and height without
- * a dependency. The fixtures are real files: a PNG, GIF, JPEG, and WebP built
- * byte by byte, because a parser tested only against its own encoder proves
- * nothing.
- */
+/** Uploads, including the header parsing that recovers width and height without a dependency. */
 
 import { DEFAULT_CONFIG } from "@greatcms/spec";
 import { describe, expect, it } from "vitest";

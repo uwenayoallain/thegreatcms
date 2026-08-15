@@ -1,11 +1,4 @@
-/**
- * Defaults and fallback — the mechanics of the hybrid model.
- *
- * A site must build before the CMS has ever touched it, and must keep building
- * after a field is added to the schema but before anyone edits content. So a
- * missing file is never an error: defaults from the schema fill the gap, and
- * stored content layers on top.
- */
+/** Defaults and fallback — the mechanics of the hybrid model. */
 
 import type { FieldDef } from "./fields.js";
 import { type CmsSchema, type RegionDef, isBlocksRegion } from "./schema.js";
@@ -52,11 +45,7 @@ function defaultsFor(region: RegionDef): RegionDocument {
   return { ...fieldDefaults(region.fields), ...region.default };
 }
 
-/**
- * Merges stored content over schema defaults. Stored values always win; missing
- * keys fall through. Arrays are replaced wholesale rather than merged, because
- * merging lists item-by-item produces results no author would predict.
- */
+/** Merges stored content over schema defaults. */
 export function resolveRegion(
   schema: CmsSchema,
   regionId: string,
@@ -68,8 +57,7 @@ export function resolveRegion(
   if (!stored) return defaults;
   if (isBlocksRegion(region)) {
     if (!Array.isArray(stored.blocks)) return defaults;
-    // Blocks get the same treatment as regions: defaults from the block's own
-    // fields fill anything the stored block predates.
+    // Blocks get the same treatment as regions: defaults from the block's own fields fill.
     const blocks = stored.blocks.map((block) => {
       const type = (block as { _type?: unknown })?._type;
       const def = typeof type === "string" ? schema.blocks[type] : undefined;
@@ -109,10 +97,7 @@ export function serializeRegion(document: RegionDocument, meta?: RegionMeta): st
   return `${JSON.stringify(ordered, null, 2)}\n`;
 }
 
-/**
- * Keys beginning with `_` are machinery (`_meta`, `_type`). Sorting them last
- * keeps human-meaningful content at the top of a diff.
- */
+/** Keys beginning with `_` are machinery (`_meta`, `_type`). */
 function machineryLast(a: string, b: string): number {
   const am = a.startsWith("_");
   const bm = b.startsWith("_");

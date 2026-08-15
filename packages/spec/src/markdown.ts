@@ -1,8 +1,4 @@
-/**
- * Collection entries are Markdown with YAML frontmatter, because that is what
- * Hugo, Jekyll, Eleventy, and Astro content collections already expect. Writing
- * blog posts as JSON would fight every generator's built-in pipeline for no gain.
- */
+/** Collection entries are Markdown with YAML frontmatter, because that is what Hugo, Jekyll, Eleventy. */
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 

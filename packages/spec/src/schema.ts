@@ -1,9 +1,4 @@
-/**
- * `.cms/schema.yaml` — the file that tells the studio what a site's content
- * looks like. It is *data*, deliberately: the studio never imports or executes
- * anything from the site repo, which is what lets a Hugo site and a Next site
- * be managed by exactly the same code.
- */
+/** `.cms/schema.yaml` — the file that tells the studio what a site's content looks like. */
 
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -12,10 +7,7 @@ import { type FieldDef, FieldDefSchema } from "./fields.js";
 
 export const SPEC_VERSION = 1;
 
-/**
- * Region ids double as file names (`home.hero` → `home.hero.json`), so they are
- * restricted to characters that are safe on every filesystem and in every URL.
- */
+/** Region ids double as file names, so they are restricted to safe characters. */
 export const REGION_ID_RE = /^[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)*$/;
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -97,10 +89,7 @@ export interface ParseSchemaOptions {
   file?: string;
 }
 
-/**
- * Parses and validates a schema file. Reports *every* problem found rather than
- * failing on the first, because fixing schema files one error per run is misery.
- */
+/** Parses and validates a schema file. */
 export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsSchema {
   const file = opts.file ?? ".cms/schema.yaml";
   const bag = new IssueBag(file);

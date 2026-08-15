@@ -2,9 +2,7 @@
 import Base from '../layouts/Base.astro';
 import { type AboutIntro, cms } from '../lib/cms';
 
-// `about.intro` has no content file in this repo. It still renders, because a
-// missing file resolves to the defaults declared in the schema — which is what
-// lets a site be built before the CMS has ever been opened.
+// `about.intro` has no content file in this repo.
 const intro = cms.region<AboutIntro>('about.intro');
 ---
 

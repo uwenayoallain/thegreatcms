@@ -8,7 +8,6 @@ export default defineConfig({
   clean: true,
   target: "node20",
   treeshake: true,
-  // Plain .js/.d.ts so package.json exports stay obvious and every
-  // consumer resolves them without thinking about .mjs.
+  // Plain .js/.d.ts so package.json exports stay obvious and every consumer resolves them without thinking.
   outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
 });

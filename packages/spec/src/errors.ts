@@ -1,8 +1,4 @@
-/**
- * Every error in the standard names three things: where it happened, what is
- * wrong, and how to fix it. A CMS error that only says "invalid schema" is a
- * bug in this file.
- */
+/** Every error in the standard names three things: where it happened, what is wrong. */
 
 export interface SpecIssueInit {
   /** Stable machine code, e.g. `unknown_field_type`. */

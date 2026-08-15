@@ -8,8 +8,7 @@ import { type Hero, cms } from '../lib/cms';
 const hero = cms.region<Hero>('home.hero');
 const features = cms.blocks('home.features');
 
-// Where form submissions go. Set PUBLIC_CMS_URL to your studio; with it unset
-// the form still renders and still validates, it just has nowhere to post.
+// Where form submissions go.
 const studio = import.meta.env.PUBLIC_CMS_URL ?? '';
 const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
 ---

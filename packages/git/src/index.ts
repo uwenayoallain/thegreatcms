@@ -1,16 +1,4 @@
-/**
- * @greatcms/git — write content to GitHub as atomic commits.
- *
- * Deliberately not an SDK wrapper: it is a few hundred lines of `fetch` against
- * documented endpoints, which keeps the studio small and portable to any
- * runtime that has `fetch` (Node, Workers, Deno, Bun).
- *
- * The important decision is using the **Git Data API** rather than repeated
- * `PUT /repos/.../contents/{path}` calls. Contents-API writes are one commit per
- * file, so publishing a region plus three images is four commits that can
- * half-apply — and half-applied content is how `main` stops building. Here a
- * publish is: blobs → tree → commit → ref update. One commit, all or nothing.
- */
+/** @greatcms/git — write content to GitHub as atomic commits. */
 
 export interface RepoRef {
   owner: string;
@@ -32,10 +20,7 @@ export interface CommitRequest {
   branch: string;
   message: string;
   files: FileChange[];
-  /**
-   * The commit the editor started from. If the branch has moved since, the
-   * publish is rejected rather than silently overwriting someone else's work.
-   */
+  /** The commit the editor started from. */
   expectedHeadSha?: string;
   author?: { name: string; email: string };
 }
@@ -170,9 +155,7 @@ export class GitHubClient {
     return (ref as { object: { sha: string } }).object.sha;
   }
 
-  /**
-   * Writes every file in one commit, or writes nothing at all.
-   */
+  /** Writes every file in one commit, or writes nothing at all. */
   async commitFiles(repo: RepoRef, request: CommitRequest): Promise<CommitResult> {
     if (request.files.length === 0) {
       throw new GitHubError(400, "commitFiles", "A commit needs at least one file change.");
@@ -207,10 +190,7 @@ export class GitHubClient {
       }
     }
 
-    // Blobs go up in parallel: a publish with a region and three images is one
-    // round trip's worth of latency rather than four. Uploading them separately
-    // from the tree also lets binary content travel as base64 without
-    // corrupting text files.
+    // Blobs go up in parallel: four round trips one after another is a slow save.
     const tree = await Promise.all(
       request.files.map(async (file) => {
         if (file.delete) {
@@ -236,8 +216,7 @@ export class GitHubClient {
       ...(request.author ? { author: request.author } : {}),
     })) as { sha: string; html_url?: string };
 
-    // force: false — if the branch moved between the check above and now, the
-    // update is refused rather than discarding the other commit.
+    // force: false — if the branch moved between the check above and now, the.
     await this.request(
       "PATCH",
       `/repos/${repo.owner}/${repo.repo}/git/refs/heads/${encodePath(request.branch)}`,
@@ -252,13 +231,7 @@ export class GitHubClient {
     };
   }
 
-  /**
-   * Opens a pull request, or updates the one already open for this branch.
-   *
-   * Reusing an open PR matters: an editor who saves five times should get one
-   * reviewable pull request, not five. GitHub itself refuses a duplicate, so
-   * this checks first rather than treating that error as normal.
-   */
+  /** Opens a pull request, or updates the one already open for this branch. */
   async openOrUpdatePullRequest(
     repo: RepoRef,
     request: { head: string; base: string; title: string; body: string },

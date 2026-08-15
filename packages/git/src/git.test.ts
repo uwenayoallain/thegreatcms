@@ -11,11 +11,7 @@ interface Call {
   body?: Record<string, unknown>;
 }
 
-/**
- * A stand-in for the parts of the GitHub API we use. Recording calls is the
- * point: the guarantee worth testing is *how many* commits a publish produces
- * and in what order, not that fetch works.
- */
+/** A stand-in for the parts of the GitHub API we use. */
 function fakeGitHub(overrides: Record<string, unknown> = {}) {
   const calls: Call[] = [];
   let blobCounter = 0;

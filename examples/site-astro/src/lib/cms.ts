@@ -1,9 +1,6 @@
 import { createReader } from "@greatcms/reader";
 
-/**
- * One reader for the whole site. Reads happen during the build, so nothing here
- * reaches the browser and no request ever touches the CMS.
- */
+/** One reader for the whole site. */
 export const cms = createReader({ root: new URL("../../", import.meta.url).pathname });
 
 export interface Hero {

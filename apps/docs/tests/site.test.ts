@@ -1,9 +1,4 @@
-/**
- * The docs site holds itself to the same bars as everything else: no
- * JavaScript, no axe violations, and a weight budget. It is also the project's
- * dogfood — its landing copy is managed by the CMS it documents — so these
- * tests double as proof that a real site can be built this way.
- */
+/** The docs site holds itself to the same bars as everything else: no JavaScript. */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
