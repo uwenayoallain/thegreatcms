@@ -1,7 +1,4 @@
-/**
- * Drives the CLI against a real repository on disk — real git, real files, real
- * draft branch. The unit tests cover the logic; this proves the wiring.
- */
+/** Drives the CLI against a real repository on disk — real git, real files, real draft branch. */
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
@@ -78,6 +75,52 @@ describe("greatcms doctor", () => {
     expect(text).toMatch(/edited\s+home\.hero/);
     expect(text).toMatch(/default\s+about\.intro/);
     expect(text).toContain("will render schema defaults. That is normal, not a problem.");
+  });
+});
+
+describe("greatcms doctor and unsaved drafts", () => {
+  it("says nothing about drafts when there are none", async () => {
+    expect(await cli(["doctor"])).toBe(0);
+    expect(out.join("")).not.toContain("unsaved edit");
+  });
+
+  it("names a forgotten draft, which only ever shows in dev", async () => {
+    mkdirSync(join(repo, ".cms/draft/content/cms"), { recursive: true });
+    writeFileSync(join(repo, ".cms/draft/content/cms/home.hero.json"), '{"heading":"Forgotten"}');
+    try {
+      expect(await cli(["doctor"])).toBe(0);
+      const text = out.join("");
+      expect(text).toContain("1 unsaved edit");
+      expect(text).toContain("content/cms/home.hero.json");
+      expect(text).toContain("fix:");
+    } finally {
+      rmSync(join(repo, ".cms/draft"), { recursive: true, force: true });
+    }
+  });
+});
+
+describe("greatcms check", () => {
+  it("passes on the repository as committed", async () => {
+    expect(await cli(["check"])).toBe(0);
+    expect(out.join("")).toContain("content: OK");
+  });
+
+  it("fails, on stderr, when a content file no longer fits the schema", async () => {
+    writeFileSync(join(repo, "content/cms/home.hero.json"), '{"heading":""}');
+    try {
+      expect(await cli(["check"])).toBe(1);
+      expect(err.join("")).toContain("content/cms/home.hero.json");
+      expect(err.join("")).toContain("required");
+    } finally {
+      git(["checkout", "--", "content/cms/home.hero.json"]);
+    }
+  });
+
+  it("reports as JSON for CI and for agents", async () => {
+    expect(await cli(["check", "--json"])).toBe(0);
+    const report = JSON.parse(out.join("")) as { ok: boolean; checked: { regions: number } };
+    expect(report.ok).toBe(true);
+    expect(report.checked.regions).toBe(1);
   });
 });
 

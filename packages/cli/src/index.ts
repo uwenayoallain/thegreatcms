@@ -1,20 +1,13 @@
-/**
- * @greatcms/cli — the local half of the workflow.
- *
- *   greatcms preview --run "pnpm dev"   overlay drafts, run your dev server
- *   greatcms doctor                      check this repository's CMS setup
- *
- * The studio owns publishing; this owns everything that should happen on your
- * machine, with your toolchain, running your code.
- */
+/** @greatcms/cli — the local half of the workflow. */
 
 import { spawn } from "node:child_process";
-import { readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { access, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   DEFAULT_CONFIG,
+  DRAFT_DIR,
   parseConfig,
   parseSchema,
   regionFilePath,
@@ -22,6 +15,13 @@ import {
   type CmsConfig,
   type CmsSchema,
 } from "@greatcms/spec";
+import {
+  checkSite,
+  formatReport,
+  reportAsJson,
+  type CheckPort,
+  type CheckReport,
+} from "./check.js";
 import { detectFramework, FRAMEWORKS, type Framework, type FrameworkId } from "./detect.js";
 import {
   DEFAULT_SCHEMA_URL,
@@ -79,6 +79,56 @@ export function nodeFiles(root: string): FilePort {
       await rm(join(root, path), { force: true });
     },
   };
+}
+
+/** Reading a site for `check`: no writes, and a missing directory is not news. */
+export function nodeCheckFiles(root: string): CheckPort {
+  return {
+    async read(path: string) {
+      try {
+        return await readFile(join(root, path), "utf8");
+      } catch {
+        return null;
+      }
+    },
+    async list(dir: string) {
+      try {
+        const names = await readdir(join(root, dir), { withFileTypes: true });
+        return names.filter((entry) => entry.isFile()).map((entry) => `${dir}/${entry.name}`);
+      } catch {
+        return [];
+      }
+    },
+    async exists(path: string) {
+      try {
+        await access(join(root, path));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+/** Content paths with an unsaved edit waiting in the working copy. */
+async function listDrafts(root: string): Promise<string[]> {
+  const walk = async (dir: string): Promise<string[]> => {
+    let entries;
+    try {
+      entries = await readdir(join(root, dir), { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const found = await Promise.all(
+      entries.map(async (entry) => {
+        const path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) return walk(path);
+        return entry.name === ".gitignore" ? [] : [path.slice(DRAFT_DIR.length + 1)];
+      }),
+    );
+    return found.flat();
+  };
+  return walk(DRAFT_DIR);
 }
 
 export async function loadConfig(root: string): Promise<CmsConfig> {
@@ -142,6 +192,8 @@ export async function run(options: RunOptions): Promise<number> {
         return await initCommand({ ...options, flags });
       case "preview":
         return await previewCommand({ ...options, flags });
+      case "check":
+        return await checkCommand({ ...options, flags });
       case "doctor":
         return await doctorCommand({ ...options, flags });
       case "help":
@@ -334,12 +386,36 @@ async function previewCommand(options: RunOptions & { flags: Flags }): Promise<n
     return 0;
   }
 
-  // The dev server runs here, on your machine, with your toolchain — the studio
-  // never executes anything from this repository.
+  // The dev server runs here, on your machine, with your toolchain — the studio.
   stdout(`Running: ${command}\n\n`);
   const code = await runUntilExit(command, root, restore);
   stdout("\nWorking copy restored.\n");
   return code;
+}
+
+/** Exits non-zero when the content would not render, so a build can run it. */
+async function checkCommand(options: RunOptions & { flags: Flags }): Promise<number> {
+  const { cwd, stdout, stderr, flags } = options;
+  const root = resolve(cwd);
+
+  const report: CheckReport = await checkSite({
+    schema: await loadSchema(root),
+    config: await loadConfig(root),
+    files: nodeCheckFiles(root),
+  });
+
+  if (flags.boolean("json")) {
+    stdout(reportAsJson(report));
+    return report.issues.length === 0 ? 0 : 1;
+  }
+
+  if (report.issues.length === 0) {
+    stdout(formatReport(report));
+    return 0;
+  }
+
+  stderr(formatReport(report));
+  return 1;
 }
 
 async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<number> {
@@ -383,6 +459,18 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
     lines.push("", `Collections: ${collections.join(", ")}`);
   }
 
+  // An unsaved draft only shows in dev, so the only way to notice a forgotten
+  // one is to be told.
+  const drafts = await listDrafts(root);
+  if (drafts.length > 0) {
+    lines.push(
+      "",
+      `${drafts.length} unsaved edit${drafts.length === 1 ? "" : "s"} in ${DRAFT_DIR}, which your dev server is showing instead of what is published:`,
+      ...drafts.map((path) => `  ${path}`),
+      `  fix: publish it in the studio, or delete ${DRAFT_DIR} to go back to what is committed.`,
+    );
+  }
+
   stdout(`${lines.join("\n")}\n`);
   return 0;
 }
@@ -399,8 +487,7 @@ function runUntilExit(command: string, cwd: string, restore: () => Promise<void>
       resolvePromise(code);
     };
 
-    // Ctrl-C must still restore the working copy, so the signal is handled here
-    // rather than left to kill the process outright.
+    // Ctrl-C must still restore the working copy, so the signal is handled here rather.
     const onSignal = () => {
       child.kill("SIGINT");
     };
@@ -460,6 +547,9 @@ const HELP = `greatcms — local tools for a Git-backed site
     --remote <name>              default: origin
     --diff                       show what would change, write nothing
     --force                      overlay even with uncommitted content changes
+
+  greatcms check [--json]        validate this repository's content against the
+                                 schema; exits non-zero, so CI can run it
 
   greatcms doctor                check this repository's CMS setup
 

@@ -1,19 +1,11 @@
-/**
- * Content validation. The studio runs this *before* committing, so an invalid
- * document never reaches the repository and never breaks a build — the whole
- * point of putting content in Git is that `main` always builds.
- */
+/** Content validation. */
 
 import { SpecIssue } from "./errors.js";
 import { type FieldDef, selectOptions } from "./fields.js";
 import { type BlockDef, type CmsSchema, type RegionDef, isBlocksRegion } from "./schema.js";
 
 export interface ValidateOptions {
-  /**
-   * Strict mode reports keys the schema does not know about. Readers stay
-   * lenient (extra keys are none of their business); the studio is strict, so
-   * a renamed field surfaces as an error instead of silently dropped content.
-   */
+  /** Strict mode reports keys the schema does not know about. */
   strict?: boolean;
   /** Prefix for issue paths, used when validating nested structures. */
   basePath?: string;
@@ -85,7 +77,16 @@ function validateField(
 
   if (missing) {
     if (def.required) {
-      issues.push(issue(opts, path, "required", "This field is required but is empty."));
+      issues.push(
+        issue(
+          opts,
+          path,
+          "required",
+          "This field is required but is empty.",
+          // Both ways out: outside the studio, the schema is as editable as the content.
+          `Give \`${path}\` a value, or drop \`required: true\` from the field in the schema.`,
+        ),
+      );
     }
     return;
   }

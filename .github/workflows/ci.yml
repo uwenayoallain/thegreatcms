@@ -42,6 +42,13 @@ jobs:
       - name: Test (includes the accessibility gate)
         run: pnpm test
 
+      # Both sites in this repository are managed by GreatCMS, so the content
+      # checker runs against them the way a site would run it in its own build.
+      - name: Content matches the schema
+        run: |
+          (cd apps/docs && node ../../packages/cli/bin/greatcms.mjs check)
+          (cd examples/site-astro && node ../../packages/cli/bin/greatcms.mjs check)
+
       # The standard has to be usable outside JavaScript, so CI proves it every
       # run: a Python reader written from SPEC.md must pass the same suite.
       - name: Cross-language conformance
