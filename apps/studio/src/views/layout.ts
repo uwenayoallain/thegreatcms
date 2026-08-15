@@ -1,11 +1,4 @@
-/**
- * Server-rendered HTML for the whole studio.
- *
- * The admin is deliberately not a single-page app: every screen is a form POST,
- * so the editor works with JavaScript disabled, needs no hydration, and is
- * keyboard- and screen-reader-navigable by construction rather than by patching
- * ARIA onto custom widgets.
- */
+/** Server-rendered HTML for the whole studio. */
 
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
@@ -20,20 +13,17 @@ export interface PageOptions {
   crumbs?: Crumb[];
   /** Announced to screen readers on arrival, e.g. after a publish. */
   flash?: { kind: "success" | "error"; message: string; detail?: string[] };
-  /**
-   * Load the visual editor. Set only by screens that render a richtext field,
-   * so no other page pays for the bundle.
-   */
+  /** Load the visual editor. */
   editor?: boolean;
   /** Load the live preview enhancement. */
-  livePreview?: boolean;
+  liveSite?: boolean;
 }
 
 export function page(
   options: PageOptions,
   body: HtmlEscapedString | Promise<HtmlEscapedString> | string,
 ): string {
-  const { title, crumbs = [], flash, editor = false, livePreview = false } = options;
+  const { title, crumbs = [], flash, editor = false, liveSite = false } = options;
 
   return `<!doctype html>${html`
     <html lang="en">
@@ -103,7 +93,7 @@ export function page(
           ${body}
         </main>
         ${editor ? html`<script type="module" src="/assets/editor.js"></script>` : ""}
-        ${livePreview ? html`<script type="module" src="/assets/preview.js"></script>` : ""}
+        ${liveSite ? html`<script type="module" src="/assets/live.js"></script>` : ""}
       </body>
     </html>
   `}`;
@@ -172,6 +162,12 @@ body {
 .live-bar p { margin: 0; font-size: .8rem; }
 .live-frame.real { height: 22rem; margin-bottom: 1.2rem; }
 .live-frame { width: 100%; height: 30rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); }
+.live-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.live-actions form { margin: 0; }
+.drafts { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1.5rem 0; background: var(--raised); }
+.drafts h2 { margin-top: 0; font-size: 1rem; }
+.drafts ul { margin: .5rem 0 0; padding-left: 1.1rem; }
+.drafts code { font-size: .8rem; color: var(--ink-soft); }
 main { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 h1 { font-size: 1.6rem; margin: .25rem 0 1rem; letter-spacing: -.02em; }
 h2 { font-size: 1.15rem; margin: 2rem 0 .75rem; }
@@ -211,6 +207,8 @@ button, .button {
   border: 1px solid transparent; background: var(--accent); color: var(--accent-ink);
   cursor: pointer; text-decoration: none; display: inline-block;
 }
+/* A display rule beats the hidden attribute, so hidden has to say so louder. */
+[hidden] { display: none !important; }
 button.secondary, .button.secondary { background: transparent; color: inherit; border-color: var(--line); }
 button.link { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; font-weight: 400; cursor: pointer; }
 button.danger { background: transparent; color: var(--danger); border-color: currentColor; }
@@ -233,8 +231,7 @@ iframe.preview { width: 100%; height: 34rem; border: 1px solid var(--line); bord
 table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
-/* Visual editor. The toolbar is buttons, the surface is a real textbox to
-   assistive technology, and both are absent until the script runs. */
+/* Visual editor. */
 .editor { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
 .editor-toolbar { display: flex; flex-wrap: wrap; gap: .25rem; padding: .4rem; border-bottom: 1px solid var(--line); background: var(--raised); }
 .editor-toolbar button { padding: .25rem .6rem; min-width: 2.1rem; font-size: .85rem; font-weight: 600; background: transparent; color: inherit; border: 1px solid transparent; border-radius: 6px; }
@@ -247,8 +244,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .editor-surface .ProseMirror blockquote { margin: .8rem 0; padding-left: .9rem; border-left: 3px solid var(--line); color: var(--ink-soft); }
 .editor-surface .ProseMirror code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; background: var(--paper-raised); padding: .05em .3em; border-radius: 4px; }
 .error-text { color: var(--danger); font-size: .88rem; margin: .3rem 0 0; font-weight: 600; }
-/* Present to assistive technology, absent visually — never display:none, which
-   removes it from the accessibility tree as well. */
+/* Present to assistive technology, absent visually — never display:none, which removes it from the. */
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;

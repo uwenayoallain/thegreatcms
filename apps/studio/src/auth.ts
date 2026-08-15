@@ -1,8 +1,4 @@
-/**
- * Authentication for a single-operator, self-hosted studio: one password, one
- * signed cookie. No user table, no OAuth dance, no third-party identity service
- * — anything more would be ceremony around a tool you run for yourself.
- */
+/** Authentication for a single-operator, self-hosted studio: one password, one signed cookie. */
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
@@ -18,8 +14,7 @@ export function createSessionCookie(secret: string, actor = "studio"): string {
   const expiresAt = Date.now() + MAX_AGE_SECONDS * 1000;
   const payload = `${actor}.${expiresAt}`;
   const value = `${payload}.${sign(payload, secret)}`;
-  // Lax rather than Strict: the studio is a normal web app you navigate to from
-  // elsewhere, and every state change is a same-origin POST checked separately.
+  // Lax rather than Strict: every state change is a same-origin POST, checked separately.
   return `${COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_SECONDS}`;
 }
 
@@ -51,11 +46,7 @@ export function randomSecret(): string {
   return randomBytes(32).toString("hex");
 }
 
-/**
- * Cross-site request forgery defence for a cookie-authenticated app with no
- * JavaScript: every state change must come from our own origin. Browsers set
- * `Origin` on POST, so this needs no token plumbing in every form.
- */
+/** Cross-site request forgery defence for a cookie-authenticated app with no JavaScript: every state change. */
 export function isSameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true; // curl and no-JS clients that omit it entirely

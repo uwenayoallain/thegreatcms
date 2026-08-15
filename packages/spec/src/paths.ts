@@ -1,8 +1,4 @@
-/**
- * Deterministic mapping between ids and files. Both the studio and every
- * consumer derive paths with the same rules, so nobody has to be told where a
- * region lives — `home.hero` is always `<regions dir>/home.hero.json`.
- */
+/** Deterministic mapping between ids and files. */
 
 import type { CmsConfig } from "./config.js";
 import { REGION_ID_RE } from "./schema.js";
@@ -32,6 +28,13 @@ export function collectionEntryPath(
   return `${trimSlashes(collection.path)}/${slug}.${ext}`;
 }
 
+/** Where an unsaved edit lives while you are still typing it. */
+export const DRAFT_DIR = ".cms/draft";
+
+export function draftFilePath(contentPath: string): string {
+  return `${DRAFT_DIR}/${trimSlashes(contentPath)}`;
+}
+
 export function mediaFilePath(config: CmsConfig, fileName: string): string {
   return `${trimSlashes(config.content.media)}/${fileName}`;
 }
@@ -42,10 +45,7 @@ export function mediaUrl(config: CmsConfig, fileName: string): string {
   return `${prefix}/${fileName}`;
 }
 
-/**
- * Slugs land in file names and URLs, so they get the strict treatment:
- * lowercase, ASCII-safe, no leading/trailing separators.
- */
+/** Slugs land in file names and URLs, so they get the strict treatment: lowercase. */
 export function slugify(input: string): string {
   const slug = input
     .normalize("NFKD")

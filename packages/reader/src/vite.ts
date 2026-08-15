@@ -1,24 +1,8 @@
-/**
- * A Vite plugin that makes content edits visible in dev.
- *
- * The reader deliberately reads files with `fs` so it stays framework-neutral —
- * but that means Vite never learns those files are dependencies, so editing one
- * changes the disk and nothing else. The dev server keeps serving the module it
- * already evaluated, and the page looks unchanged even though the content is
- * not.
- *
- * This watches the directories the site's own config declares and restarts the
- * dev server when one changes. Restarting rather than invalidating is
- * deliberate: content is read at module scope, so the module graph has to be
- * rebuilt for a re-read to happen at all, and guessing which modules to
- * invalidate would work until someone read content somewhere new.
- *
- * Optional, and dev-only. Builds are unaffected.
- */
+/** A Vite plugin that makes content edits visible in dev. */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { DEFAULT_CONFIG, parseConfig, type CmsConfig } from "@greatcms/spec";
+import { DEFAULT_CONFIG, DRAFT_DIR, parseConfig, type CmsConfig } from "@greatcms/spec";
 
 export interface WatchOptions {
   /** Site root — the directory containing `.cms/`. Defaults to the Vite root. */
@@ -34,6 +18,8 @@ interface DevServer {
     on(event: "add" | "change" | "unlink", handler: (path: string) => void): void;
   };
   restart(): Promise<void> | void;
+  ws?: { send(payload: { type: "full-reload"; path: string }): void };
+  hot?: { send(payload: { type: "full-reload"; path: string }): void };
   config?: { logger?: { info(message: string): void } };
 }
 
@@ -56,6 +42,8 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
       const directories = [
         config.content.regions,
         config.content.media,
+        // Unsaved edits from the studio land here, and are what makes the editor's view.
+        DRAFT_DIR,
         ...collectionPaths(root),
         ...(options.include ?? []),
       ]
@@ -64,16 +52,22 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
 
       for (const directory of directories) server.watcher.add(directory);
 
+      // Chokidar will not report a directory that does not exist yet, and the draft.
+      server.watcher.add(join(root, DRAFT_DIR, "**"));
+
       let pending: NodeJS.Timeout | undefined;
       const onChange = (path: string) => {
         if (!directories.some((directory) => path.startsWith(directory))) return;
 
-        // A publish writes several files at once; one restart covers them all.
+        // A publish writes several files at once; one reload covers them all.
         clearTimeout(pending);
         pending = setTimeout(() => {
           server.config?.logger?.info("[greatcms] content changed — reloading");
-          void server.restart();
-        }, 60);
+          // A reload is enough because the reader re-reads content on every call in development.
+          const socket = server.hot ?? server.ws;
+          if (socket) socket.send({ type: "full-reload", path: "*" });
+          else void server.restart();
+        }, 80);
       };
 
       server.watcher.on("add", onChange);
@@ -97,8 +91,7 @@ function collectionPaths(root: string): string[] {
     const path = join(root, name);
     if (!existsSync(path)) continue;
     try {
-      // Parsed loosely on purpose: a schema this plugin cannot read should not
-      // stop a dev server from starting.
+      // Parsed loosely: a schema this cannot read must not stop a dev server.
       const source = readFileSync(path, "utf8");
       return [...source.matchAll(/^\s{4}path:\s*(\S+)\s*$/gm)].map((match) =>
         String(match[1]).replace(/^["']|["']$/g, ""),

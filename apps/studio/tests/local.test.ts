@@ -1,8 +1,4 @@
-/**
- * Local sites, driven against a real folder and a real Git repository. The
- * point of this mode is that there is no network and no fake, so the tests do
- * not have one either.
- */
+/** Local sites, driven against a real folder and a real Git repository. */
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -126,6 +122,99 @@ describe("editing a folder on this machine", () => {
 
     expect(body).toContain('src="http://localhost:4321"');
     expect(body).toContain("Your real components");
+  });
+});
+
+/** The live loop: what you type is written where the site's dev server reads it, and nowhere else. */
+describe("editing live, before anything is published", () => {
+  const draftFile = () => join(root, ".cms/draft/content/cms/home.hero.json");
+
+  it("writes what is in the form to the draft directory", async () => {
+    const response = await post("/sites/local-1/regions/home.hero/draft", {
+      "f[heading]": "Halfway through a sentence",
+    });
+
+    expect(response.status).toBe(204);
+    expect(JSON.parse(readFileSync(draftFile(), "utf8")).heading).toBe(
+      "Halfway through a sentence",
+    );
+  });
+
+  it("leaves the published content alone", async () => {
+    await post("/sites/local-1/regions/home.hero", { headSha: "", "f[heading]": "Published" });
+    await post("/sites/local-1/regions/home.hero/draft", { "f[heading]": "Only a draft" });
+
+    const published = JSON.parse(readFileSync(join(root, "content/cms/home.hero.json"), "utf8"));
+    expect(published.heading).toBe("Published");
+  });
+
+  it("clears the draft once the same content is published", async () => {
+    await post("/sites/local-1/regions/home.hero/draft", { "f[heading]": "About to publish" });
+    expect(existsSync(draftFile())).toBe(true);
+
+    await post("/sites/local-1/regions/home.hero", {
+      headSha: "",
+      "f[heading]": "About to publish",
+    });
+
+    expect(existsSync(draftFile())).toBe(false);
+  });
+
+  it("keeps drafts out of Git, so one can never be committed by accident", async () => {
+    await post("/sites/local-1/regions/home.hero/draft", { "f[heading]": "Never committed" });
+
+    const status = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
+    expect(status.trim()).toBe("");
+    expect(readFileSync(join(root, ".cms/draft/.gitignore"), "utf8")).toBe("*\n");
+  });
+
+  it("never offers a draft branch, which on a working copy would commit to main", async () => {
+    const body = await (
+      await app.request("/sites/local-1/regions/home.hero", { headers: signedIn })
+    ).text();
+    expect(body).not.toContain("Save draft");
+
+    // And refuses it even if the request is made by hand: this one already.
+    const before = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+    const response = await post("/sites/local-1/regions/home.hero", {
+      headSha: "",
+      action: "draft",
+      "f[heading]": "Meant as a preview",
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" })).toBe(
+      before,
+    );
+  });
+
+  it("lists what is unsaved on the site page, so none is forgotten", async () => {
+    await post("/sites/local-1/regions/home.hero/draft", { "f[heading]": "Left half-written" });
+
+    const body = await (await app.request("/sites/local-1", { headers: signedIn })).text();
+    expect(body).toContain("Unsaved edits");
+    expect(body).toContain("content/cms/home.hero.json");
+    expect(body).toContain("/sites/local-1/regions/home.hero");
+  });
+
+  it("discards one with a plain form post, no JavaScript involved", async () => {
+    await post("/sites/local-1/regions/home.hero/draft", { "f[heading]": "Never mind" });
+    expect(existsSync(draftFile())).toBe(true);
+
+    const response = await post("/sites/local-1/regions/home.hero/draft/discard", {});
+    expect(response.status).toBe(303);
+    expect(existsSync(draftFile())).toBe(false);
+
+    const body = await (await app.request("/sites/local-1", { headers: signedIn })).text();
+    expect(body).not.toContain("Unsaved edits");
+  });
+
+  it("points the editor's frame at the endpoint that writes them", async () => {
+    const body = await (
+      await app.request("/sites/local-1/regions/home.hero", { headers: signedIn })
+    ).text();
+
+    expect(body).toContain('data-live-site="/sites/local-1/regions/home.hero/draft"');
   });
 
   it("still refuses invalid content, and writes nothing", async () => {

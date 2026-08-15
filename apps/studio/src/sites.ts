@@ -1,11 +1,4 @@
-/**
- * Talking to a managed repository.
- *
- * The studio reads three things over the GitHub API — the schema, the config,
- * and content files — and writes content back. It never executes anything from
- * the repository, which is what lets one studio manage a Hugo site, an Astro
- * site, and a Laravel site with the same code path.
- */
+/** Talking to a managed repository. */
 
 import type { CommitResult, PullRequest } from "@greatcms/git";
 import type { FileChange } from "@greatcms/git";
@@ -23,15 +16,28 @@ import {
   parseRegionFile,
   parseSchema,
   regionFilePath,
+  regionIdFromPath,
   resolveRegion,
   serializeRegion,
   type RegionDocument,
 } from "@greatcms/spec";
 import type { Site } from "./db.js";
-import { GitHubRepository, LocalRepository, type Repository } from "./repo.js";
+import {
+  GitHubRepository,
+  LocalRepository,
+  LocalRepositoryError,
+  type Repository,
+} from "./repo.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
+
+export interface UnsavedDraft {
+  label: string;
+  href: string;
+  /** Repo-relative path of the content file this draft stands in for. */
+  path: string;
+}
 
 export interface CollectionEntry {
   slug: string;
@@ -74,11 +80,7 @@ export class SiteClient {
     return this.site.kind === "local" ? this.site.path : `${this.site.owner}/${this.site.repo}`;
   }
 
-  /**
-   * Loads the schema fresh on every request rather than caching it. A schema
-   * change is a code change, and an editor seeing a stale form is worse than
-   * one extra API call.
-   */
+  /** Loads the schema fresh on every request rather than caching it. */
   async context(): Promise<SiteContext> {
     const [schemaFile, configFile, headSha] = await Promise.all([
       this.firstFile(SCHEMA_CANDIDATES),
@@ -113,11 +115,7 @@ export class SiteClient {
     return resolveRegion(context.schema, regionId, stored) ?? {};
   }
 
-  /**
-   * Entries in a collection, newest-looking first. Listing costs one request
-   * plus one per entry, run together — a blog with thirty posts is one round
-   * trip's latency, not thirty.
-   */
+  /** Entries in a collection, newest-looking first. */
   async listEntries(context: SiteContext, name: string): Promise<CollectionEntry[]> {
     const collection = this.collection(context, name);
     const paths = await this.repo.listDirectory(collection.path, this.site.branch);
@@ -183,8 +181,7 @@ export class SiteClient {
       return { path, content: `${JSON.stringify(document, null, 2)}\n` };
     }
 
-    // The body field is stored as the Markdown body rather than frontmatter,
-    // which is what every static site generator already expects to read.
+    // The body field is the Markdown body, which is what every generator expects.
     const data = { ...document };
     let body = "";
     if (collection.body) {
@@ -218,9 +215,7 @@ export class SiteClient {
 
     const { data, body } = parseFrontmatter(source, path);
     if (collection.body) {
-      // The body field carries the value shape its type declares: a richtext
-      // field is an object, a text field is a string. Storing a bare string in
-      // a richtext field would render an empty editor and fail validation.
+      // The body carries the shape its field type declares: richtext is an object.
       const field = collection.fields[collection.body];
       data[collection.body] = field?.type === "richtext" ? { html: body.trim() } : body.trim();
     }
@@ -261,12 +256,98 @@ export class SiteClient {
     });
   }
 
+  /** Writes what is currently in the editor to `.cms/draft/`, where the site's own dev. */
+  async writeLiveDraft(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+    document: RegionDocument;
+  }): Promise<boolean> {
+    const repo = this.repo;
+    if (!(repo instanceof LocalRepository)) return false;
+
+    const { path, content } = this.contentFile(options);
+    await repo.writeDraft(path, content);
+    return true;
+  }
+
   /**
-   * Saves to a draft branch instead of the publish branch, so the site's own CI
-   * builds a preview. This is the only preview approach that works for every
-   * stack — the studio cannot render a Hugo site, and pretending otherwise
-   * would mean a preview that lies.
+   * Unsaved edits waiting in the working copy, named the way the editor names
+   * them. A draft nobody can see is a site quietly rendering something that was
+   * never published.
    */
+  async listLiveDrafts(context: SiteContext): Promise<UnsavedDraft[]> {
+    const repo = this.repo;
+    if (!(repo instanceof LocalRepository)) return [];
+
+    const paths = await repo.listDrafts();
+    const drafts: UnsavedDraft[] = [];
+
+    for (const path of paths) {
+      const regionId = regionIdFromPath(context.config, path);
+      if (regionId && context.schema.regions[regionId]) {
+        const region = context.schema.regions[regionId];
+        drafts.push({
+          label: region.label ?? regionId,
+          href: `/sites/${this.site.id}/regions/${regionId}`,
+          path,
+        });
+        continue;
+      }
+
+      const entry = this.entryFromPath(context, path);
+      if (entry) drafts.push(entry);
+    }
+
+    return drafts.toSorted((a, b) => a.label.localeCompare(b.label));
+  }
+
+  /** Which collection entry a path belongs to, if it belongs to one at all. */
+  private entryFromPath(context: SiteContext, path: string): UnsavedDraft | null {
+    for (const [name, collection] of Object.entries(context.schema.collections)) {
+      const dir = `${collection.path.replace(/\/+$/, "")}/`;
+      if (!path.startsWith(dir)) continue;
+      const slug = path.slice(dir.length).replace(/\.(md|json)$/, "");
+      return {
+        label: `${collection.label ?? name} — ${slug}`,
+        href: `/sites/${this.site.id}/collections/${name}/${slug}`,
+        path,
+      };
+    }
+    return null;
+  }
+
+  /** Drops the draft, once its content is published or the edit is abandoned. */
+  async clearLiveDraft(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+  }): Promise<void> {
+    const repo = this.repo;
+    if (!(repo instanceof LocalRepository)) return;
+    await repo.clearDraft(this.contentFile({ ...options, document: {} }).path);
+  }
+
+  /** The file a document belongs in, and the bytes that would be written to it. */
+  private contentFile(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+    document: RegionDocument;
+  }): { path: string; content: string } {
+    const { context, regionId, collection, document } = options;
+    if (regionId) {
+      return {
+        path: regionFilePath(context.config, regionId),
+        content: serializeRegion(document),
+      };
+    }
+    if (!collection) throw new Error("A draft needs a region or a collection entry.");
+    const file = this.entryFile(context, collection.name, collection.slug, document);
+    return { path: file.path, content: file.content ?? "" };
+  }
+
+  /** Saves to a draft branch instead of the publish branch, so the site's own CI builds a preview. */
   async saveDraft(options: {
     context: SiteContext;
     regionId: string;
@@ -276,6 +357,15 @@ export class SiteClient {
     media?: FileChange[];
   }): Promise<{ branch: string; commit: CommitResult; previewUrl: string | null }> {
     const { context, regionId, document, actor } = options;
+
+    // A working copy stays on its branch, so a "draft branch" commit lands on main.
+    if (this.repo instanceof LocalRepository) {
+      throw new LocalRepositoryError(
+        "A folder on this machine cannot save to a draft branch.",
+        "Your edits already show in the site beside the form. Publish when you are ready.",
+      );
+    }
+
     const branch = `${context.config.publish.draftBranchPrefix}-${regionId}`.replace(
       /[^\w./-]/g,
       "-",
@@ -307,12 +397,7 @@ export class SiteClient {
     };
   }
 
-  /**
-   * Publishes by proposing rather than committing: the change lands on a draft
-   * branch and a pull request asks for it. Review, a CI preview build, and
-   * revert-to-roll-back all come from the pull request rather than being
-   * features this studio has to grow.
-   */
+  /** Publishes by proposal: the change lands on a draft branch, then a pull request. */
   async proposeRegion(options: {
     context: SiteContext;
     regionId: string;
@@ -363,14 +448,12 @@ export class SiteClient {
     const result = await this.repo.commitFiles({
       branch: this.site.branch,
       message,
-      // One commit: the image and the JSON pointing at it land together, or
-      // neither does. A deploy between the two would build a broken page.
+      // One commit: the image and the JSON pointing at it land together, or neither.
       files: [...(options.media ?? []), { path, content }],
       expectedHeadSha,
     });
 
-    // Some pipelines watch pushes; others want an explicit event. Both are one
-    // line here, and neither is required for the site to rebuild.
+    // Some pipelines watch pushes; others want an explicit event.
     const dispatchEvent = context.config.publish.dispatchEvent;
     if (dispatchEvent) {
       await this.repo.dispatch(dispatchEvent, { region: regionId });
@@ -379,12 +462,7 @@ export class SiteClient {
     return result;
   }
 
-  /**
-   * Tries every spelling at once and keeps the first that exists, in the order
-   * given. Three parallel 404-able reads cost one round trip instead of three,
-   * and the API budget is 5000 requests an hour — latency is the scarce thing
-   * here, not calls.
-   */
+  /** Tries every spelling at once and keeps the first that exists, in the order given. */
   private async firstFile(candidates: string[]): Promise<{ path: string; content: string } | null> {
     const found = await Promise.all(
       candidates.map(async (path) => {

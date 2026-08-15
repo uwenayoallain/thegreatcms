@@ -1,11 +1,4 @@
-/**
- * The studio's HTTP surface.
- *
- * Every screen is server-rendered and every mutation is a form POST, so the
- * whole editor works with JavaScript disabled. That is not nostalgia: it makes
- * the admin keyboard- and screen-reader-accessible by construction, and keeps
- * the client payload at zero.
- */
+/** The studio's HTTP surface. */
 
 import { readFile } from "node:fs/promises";
 import { ConflictError, GitHubError } from "@greatcms/git";
@@ -37,7 +30,6 @@ import {
 } from "./submissions.js";
 import { SiteClient, SiteNotConfiguredError, type SiteContext } from "./sites.js";
 import { errorsByPath } from "./views/fields.js";
-import { previewDocument } from "./views/preview.js";
 import { page } from "./views/layout.js";
 import {
   collectionPage,
@@ -72,12 +64,7 @@ export function createApp(options: AppOptions) {
   const clientFor = (site: Site) => new SiteClient(site, options.fetch);
   const limiter = options.rateLimiter ?? new RateLimiter();
 
-  /**
-   * The public submission endpoint. It sits before authentication and before
-   * the same-origin check on purpose: managed sites post here from their own
-   * domains, which is cross-origin by definition. It accepts only form data,
-   * writes only to the submissions table, and never reads a session.
-   */
+  /** The public submission endpoint. */
   app.post("/f/:siteId/:form", async (c) => {
     const siteId = c.req.param("siteId");
     const form = c.req.param("form").slice(0, 64);
@@ -112,8 +99,7 @@ export function createApp(options: AppOptions) {
     });
 
     if (options.notifier && spam.score < SPAM_THRESHOLD) {
-      // Not awaited: the visitor should not wait on an email provider, and the
-      // submission is already stored.
+      // Not awaited: the visitor should not wait on an email provider.
       void options.notifier.notify({
         subject: `${site.name}: new ${form} submission`,
         lines: Object.entries(data).map(([key, value]) => `${key}: ${value}`),
@@ -127,8 +113,7 @@ export function createApp(options: AppOptions) {
   });
 
   app.use("*", async (c, next) => {
-    // Managed sites post submissions from their own domains, so this one route
-    // is exempt from both the origin check and the session requirement.
+    // Managed sites post submissions from their own domains, so this one route is exempt.
     if (new URL(c.req.url).pathname.startsWith("/f/")) return next();
 
     if (c.req.method !== "GET" && !isSameOrigin(c.req.raw)) {
@@ -148,11 +133,7 @@ export function createApp(options: AppOptions) {
     return next();
   });
 
-  /**
-   * Client bundles. An allowlist rather than a static directory: the studio
-   * serves exactly two files, and a path-traversal bug in a file server is a
-   * silly way to lose a token database.
-   */
+  /** Client bundles. */
   app.get("/assets/:file", async (c) => {
     const file = c.req.param("file");
     if (!CLIENT_ASSETS.has(file)) return c.notFound();
@@ -171,8 +152,7 @@ export function createApp(options: AppOptions) {
     const form = await c.req.formData();
     const supplied = String(form.get("password") ?? "");
     if (!checkPassword(supplied, password)) {
-      // Deliberately vague, and the same shape whether or not a password was
-      // supplied: there is nothing here worth confirming to a guesser.
+      // Deliberately vague, and the same shape whether or not a password was supplied: there.
       return c.html(signInPage({ error: "That password did not work." }), 401);
     }
     c.header("Set-Cookie", createSessionCookie(secret));
@@ -261,8 +241,7 @@ export function createApp(options: AppOptions) {
       createdAt: new Date().toISOString(),
     };
 
-    // Verify before storing: a site that cannot be read is not connected, and
-    // finding that out at save time beats finding out mid-edit.
+    // Verify before storing: a site that cannot be read is not connected, and finding.
     try {
       await clientFor(candidate).context();
     } catch (error) {
@@ -278,8 +257,17 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
 
     try {
-      const { schema } = await clientFor(site).context();
-      return c.html(sitePage(site, schema, store.recentPublishes(site.id)));
+      const client = clientFor(site);
+      const context = await client.context();
+      return c.html(
+        sitePage(
+          site,
+          context.schema,
+          store.recentPublishes(site.id),
+          undefined,
+          await client.listLiveDrafts(context),
+        ),
+      );
     } catch (error) {
       return c.html(errorPage(site.name, describeError(error)), 502);
     }
@@ -290,12 +278,7 @@ export function createApp(options: AppOptions) {
     return c.redirect("/", 303);
   });
 
-  /**
-   * Collections are edited with the same generated forms and the same
-   * validation as regions; only the file they land in differs. Keeping one
-   * editing path means a Markdown blog post gets the same alt-text enforcement
-   * and the same atomic publish as a hero section.
-   */
+  /** Collections are edited with the same generated forms and the same validation as regions. */
   app.get("/sites/:id/collections/:name", async (c) => {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
@@ -423,8 +406,7 @@ export function createApp(options: AppOptions) {
       );
     }
 
-    // A new entry takes its file name from the slug field; an existing one keeps
-    // the name it has, so renaming a title never orphans a published URL.
+    // A new entry takes its file name from the slug field; an existing one.
     const slug = requested === "new" ? client.entrySlug(context, name, document) : requested;
 
     try {
@@ -436,6 +418,9 @@ export function createApp(options: AppOptions) {
         actor,
         expectedHeadSha: requested === "new" ? undefined : headSha || undefined,
       });
+
+      // The published file is now the truth; a leftover draft would keep the dev.
+      await client.clearLiveDraft({ context, collection: { name, slug } });
 
       store.recordPublish({
         siteId: site.id,
@@ -479,7 +464,8 @@ export function createApp(options: AppOptions) {
     }
   });
 
-  app.post("/sites/:id/regions/:regionId/preview", async (c) => {
+  /** An unsaved edit, written where the site's dev server will read it. */
+  app.post("/sites/:id/regions/:regionId/draft", async (c) => {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
     const regionId = c.req.param("regionId");
@@ -489,47 +475,55 @@ export function createApp(options: AppOptions) {
     const region = context.schema.regions[regionId];
     if (!region) return c.notFound();
 
-    const form = await c.req.formData();
-    const entries: Array<[string, string]> = [...form.entries()].map(
-      ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
-    );
-
+    const entries = await formEntries(c.req.raw);
     const document = isBlocksRegion(region)
       ? { blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields) }
       : decodeForm(entries, region.fields);
 
-    return c.html(
-      previewDocument({
-        title: region.label ?? regionId,
-        region,
-        blocks: context.schema.blocks,
-        fields: isBlocksRegion(region) ? undefined : region.fields,
-        document,
-      }),
-    );
+    const written = await client.writeLiveDraft({ context, regionId, document });
+    return c.body(null, written ? 204 : 409);
   });
 
-  app.post("/sites/:id/collections/:name/:slug/preview", async (c) => {
+  /** Throws the unsaved edit away, so the site goes back to what is published. */
+  app.post("/sites/:id/regions/:regionId/draft/discard", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const regionId = c.req.param("regionId");
+
+    const client = clientFor(site);
+    await client.clearLiveDraft({ context: await client.context(), regionId });
+    return c.redirect(`/sites/${site.id}/regions/${regionId}`, 303);
+  });
+
+  app.post("/sites/:id/collections/:name/:slug/draft/discard", async (c) => {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
     const name = c.req.param("name");
+    const slug = c.req.param("slug");
 
-    const context = await clientFor(site).context();
+    const client = clientFor(site);
+    await client.clearLiveDraft({ context: await client.context(), collection: { name, slug } });
+    return c.redirect(`/sites/${site.id}/collections/${name}/${slug}`, 303);
+  });
+
+  app.post("/sites/:id/collections/:name/:slug/draft", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const name = c.req.param("name");
+    const slug = c.req.param("slug");
+
+    const client = clientFor(site);
+    const context = await client.context();
     const collection = context.schema.collections[name];
-    if (!collection) return c.notFound();
+    if (!collection || slug === "new") return c.notFound();
 
-    const form = await c.req.formData();
-    const entries: Array<[string, string]> = [...form.entries()].map(
-      ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
-    );
-
-    return c.html(
-      previewDocument({
-        title: collection.label ?? name,
-        fields: collection.fields,
-        document: decodeForm(entries, collection.fields),
-      }),
-    );
+    const document = decodeForm(await formEntries(c.req.raw), collection.fields);
+    const written = await client.writeLiveDraft({
+      context,
+      collection: { name, slug },
+      document,
+    });
+    return c.body(null, written ? 204 : 409);
   });
 
   app.get("/sites/:id/regions/:regionId", async (c) => {
@@ -584,11 +578,7 @@ export function createApp(options: AppOptions) {
     const action = String(form.get("action") ?? "publish");
     const headSha = String(form.get("headSha") ?? "");
 
-    // Uploads ride along in the same form, keyed by the field they belong to,
-    // so an image and the content referencing it are one submission and one
-    // commit. Each upload is turned into ordinary form entries before decoding,
-    // so an uploaded image travels the same path as a pasted URL — and the alt
-    // text typed beside it is picked up with everything else.
+    // Uploads ride along in the same form, keyed by the field they belong to.
     let media: Array<{ path: string; base64: string }> = [];
     try {
       const files = [...form.entries()].flatMap(([key, value]) => {
@@ -597,8 +587,7 @@ export function createApp(options: AppOptions) {
         return path ? [{ path, file: value }] : [];
       });
 
-      // Reading the uploads runs at once; a publish with three images should
-      // not cost three sequential reads before it even starts committing.
+      // Reading the uploads runs at once; a publish with three images should not cost.
       const prepared = await Promise.all(
         files.map(async ({ path, file }) => ({
           path,
@@ -646,8 +635,7 @@ export function createApp(options: AppOptions) {
     // Nothing is uploaded for a block-list shuffle; those never reach a commit.
     if (action !== "publish" && action !== "draft") media = [];
 
-    // Block list edits round-trip through the server so add, remove, and
-    // reorder work without a line of client JavaScript.
+    // Block list edits round-trip through the server so add, remove, and reorder work without.
     if (action !== "publish" && action !== "draft" && isBlocksRegion(region)) {
       const blocks = document.blocks as Array<Record<string, unknown>>;
       applyBlockAction(action, blocks, String(form.get("addType") ?? ""), region.allow);
@@ -776,6 +764,8 @@ export function createApp(options: AppOptions) {
         expectedHeadSha: headSha || undefined,
         media,
       });
+      await client.clearLiveDraft({ context, regionId });
+
       store.recordPublish({
         siteId: site.id,
         regionId,
@@ -858,7 +848,15 @@ function thanksPage(): string {
   );
 }
 
-const CLIENT_ASSETS = new Set(["editor.js", "preview.js"]);
+/** Form fields as string pairs; uploads are not part of an unsaved draft. */
+async function formEntries(request: Request): Promise<Array<[string, string]>> {
+  const form = await request.formData();
+  return [...form.entries()].map(
+    ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
+  );
+}
+
+const CLIENT_ASSETS = new Set(["editor.js", "live.js"]);
 const assetCache = new Map<string, string | null>();
 
 /** Resolved next to the built server bundle, and beside the source in dev. */

@@ -1,17 +1,4 @@
-/**
- * The visual editor — ProseMirror directly, no wrapper.
- *
- * ProseMirror is MIT, maintained independently, and has no commercial tier that
- * features can migrate into. Wrappers over it are convenient right up until the
- * convenient parts move behind a licence, so the studio depends on the engine.
- *
- * This is the studio's only client-side JavaScript, and it is a progressive
- * enhancement rather than a requirement: every richtext field is a real
- * `<textarea>` that submits correctly on its own. When this script runs it
- * hides that textarea and writes back into it on every change, so the form
- * still posts exactly one value and no server code knows the difference. If the
- * bundle fails to load, or throws, you get a working textarea.
- */
+/** The visual editor — ProseMirror directly, no wrapper. */
 
 import { baseKeymap, setBlockType, toggleMark, wrapIn } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
@@ -131,8 +118,7 @@ function toHtml(state: EditorState): string {
   const holder = document.createElement("div");
   holder.append(fragment);
   const html = holder.innerHTML;
-  // An empty document serializes to an empty paragraph; store nothing instead,
-  // so "no value" stays distinguishable from "a blank paragraph".
+  // An empty document serializes to an empty paragraph; store nothing instead, so "no value".
   return html === "<p></p>" || html === "<p><br></p>" ? "" : html;
 }
 
@@ -178,8 +164,7 @@ function enhance(textarea: HTMLTextAreaElement): void {
       ],
     }),
     attributes: {
-      // Without these the editing surface is an unlabelled div to a screen
-      // reader, which would be worse than the textarea it replaced.
+      // Without these the editing surface is an unlabelled div to a screen reader, which.
       role: "textbox",
       "aria-multiline": "true",
       "aria-label": label?.textContent?.trim() || "Rich text",
@@ -193,8 +178,7 @@ function enhance(textarea: HTMLTextAreaElement): void {
     },
   });
 
-  // Only hide the textarea once the editor is actually up, so a throw above
-  // leaves a usable field rather than an invisible one.
+  // Only hide the textarea once the editor is actually up, so a throw above.
   textarea.hidden = true;
   textarea.setAttribute("aria-hidden", "true");
   textarea.tabIndex = -1;

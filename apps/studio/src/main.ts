@@ -1,6 +1,4 @@
-/**
- * Entry point. One process, one SQLite file, no external services.
- */
+/** Entry point. */
 
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
@@ -17,14 +15,12 @@ if (!password) {
   process.exit(1);
 }
 
-// A generated secret is fine for a single instance; set STUDIO_SECRET to keep
-// sessions alive across restarts or to run more than one process.
+// A generated secret is fine for a single instance; set STUDIO_SECRET to keep sessions.
 const secret = process.env.STUDIO_SECRET ?? randomSecret();
 const databaseFile = process.env.STUDIO_DB ?? "data/studio.sqlite";
 const port = Number(process.env.PORT ?? 8787);
 
-// Email is optional. Without it, submissions still arrive in the inbox — you
-// just have to go and look.
+// Email is optional.
 const notifier =
   process.env.RESEND_API_KEY && process.env.NOTIFY_FROM && process.env.NOTIFY_TO
     ? new ResendNotifier({
@@ -35,8 +31,6 @@ const notifier =
     : undefined;
 
 // Any OpenAI-compatible endpoint: Groq, Google, Cloudflare, Mistral, Ollama.
-// Publishing never waits on it — a failure falls back to the diff-generated
-// title — and no site sends content here unless it opted in.
 const summarizer =
   process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL
     ? new ModelSummarizer({

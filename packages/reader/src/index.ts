@@ -1,14 +1,4 @@
-/**
- * @greatcms/reader — read managed content at build time.
- *
- * Deliberately framework-neutral. Astro, Next, Eleventy, Nuxt, and plain Node
- * scripts all use this same reader, because there is nothing framework-specific
- * about reading a JSON file. If this package ever needs a framework-specific
- * sibling, something has gone wrong with the standard.
- *
- * Everything here is synchronous filesystem work that happens during a build, so
- * a site ships zero CMS JavaScript to the browser.
- */
+/** @greatcms/reader — read managed content at build time. */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -17,6 +7,7 @@ import {
   type CmsSchema,
   type CollectionDef,
   DEFAULT_CONFIG,
+  draftFilePath,
   type RegionDocument,
   parseConfig,
   parseFrontmatter,
@@ -29,11 +20,10 @@ import {
 export interface ReaderOptions {
   /** Site root — the directory containing `.cms/`. Defaults to `process.cwd()`. */
   root?: string;
-  /**
-   * Throw when a region is missing from the schema. On by default: a typo in a
-   * region id should fail the build, not silently render nothing.
-   */
+  /** Throw when a region is missing from the schema. */
   strictRegions?: boolean;
+  /** Prefer unsaved edits from `.cms/draft/` over the committed file, so the studio can show. */
+  drafts?: boolean;
 }
 
 export interface CollectionEntry {
@@ -52,11 +42,13 @@ export class CmsReader {
   readonly schema: CmsSchema;
   readonly config: CmsConfig;
   private readonly strictRegions: boolean;
+  private readonly drafts: boolean;
   private readonly cache = new Map<string, RegionDocument | null>();
 
   constructor(options: ReaderOptions = {}) {
     this.root = resolve(options.root ?? process.cwd());
     this.strictRegions = options.strictRegions ?? true;
+    this.drafts = options.drafts ?? process.env.NODE_ENV === "development";
 
     const schemaFile = firstExisting(this.root, [
       ".cms/schema.json",
@@ -82,13 +74,10 @@ export class CmsReader {
       : DEFAULT_CONFIG;
   }
 
-  /**
-   * Resolves a region: schema defaults, then the stored file layered on top.
-   * A region with no content file yet returns its defaults, which is what makes
-   * a site buildable before the CMS has ever touched it.
-   */
+  /** Resolves a region: schema defaults, then the stored file layered on top. */
   region<T = RegionDocument>(regionId: string): T {
-    if (this.cache.has(regionId)) return this.cache.get(regionId) as T;
+    // The cache is a build-time optimisation; in dev it would pin the content to startup.
+    if (!this.drafts && this.cache.has(regionId)) return this.cache.get(regionId) as T;
 
     if (!(regionId in this.schema.regions)) {
       if (this.strictRegions) {
@@ -101,11 +90,8 @@ export class CmsReader {
     }
 
     const relative = regionFilePath(this.config, regionId);
-    const absolute = join(this.root, relative);
-    let stored: RegionDocument | null = null;
-    if (existsSync(absolute)) {
-      stored = parseRegionFile(readFileSync(absolute, "utf8"), relative);
-    }
+    const source = this.read(relative);
+    const stored = source === null ? null : parseRegionFile(source, relative);
 
     const resolved = resolveRegion(this.schema, regionId, stored);
     this.cache.set(regionId, resolved);
@@ -117,6 +103,16 @@ export class CmsReader {
     const document = this.region<RegionDocument>(regionId);
     const blocks = document?.blocks;
     return Array.isArray(blocks) ? (blocks as Array<T & { _type: string }>) : [];
+  }
+
+  /** A file's contents, taking an unsaved draft over the committed copy. */
+  private read(relative: string): string | null {
+    if (this.drafts) {
+      const draft = join(this.root, draftFilePath(relative));
+      if (existsSync(draft)) return readFileSync(draft, "utf8");
+    }
+    const absolute = join(this.root, relative);
+    return existsSync(absolute) ? readFileSync(absolute, "utf8") : null;
   }
 
   /** Every region id the schema defines. */
@@ -141,7 +137,7 @@ export class CmsReader {
     for (const file of readdirSync(dir).toSorted()) {
       if (!file.endsWith(extension)) continue;
       const relative = `${def.path.replace(/\/+$/, "")}/${file}`;
-      const source = readFileSync(join(dir, file), "utf8");
+      const source = this.read(relative) ?? readFileSync(join(dir, file), "utf8");
       const slug = file.slice(0, -extension.length);
 
       if (def.format === "json") {
@@ -150,8 +146,7 @@ export class CmsReader {
       }
 
       const { data, body } = parseFrontmatter(source, relative);
-      // The body field is a normal field as far as consumers are concerned; the
-      // Markdown body is simply where it is stored.
+      // The body is a normal field to consumers; Markdown is only where it is stored.
       if (def.body) data[def.body] = body;
       entries.push({ slug, file: relative, data, body });
     }

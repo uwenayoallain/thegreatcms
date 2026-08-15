@@ -1,14 +1,4 @@
-/**
- * Form data ↔ content documents.
- *
- * The studio's editor is generated from the schema, so it cannot know field
- * names ahead of time. Inputs are named with bracket paths — `f[seo][title]`,
- * `f[tags][0]`, `f[blocks][2][heading]` — and this module converts between that
- * flat wire format and the nested documents the standard stores.
- *
- * Doing it here, on the server, is what lets the whole editor work with
- * JavaScript disabled: a plain form POST is a complete, valid publish.
- */
+/** Form data ↔ content documents. */
 
 import type { FieldDef } from "@greatcms/spec";
 
@@ -30,11 +20,7 @@ export function fieldName(path: Array<string | number>, root: string = ROOT): st
   return root + path.map((segment) => `[${segment}]`).join("");
 }
 
-/**
- * Builds a nested document from submitted form entries, coercing each value
- * according to its field definition. Unknown inputs are ignored rather than
- * trusted — the schema decides what a document may contain, never the browser.
- */
+/** Builds a nested document from submitted form entries, coercing each value according to its. */
 export function decodeForm(
   entries: Iterable<[string, string]>,
   fields: Record<string, FieldDef>,
@@ -91,9 +77,7 @@ function coerceField(def: FieldDef, value: unknown): unknown {
     case "text":
     case "date": {
       const text = asString(value);
-      // An empty box means "no value", not an empty string that overwrites a
-      // default with nothing. Required-ness is the validator's job, not the
-      // encoder's.
+      // An empty box means "no value", not an empty string that overwrites a default.
       return text === "" ? undefined : text;
     }
 
@@ -106,8 +90,7 @@ function coerceField(def: FieldDef, value: unknown): unknown {
       const text = asString(value);
       if (text === "") return undefined;
       const parsed = Number(text);
-      // A number that will not parse is passed through as-is so the validator
-      // can report it against the field the author actually typed in.
+      // A number that will not parse is passed through as-is so the validator can.
       return Number.isNaN(parsed) ? text : parsed;
     }
 
@@ -167,11 +150,7 @@ function coerceField(def: FieldDef, value: unknown): unknown {
   }
 }
 
-/**
- * Blocks carry `_type` alongside their fields, and each block's shape depends
- * on it — so they are decoded against the block definitions rather than a
- * single field map.
- */
+/** Blocks carry `_type` alongside their fields, and each block's shape depends on it —. */
 export function decodeBlocks(
   entries: Iterable<[string, string]>,
   blockFields: (type: string) => Record<string, FieldDef> | undefined,

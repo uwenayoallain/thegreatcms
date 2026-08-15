@@ -1,11 +1,4 @@
-/**
- * Renders form controls from field definitions.
- *
- * Every control is a native HTML element with a real `<label for>`, so the
- * editor is keyboard-operable and screen-reader-legible without a single line
- * of ARIA plumbing. Validation errors are attached with `aria-describedby` and
- * `aria-invalid` rather than colour alone.
- */
+/** Renders form controls from field definitions. */
 
 import { type FieldDef, selectOptions } from "@greatcms/spec";
 import { html, raw } from "hono/html";
@@ -317,11 +310,7 @@ export function errorsByPath(
   return map;
 }
 
-/**
- * Renders an attribute list. Values that are undefined, null, or false are
- * dropped entirely rather than rendered as "undefined" — an `aria-invalid`
- * attribute present with the wrong value is worse than an absent one.
- */
+/** Renders an attribute list. */
 function attrs(pairs: Record<string, string | number | boolean | undefined>) {
   const rendered = Object.entries(pairs)
     .filter(([, value]) => value !== undefined && value !== null && value !== false)

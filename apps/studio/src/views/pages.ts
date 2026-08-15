@@ -2,6 +2,7 @@ import type { CmsSchema, FieldDef, RegionDef } from "@greatcms/spec";
 import { isBlocksRegion } from "@greatcms/spec";
 import { html } from "hono/html";
 import type { Publish, Site, Submission } from "../db.js";
+import type { UnsavedDraft } from "../sites.js";
 import { fieldName } from "../form.js";
 import { type ErrorsByPath, hasRichText, renderFields } from "./fields.js";
 import { page, type PageOptions } from "./layout.js";
@@ -226,6 +227,7 @@ export function sitePage(
   schema: CmsSchema,
   publishes: Publish[],
   flash?: PageOptions["flash"],
+  drafts: UnsavedDraft[] = [],
 ): string {
   const regions = Object.entries(schema.regions);
   return page(
@@ -252,6 +254,27 @@ export function sitePage(
             : html`publishing straight to ${site.branch}`
         }
       </p>
+
+      ${
+        drafts.length > 0
+          ? html`
+              <div class="drafts" role="status">
+                <h2>Unsaved edits</h2>
+                <p>
+                  Your dev server is showing these instead of what is published. Nothing here is
+                  committed.
+                </p>
+                <ul>
+                  ${drafts.map(
+                    (draft) => html`
+                      <li><a href="${draft.href}">${draft.label}</a> <code>${draft.path}</code></li>
+                    `,
+                  )}
+                </ul>
+              </div>
+            `
+          : ""
+      }
 
       <h2>Regions</h2>
       <ul class="cards">
@@ -364,7 +387,7 @@ export function editRegionPage(options: EditPageOptions): string {
       ],
       flash,
       editor,
-      livePreview: true,
+      liveSite: true,
     },
     html`
       <h1>${title}</h1>
@@ -400,7 +423,7 @@ export function editRegionPage(options: EditPageOptions): string {
           action="/sites/${site.id}/regions/${regionId}"
           enctype="multipart/form-data"
           data-editor-form
-          id="preview-form"
+          id="editor-form"
         >
           <input type="hidden" name="headSha" value="${headSha}" />
 
@@ -414,62 +437,59 @@ export function editRegionPage(options: EditPageOptions): string {
             <button type="submit" name="action" value="publish">
               ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
             </button>
-            <button class="secondary" type="submit" name="action" value="draft">
-              Save draft &amp; preview
-            </button>
+            ${
+              site.kind === "local"
+                ? ""
+                : html`
+                    <button class="secondary" type="submit" name="action" value="draft">
+                      Save draft &amp; preview
+                    </button>
+                  `
+            }
             <a class="button secondary" href="/sites/${site.id}">Back to site</a>
           </div>
         </form>
 
         <aside class="live" aria-labelledby="live-heading">
+          <div class="live-bar">
+            <h2 id="live-heading">Your site</h2>
+            <p class="muted" id="live-status" role="status">
+              ${site.kind === "local" && site.devUrl ? site.devUrl : "No dev server connected"}
+            </p>
+          </div>
           ${
             site.kind === "local" && site.devUrl
               ? html`
-                  <div class="live-bar">
-                    <h2>Your site</h2>
-                    <p class="muted"><code>${site.devUrl}</code></p>
-                  </div>
                   <iframe
                     title="Your site, running locally"
                     class="live-frame real"
                     src="${site.devUrl}"
+                    data-live-site="/sites/${site.id}/regions/${regionId}/draft"
                   ></iframe>
                   <p class="hint">
-                    Your real components, from your own dev server. Publishing writes files to
-                    <code>${site.path}</code>, so this updates as soon as your dev server reloads.
+                    Your real components, rendering what is in the form. Edits are written to
+                    <code>.cms/draft/</code> for your dev server to read — never committed until you
+                    publish.
+                  </p>
+                  <div class="live-actions">
+                    <form
+                      method="POST"
+                      action="/sites/${site.id}/regions/${regionId}/draft/discard"
+                    >
+                      <button class="secondary" type="submit">Discard unsaved edits</button>
+                    </form>
+                    <button class="secondary" type="button" data-live-reload hidden>
+                      Reload the site
+                    </button>
+                  </div>
+                `
+              : html`
+                  <p class="hint">
+                    Connect this site as a folder on this machine and give it your dev server's URL,
+                    and your edits will render here in your own components as you type.
                   </p>
                 `
-              : ""
           }
-
-          <div class="live-bar">
-            <h2 id="live-heading">
-              ${site.kind === "local" && site.devUrl ? "Unsaved content" : "Live preview"}
-            </h2>
-            <p class="muted" id="preview-status" role="status">Not yet rendered</p>
-          </div>
-          <iframe
-            title="Live preview of ${title}"
-            class="live-frame"
-            sandbox=""
-            data-live-preview="/sites/${site.id}/regions/${regionId}/preview"
-          ></iframe>
-          <p class="hint">
-            Your unsaved content, in the shape the schema describes. The layout is the studio's —
-            for your real design, save a draft or run <code>greatcms preview</code>.
-          </p>
-          <p data-preview-fallback>
-            <button
-              class="secondary"
-              type="submit"
-              form="preview-form"
-              formaction="/sites/${site.id}/regions/${regionId}/preview"
-              formmethod="POST"
-              formtarget="_blank"
-            >
-              Render preview
-            </button>
-          </p>
         </aside>
       </div>
 
@@ -782,7 +802,7 @@ export function editEntryPage(options: {
       ],
       flash,
       editor: hasRichText(fields),
-      livePreview: true,
+      liveSite: true,
     },
     html`
       <h1>${slug ?? `New ${label} entry`}</h1>
@@ -811,7 +831,7 @@ export function editEntryPage(options: {
           action="${action}"
           enctype="multipart/form-data"
           data-editor-form
-          id="preview-form"
+          id="editor-form"
         >
           <input type="hidden" name="headSha" value="${headSha}" />
           ${renderFields(fields, document, errors)}
@@ -825,51 +845,45 @@ export function editEntryPage(options: {
         </form>
 
         <aside class="live" aria-labelledby="live-heading">
+          <div class="live-bar">
+            <h2 id="live-heading">Your site</h2>
+            <p class="muted" id="live-status" role="status">
+              ${site.kind === "local" && site.devUrl ? site.devUrl : "No dev server connected"}
+            </p>
+          </div>
           ${
-            site.kind === "local" && site.devUrl
+            site.kind === "local" && site.devUrl && slug
               ? html`
-                  <div class="live-bar">
-                    <h2>Your site</h2>
-                    <p class="muted"><code>${site.devUrl}</code></p>
-                  </div>
                   <iframe
                     title="Your site, running locally"
                     class="live-frame real"
                     src="${site.devUrl}"
+                    data-live-site="${action}/draft"
                   ></iframe>
                   <p class="hint">
-                    Your real components, from your own dev server. Publishing writes files to
-                    <code>${site.path}</code>, so this updates as soon as your dev server reloads.
+                    Your real components, rendering what is in the form. Edits are written to
+                    <code>.cms/draft/</code> for your dev server to read — never committed until you
+                    publish.
+                  </p>
+                  <div class="live-actions">
+                    <form method="POST" action="${action}/draft/discard">
+                      <button class="secondary" type="submit">Discard unsaved edits</button>
+                    </form>
+                    <button class="secondary" type="button" data-live-reload hidden>
+                      Reload the site
+                    </button>
+                  </div>
+                `
+              : html`
+                  <p class="hint">
+                    ${
+                      slug
+                        ? "Connect this site as a folder on this machine and give it your dev server's URL to see this entry render as you type."
+                        : "A new entry renders here once it has been published, since your site has no file to read yet."
+                    }
                   </p>
                 `
-              : ""
           }
-
-          <div class="live-bar">
-            <h2 id="live-heading">
-              ${site.kind === "local" && site.devUrl ? "Unsaved content" : "Live preview"}
-            </h2>
-            <p class="muted" id="preview-status" role="status">Not yet rendered</p>
-          </div>
-          <iframe
-            title="Live preview of this entry"
-            class="live-frame"
-            sandbox=""
-            data-live-preview="${action}/preview"
-          ></iframe>
-          <p class="hint">Your unsaved content, updating as you type. Nothing is committed.</p>
-          <p data-preview-fallback>
-            <button
-              class="secondary"
-              type="submit"
-              form="preview-form"
-              formaction="${action}/preview"
-              formmethod="POST"
-              formtarget="_blank"
-            >
-              Render preview
-            </button>
-          </p>
         </aside>
       </div>
 

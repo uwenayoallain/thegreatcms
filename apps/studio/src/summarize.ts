@@ -1,20 +1,4 @@
-/**
- * Naming a pull request.
- *
- * Two rules shape everything here:
- *
- * 1. **The deterministic summary is the product, not the fallback.** It is
- *    computed from the actual field-level diff, so it is always accurate. A
- *    model can write something nicer, but nothing depends on it.
- * 2. **Publishing never waits on a model.** The call is time-boxed and every
- *    failure — network, rate limit, malformed output, a provider having a bad
- *    afternoon — quietly returns the deterministic version.
- *
- * The model endpoint is OpenAI-compatible, so Groq, Google's Gemini,
- * Cloudflare Workers AI, Mistral, or a local Ollama all work by configuration
- * alone. Sending content to a third party is opt-in per site, because it is the
- * site owner's content, not ours.
- */
+/** Naming a pull request. */
 
 import type { RegionDocument } from "@greatcms/spec";
 
@@ -33,11 +17,7 @@ export interface Summary {
   fromModel: boolean;
 }
 
-/**
- * Field-level diff between the published document and the one being proposed.
- * Machinery keys are skipped — `_meta` changes on every save and means nothing
- * to a reviewer.
- */
+/** Field-level diff between the published document and the one being proposed. */
 export function diffDocuments(
   before: RegionDocument | null,
   after: RegionDocument,
@@ -194,8 +174,7 @@ export class ModelSummarizer implements Summarizer {
       const title = clampTitle(firstLine(text));
       if (!title) return fallback;
 
-      // The model writes the headline; the diff table stays machine-generated,
-      // because a reviewer needs the field list to be true, not fluent.
+      // The model writes the headline; the diff table stays machine-generated, because a reviewer needs.
       return { title, body: fallback.body, fromModel: true };
     } catch (error) {
       const reason =

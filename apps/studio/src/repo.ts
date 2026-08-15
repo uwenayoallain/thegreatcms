@@ -1,17 +1,10 @@
-/**
- * Where a site's files live.
- *
- * The studio needs seven operations from a repository, and nothing about them
- * is specific to GitHub. Naming that interface lets a site be a folder on this
- * machine instead of a remote — which is the fast loop: the studio writes to
- * your working copy, your dev server notices, and you see your real components
- * update without a commit, a push, or a network round trip.
- */
+/** Where a site's files live. */
 
 import { execFile } from "node:child_process";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
+import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
 import {
   ConflictError,
   GitHubClient,
@@ -88,14 +81,7 @@ export class LocalRepositoryError extends Error {
   }
 }
 
-/**
- * A checkout on this machine.
- *
- * Publishing writes the files and, when the folder is a Git repository, makes a
- * commit — so the same history you would get from the remote path, minus the
- * network. When it is not a repository, the files are simply written; some
- * people just want a folder.
- */
+/** A checkout on this machine. */
 export class LocalRepository implements Repository {
   readonly kind = "local" as const;
 
@@ -121,11 +107,7 @@ export class LocalRepository implements Repository {
     }
   }
 
-  /**
-   * The current commit, or a marker when this is not a repository. Either way
-   * it is a value the editor can carry and compare, which is all the
-   * conflict check needs.
-   */
+  /** The current commit, or a marker when this is not a repository. */
   async getBranchHead(): Promise<string | null> {
     const sha = await this.git(["rev-parse", "HEAD"]);
     return sha?.trim() ?? "working-copy";
@@ -143,8 +125,7 @@ export class LocalRepository implements Repository {
       }
     }
 
-    // Writes happen together and before any commit, so a failure part-way
-    // leaves the working copy inspectable rather than half-committed.
+    // Writes happen together and before any commit, so a failure part-way leaves the working.
     await Promise.all(
       request.files.map(async (file) => {
         const target = this.absolute(file.path);
@@ -185,8 +166,7 @@ export class LocalRepository implements Repository {
   }
 
   async ensureBranch(): Promise<string> {
-    // A working copy is already on the branch it is on; drafts here are just
-    // files, and Git is the thing that remembers them.
+    // A working copy is already on the branch it is on; drafts here are.
     return (await this.getBranchHead()) ?? "working-copy";
   }
 
@@ -201,6 +181,44 @@ export class LocalRepository implements Repository {
     // Nothing to notify: there is no pipeline watching a folder.
   }
 
+  /** Writes an unsaved edit where the site's dev server will read it. */
+  async writeDraft(path: string, content: string): Promise<void> {
+    const target = this.absolute(draftFilePath(path));
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(this.absolute(`${DRAFT_DIR}/.gitignore`), "*\n");
+    await writeFile(target, content);
+  }
+
+  /** Drops a draft once its content is published, or when it is discarded. */
+  async clearDraft(path: string): Promise<void> {
+    await rm(this.absolute(draftFilePath(path)), { force: true });
+  }
+
+  async hasDraft(path: string): Promise<boolean> {
+    return (await this.getFile(draftFilePath(path))) !== null;
+  }
+
+  /** Every content path with an unsaved edit waiting, so none can be forgotten. */
+  async listDrafts(): Promise<string[]> {
+    const walk = async (dir: string): Promise<string[]> => {
+      let entries;
+      try {
+        entries = await readdir(this.absolute(dir), { withFileTypes: true });
+      } catch {
+        return [];
+      }
+      const found = await Promise.all(
+        entries.map(async (entry) => {
+          const path = `${dir}/${entry.name}`;
+          if (entry.isDirectory()) return walk(path);
+          return entry.name === ".gitignore" ? [] : [path.slice(DRAFT_DIR.length + 1)];
+        }),
+      );
+      return found.flat();
+    };
+    return walk(DRAFT_DIR);
+  }
+
   /** Runs git, returning null when this is not a repository or the command fails. */
   private async git(args: string[]): Promise<string | null> {
     try {
@@ -211,11 +229,7 @@ export class LocalRepository implements Repository {
     }
   }
 
-  /**
-   * Resolves a repo-relative path, refusing anything that climbs out. The
-   * studio writes wherever a schema says to, and a schema is a file in a
-   * repository someone else may have written.
-   */
+  /** Resolves a repo-relative path, refusing anything that climbs out. */
   private absolute(path: string): string {
     const target = resolve(this.root, path);
     const inside = relative(this.root, target);

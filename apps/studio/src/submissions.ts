@@ -1,14 +1,4 @@
-/**
- * The dynamic layer: the one thing Git cannot hold.
- *
- * A managed site posts a plain HTML form to this studio. That means no
- * third-party form service, no per-site backend to provision, and no JavaScript
- * required on the site — adding a site to the inbox is a row in a table.
- *
- * Spam is handled with a honeypot, submission timing, and a rate limit rather
- * than a CAPTCHA. CAPTCHAs are an accessibility tax paid by every legitimate
- * visitor to inconvenience a bot that will solve them anyway.
- */
+/** The dynamic layer: the one thing Git cannot hold. */
 
 export const SPAM_THRESHOLD = 3;
 
@@ -72,11 +62,7 @@ export function contentFields(fields: Record<string, string>): Record<string, st
   return out;
 }
 
-/**
- * A fixed-window rate limiter held in memory. Deliberately not Redis: one
- * studio process is the deployment model, and a limiter that needs its own
- * server would be the most complex thing in the system.
- */
+/** A fixed-window rate limiter held in memory. */
 export class RateLimiter {
   private readonly hits = new Map<string, { count: number; resetAt: number }>();
 
@@ -114,11 +100,7 @@ export interface Notifier {
   notify(message: { subject: string; lines: string[] }): Promise<void>;
 }
 
-/**
- * Email notifications via Resend. Failures are logged and swallowed: a
- * submission is already safely stored by the time this runs, and losing a
- * notification is far better than losing the message.
- */
+/** Email notifications via Resend. */
 export class ResendNotifier implements Notifier {
   constructor(
     private readonly options: { apiKey: string; from: string; to: string },
@@ -167,8 +149,7 @@ export function toCsv(
 }
 
 function csvCell(value: string): string {
-  // A leading =, +, -, or @ makes a spreadsheet treat the cell as a formula, so
-  // an exported submission could execute on open. Prefix it out of harm's way.
+  // A leading =, +, -, or @ makes a spreadsheet treat the cell as a formula.
   const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return `"${guarded.replace(/"/g, '""')}"`;
 }

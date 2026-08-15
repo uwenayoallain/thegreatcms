@@ -11,10 +11,12 @@ function fakeServer() {
   const watched: string[] = [];
   const handlers: Record<string, Array<(path: string) => void>> = {};
   const restart = vi.fn();
+  const send = vi.fn();
 
   return {
     watched,
     restart,
+    send,
     fire(event: "add" | "change" | "unlink", path: string) {
       for (const handler of handlers[event] ?? []) handler(path);
     },
@@ -28,6 +30,7 @@ function fakeServer() {
         },
       },
       restart,
+      hot: { send },
     },
   };
 }
@@ -74,45 +77,70 @@ describe("the dev-time content watcher", () => {
     expect(watched).toContain(join(root, "content/articles"));
   });
 
-  it("reloads when a content file changes", async () => {
-    const { server, fire, restart } = fakeServer();
+  it("watches the drafts the studio writes while you are still typing", () => {
+    const { server, watched } = fakeServer();
+    greatcmsWatch({ root }).configureServer(server);
+
+    expect(watched.some((path) => path.startsWith(join(root, ".cms/draft")))).toBe(true);
+  });
+
+  it("reloads the page when a content file changes, without restarting", async () => {
+    const { server, fire, send, restart } = fakeServer();
     greatcmsWatch({ root }).configureServer(server);
 
     fire("change", join(root, "data/cms/home.hero.json"));
-    await vi.waitFor(() => expect(restart).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: "full-reload", path: "*" }));
+    expect(restart).not.toHaveBeenCalled();
   });
 
-  it("reloads when one is created or deleted, not only edited", async () => {
-    const { server, fire, restart } = fakeServer();
+  it("reloads for an unsaved draft, which is the live editing loop", async () => {
+    const { server, fire, send } = fakeServer();
+    greatcmsWatch({ root }).configureServer(server);
+
+    fire("add", join(root, ".cms/draft/data/cms/home.hero.json"));
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+  });
+
+  it("reloads when a file is created or deleted, not only edited", async () => {
+    const { server, fire, send } = fakeServer();
     greatcmsWatch({ root }).configureServer(server);
 
     fire("add", join(root, "data/cms/new.json"));
-    await vi.waitFor(() => expect(restart).toHaveBeenCalled());
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
 
-    restart.mockClear();
+    send.mockClear();
     fire("unlink", join(root, "data/cms/new.json"));
-    await vi.waitFor(() => expect(restart).toHaveBeenCalled());
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
   });
 
-  it("restarts once for a publish that writes several files", async () => {
-    const { server, fire, restart } = fakeServer();
+  it("reloads once for a publish that writes several files", async () => {
+    const { server, fire, send } = fakeServer();
     greatcmsWatch({ root }).configureServer(server);
 
     fire("change", join(root, "data/cms/home.hero.json"));
     fire("change", join(root, "static/media/a.png"));
     fire("change", join(root, "data/cms/home.body.json"));
 
-    await vi.waitFor(() => expect(restart).toHaveBeenCalled());
-    expect(restart).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to a restart when the server exposes no socket", async () => {
+    const { server, fire, restart } = fakeServer();
+    const withoutSocket = { ...server, hot: undefined };
+    greatcmsWatch({ root }).configureServer(withoutSocket);
+
+    fire("change", join(root, "data/cms/home.hero.json"));
+    await vi.waitFor(() => expect(restart).toHaveBeenCalledTimes(1));
   });
 
   it("ignores changes to source files, which Vite already handles", async () => {
-    const { server, fire, restart } = fakeServer();
+    const { server, fire, send } = fakeServer();
     greatcmsWatch({ root }).configureServer(server);
 
     fire("change", join(root, "src/pages/index.astro"));
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    expect(restart).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 140));
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("starts a dev server even with no .cms directory at all", () => {

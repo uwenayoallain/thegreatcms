@@ -1,8 +1,4 @@
-/**
- * Storage. `node:sqlite` ships with Node, so the studio has no native module to
- * compile, no database server to run, and no ORM in the request path — one file
- * on disk is the whole persistence story for however many sites you manage.
- */
+/** Storage. */
 
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
@@ -19,10 +15,7 @@ export interface Site {
   kind: SiteKind;
   /** Absolute path to the working copy. Local sites only. */
   path: string;
-  /**
-   * Where the site's dev server is listening, so the editor can show the real
-   * components rendering. Local sites only.
-   */
+  /** Where the site's dev server is listening, so the editor can show the real components rendering. */
   devUrl: string;
   owner: string;
   repo: string;

@@ -10,9 +10,8 @@ export default defineConfig([
     outExtensions: () => ({ js: ".js" }),
   },
   {
-    // The visual editor: the studio's only client-side JavaScript, and a
-    // progressive enhancement over a textarea that already works.
-    entry: ["client/editor.ts", "client/preview.ts"],
+    // The studio's only client-side JavaScript, and an enhancement over a real textarea.
+    entry: ["client/editor.ts", "client/live.ts"],
     format: ["esm"],
     dts: false,
     clean: false,

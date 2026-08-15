@@ -1,10 +1,4 @@
-/**
- * @greatcms/spec — the GreatCMS content standard.
- *
- * This package is a convenience, not a requirement. The standard is the files:
- * `.cms/schema.yaml`, `.cms/config.yaml`, and JSON/Markdown content. Any tool in
- * any language can read those without this package, which is the entire point.
- */
+/** @greatcms/spec — the GreatCMS content standard. */
 
 export { SpecError, SpecIssue, IssueBag, type SpecIssueInit } from "./errors.js";
 
@@ -40,6 +34,8 @@ export { ConfigFileSchema, DEFAULT_CONFIG, parseConfig, type CmsConfig } from ".
 
 export {
   collectionEntryPath,
+  DRAFT_DIR,
+  draftFilePath,
   mediaFilePath,
   mediaUrl,
   regionFilePath,

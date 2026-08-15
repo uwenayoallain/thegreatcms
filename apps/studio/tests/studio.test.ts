@@ -1,8 +1,4 @@
-/**
- * End-to-end tests for the studio, driven through `app.request` with a fake
- * GitHub behind it. No network, no browser, no server — the whole publish path
- * runs in milliseconds, which is what makes it worth running on every save.
- */
+/** End-to-end tests for the studio, driven through `app.request` with a fake GitHub behind it. */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -471,16 +467,15 @@ describe("accessibility", () => {
     expect(plain).not.toContain("/assets/editor.js");
     expect(rich).toContain("/assets/editor.js");
 
-    // Both get live preview, which is a kilobyte and useful everywhere.
-    expect(plain).toContain("/assets/preview.js");
+    // Both get the live-editing script; it is a kilobyte and does nothing without a dev server.
+    expect(plain).toContain("/assets/live.js");
   });
 
   it("keeps a working textarea underneath the editor", async () => {
     const body = await (await get("/sites/site-1/regions/home.body")).text();
     const { document } = new JSDOM(body).window;
 
-    // The enhancement hides this; without JavaScript it is the field, and it is
-    // always the value the form posts.
+    // The enhancement hides this; without JavaScript it is the field, and it is always.
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-richtext]");
     expect(textarea).toBeTruthy();
     expect(textarea?.name).toMatch(/^f\[blocks\]\[\d+\]\[body\]$/);
@@ -923,77 +918,26 @@ describe("editing a collection", () => {
   });
 });
 
-describe("live preview", () => {
-  it("renders the content in the form, without committing anything", async () => {
-    const response = await post("/sites/site-1/regions/home.hero/preview", {
-      "f[heading]": "Typed but never saved",
-      "f[subtitle]": "Still unsaved",
-    });
-
-    expect(response.status).toBe(200);
-    const body = await response.text();
-    expect(body).toContain("Typed but never saved");
-    expect(github.commits).toHaveLength(0);
-  });
-
-  it("previews a block list in order", async () => {
-    const response = await post("/sites/site-1/regions/home.body/preview", {
-      "f[blocks][0][_type]": "hero",
-      "f[blocks][0][heading]": "First block",
-      "f[blocks][1][_type]": "text",
-      "f[blocks][1][body]": "<p>Second block</p>",
-    });
-
-    const body = await response.text();
-    expect(body.indexOf("First block")).toBeLessThan(body.indexOf("Second block"));
-    expect(github.commits).toHaveLength(0);
-  });
-
-  it("flags an image with no alt text, where an editor will see it", async () => {
-    const response = await post("/sites/site-1/regions/home.hero/preview", {
-      "f[heading]": "Has a picture",
-      "f[image][src]": "/media/a.webp",
-      "f[image][alt]": "",
-    });
-
-    expect(await response.text()).toContain("No alt text");
-  });
-
-  it("shows empty fields as empty rather than hiding them", async () => {
-    const body = await (
-      await post("/sites/site-1/regions/home.hero/preview", { "f[heading]": "Only a heading" })
-    ).text();
-
-    expect(body).toContain("Only a heading");
-    expect(body).toContain("empty");
-  });
-
-  it("previews a collection entry too", async () => {
-    const response = await post("/sites/site-1/collections/blog/new/preview", {
-      "f[title]": "An unsaved post",
-      "f[content]": "<p>Body in progress</p>",
-    });
-
-    const body = await response.text();
-    expect(body).toContain("An unsaved post");
-    expect(body).toContain("Body in progress");
-  });
-
-  it("gives the editor a sandboxed frame and a manual fallback", async () => {
+describe("the live view of your site", () => {
+  it("offers a GitHub site no frame, because there is no dev server to show", async () => {
     const { document } = new JSDOM(await (await get("/sites/site-1/regions/home.hero")).text())
       .window;
 
-    const frame = document.querySelector<HTMLIFrameElement>("iframe[data-live-preview]");
-    expect(frame?.getAttribute("sandbox")).toBe("");
-    expect(frame?.title).toContain("Live preview");
-    expect(frame?.dataset.livePreview).toBe("/sites/site-1/regions/home.hero/preview");
-
-    // Without JavaScript this button renders the same preview in a new tab.
-    expect(document.querySelector("[data-preview-fallback] button")).toBeTruthy();
+    expect(document.querySelector("iframe[data-live-site]")).toBeNull();
+    expect(document.body.textContent).toContain("folder on this machine");
   });
 
-  it("serves the preview bundle", async () => {
-    expect((await get("/assets/preview.js")).status).toBe(200);
+  it("will not write a draft into a repository it cannot reach", async () => {
+    const response = await post("/sites/site-1/regions/home.hero/draft", {
+      "f[heading]": "Typed but never saved",
+    });
+
+    expect(response.status).toBe(409);
+    expect(github.commits).toHaveLength(0);
+  });
+
+  it("serves the live-editing bundle", async () => {
+    expect((await get("/assets/live.js")).status).toBe(200);
   });
 
   it("refuses to serve anything else from the asset route", async () => {

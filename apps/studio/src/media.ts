@@ -1,25 +1,9 @@
-/**
- * Uploads.
- *
- * An uploaded image is committed in the same commit as the content that points
- * at it. That is the whole reason the Git layer builds trees by hand: if the
- * picture and the JSON referencing it landed separately, every deploy between
- * the two would build a page with a broken image.
- *
- * Dimensions are read from the file's own header rather than trusted from the
- * browser or left blank. `width` and `height` in the stored value are what stop
- * a page reflowing as images load, so they are worth ~100 lines of byte
- * fiddling and no dependency at all.
- */
+/** Uploads. */
 
 import { createHash } from "node:crypto";
 import { mediaFilePath, mediaUrl, slugify, type CmsConfig } from "@greatcms/spec";
 
-/**
- * Formats a browser will render inline, and that carry their size in a header
- * we can read. SVG is deliberately absent: it is a script-bearing document, and
- * an editor uploading one to a site is a stored-XSS vector on that site.
- */
+/** Formats a browser will render inline, and that carry their size in a header we can read. */
 export const ALLOWED_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -75,9 +59,7 @@ export function prepareUpload(config: CmsConfig, input: UploadInput): UploadResu
     );
   }
 
-  // Content-addressed suffix: re-uploading identical bytes reuses the same
-  // path (so no duplicate blobs), while an edited image gets a new URL and
-  // therefore busts any cache holding the old one.
+  // Content-addressed suffix: re-uploading identical bytes reuses the same path (so no duplicate blobs), while.
   const digest = createHash("sha256").update(input.bytes).digest("hex").slice(0, 8);
   const base = slugify(input.fileName.replace(/\.[^.]+$/, "")) || "upload";
   const fileName = `${base}-${digest}.${extension}`;
@@ -97,16 +79,11 @@ export interface ImageSize {
   height: number;
 }
 
-/**
- * Reads intrinsic size from the file header. Returns null rather than guessing
- * when a format is unrecognised — a wrong width is worse than none, because the
- * page would reserve the wrong space.
- */
+/** Reads intrinsic size from the file header. */
 export function imageSize(bytes: Uint8Array): ImageSize | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-  // PNG: 8-byte signature, then an IHDR chunk whose payload starts with the
-  // dimensions as big-endian 32-bit integers.
+  // PNG: 8-byte signature, then an IHDR chunk starting with two big-endian uint32s.
   if (bytes.byteLength > 24 && startsWith(bytes, [0x89, 0x50, 0x4e, 0x47])) {
     return { width: view.getUint32(16), height: view.getUint32(20) };
   }
