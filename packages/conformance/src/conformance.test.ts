@@ -6,6 +6,8 @@ import {
   readFixtureRegion,
   runConformance,
   verifyRegions,
+  readFixtureEntries,
+  verifyEntries,
 } from "./index.js";
 
 describe("the fixture site", () => {
@@ -84,5 +86,81 @@ describe("the verifier", () => {
   it("reports regions the reader invented", () => {
     const result = verifyRegions({ ...expectedRegions(), "made.up": {} });
     expect(result.failures[0]?.reason).toBe("unexpected region in output");
+  });
+});
+
+describe("collections", () => {
+  it("reads a Markdown entry as frontmatter plus its body field", () => {
+    const [entry] = readFixtureEntries("blog");
+
+    expect(entry?.slug).toBe("publish-from-anywhere");
+    expect(entry?.data.title).toBe("Publish from anywhere");
+    expect(entry?.data.content).toContain("Content lives in the repository");
+  });
+
+  it("reads an MDX entry the same way, keeping the JSX untouched", () => {
+    const [entry] = readFixtureEntries("guides");
+
+    expect(entry?.slug).toBe("measuring-latency");
+    expect(entry?.data.content).toContain(
+      '<Chart data={[240, 120, 18]} caption="p99, in milliseconds" />',
+    );
+  });
+
+  it("keeps a frontmatter date as an ISO string, not a native date", () => {
+    // YAML has a timestamp type; the standard does not. A reader that lets its
+    // parser resolve one produces a document no other implementation matches.
+    const [entry] = readFixtureEntries("guides");
+
+    expect(entry?.data.date).toBe("2026-08-14");
+    expect(typeof entry?.data.date).toBe("string");
+  });
+
+  it("does not layer schema defaults over an entry that exists", () => {
+    const [entry] = readFixtureEntries("blog");
+
+    // `draft` is in the file; nothing invents fields the file does not have.
+    expect(Object.keys(entry?.data ?? {}).toSorted()).toEqual([
+      "content",
+      "date",
+      "draft",
+      "tags",
+      "title",
+    ]);
+  });
+
+  it("matches the expected entries, which is what a third-party reader is held to", () => {
+    const actual: Record<string, unknown> = {};
+    for (const name of ["blog", "guides"]) {
+      for (const entry of readFixtureEntries(name)) actual[`${name}/${entry.slug}`] = entry;
+    }
+
+    expect(verifyEntries(actual)).toMatchObject({ ok: true, checked: 2 });
+  });
+
+  it("fails a reader that reformats an MDX body", () => {
+    const actual: Record<string, unknown> = {};
+    for (const name of ["blog", "guides"]) {
+      for (const entry of readFixtureEntries(name)) actual[`${name}/${entry.slug}`] = entry;
+    }
+    const guide = actual["guides/measuring-latency"] as { data: { content: string } };
+    guide.data = { ...guide.data, content: guide.data.content.replace(/<Chart[^>]*\/>/, "<p/>") };
+
+    expect(verifyEntries(actual).ok).toBe(false);
+  });
+});
+
+describe("nested blocks", () => {
+  it("applies a block's own default", () => {
+    const showcase = readFixtureRegion("home.showcase") as { blocks: Array<{ heading: string }> };
+    expect(showcase.blocks[0]?.heading).toBe("What you get");
+  });
+
+  it("applies defaults to blocks nested inside a block", () => {
+    const showcase = readFixtureRegion("home.showcase") as {
+      blocks: Array<{ cards: Array<{ tone: string }> }>;
+    };
+
+    expect(showcase.blocks[0]?.cards.map((card) => card.tone)).toEqual(["plain", "accent"]);
   });
 });

@@ -61,16 +61,41 @@ export function resolveRegion(
   if (!stored) return defaults;
   if (isBlocksRegion(region)) {
     if (!Array.isArray(stored.blocks)) return defaults;
-    // Blocks get the same treatment as regions: defaults from the block's own fields fill.
-    const blocks = stored.blocks.map((block) => {
-      const type = (block as { _type?: unknown })?._type;
-      const def = typeof type === "string" ? schema.blocks[type] : undefined;
-      if (!def || !isPlainObject(block)) return block;
-      return deepMerge(fieldDefaults(def.fields), block);
-    });
-    return { ...stored, blocks };
+    return { ...stored, blocks: stored.blocks.map((block) => resolveBlock(schema, block)) };
   }
-  return deepMerge(defaults, stored);
+  return resolveNested(schema, region.fields, deepMerge(defaults, stored));
+}
+
+/**
+ * One block, with its own field defaults filled in — and then the same again
+ * for any block nested inside it. Resolution has to reach every depth the
+ * content actually has, or a nested block renders without its defaults.
+ */
+function resolveBlock(schema: CmsSchema, block: unknown): unknown {
+  const type = (block as { _type?: unknown })?._type;
+  const def = typeof type === "string" ? schema.blocks[type] : undefined;
+  if (!def || !isPlainObject(block)) return block;
+  return resolveNested(schema, def.fields, deepMerge(fieldDefaults(def.fields), block));
+}
+
+/** Walks a document's `blocks` fields, resolving what is inside them. */
+function resolveNested(
+  schema: CmsSchema,
+  fields: Record<string, FieldDef>,
+  document: RegionDocument,
+): RegionDocument {
+  const out: RegionDocument = { ...document };
+  for (const [name, def] of Object.entries(fields)) {
+    const value = out[name];
+    if (def.type === "blocks" && Array.isArray(value)) {
+      out[name] = value.map((entry) => resolveBlock(schema, entry));
+      continue;
+    }
+    if (def.type === "group" && isPlainObject(value)) {
+      out[name] = resolveNested(schema, def.fields, value);
+    }
+  }
+  return out;
 }
 
 function deepMerge(base: RegionDocument, over: RegionDocument): RegionDocument {

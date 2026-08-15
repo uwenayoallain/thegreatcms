@@ -29,6 +29,21 @@ blocks:
       link: { type: link, required: true }
       style: { type: select, options: [primary, secondary], default: primary }
 
+  card:
+    label: Card
+    fields:
+      title: { type: text, required: true }
+      body: { type: text }
+      tone: { type: select, options: [plain, accent], default: plain }
+
+  # A block whose own field is a list of blocks. Nesting is the point: a
+  # conforming reader must apply defaults at every depth, not only the top.
+  grid:
+    label: Card grid
+    fields:
+      heading: { type: text, default: What you get }
+      cards: { type: blocks, allow: [card], max: 4 }
+
 regions:
   # Fully edited: content file overrides every default.
   home.hero:
@@ -65,7 +80,25 @@ regions:
     fields:
       image: { type: image, alt: decorative-allowed }
 
+  # Blocks inside blocks, with a default that has to reach two levels down.
+  home.showcase:
+    type: blocks
+    allow: [grid]
+
 collections:
+  # MDX: stored exactly like Markdown, read exactly like Markdown. The
+  # difference is the extension, and that an editor must not reformat the body.
+  guides:
+    label: Guides
+    path: content/guides
+    format: mdx
+    body: content
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 120 }
+      date: { type: date, required: true }
+      content: { type: richtext }
+
   blog:
     label: Blog
     path: content/blog

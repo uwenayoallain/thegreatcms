@@ -1,0 +1,21 @@
+{
+  "blocks": [
+    {
+      "heading": "What you get",
+      "_type": "grid",
+      "cards": [
+        {
+          "tone": "plain",
+          "_type": "card",
+          "title": "Content lives in Git",
+          "body": "Every publish is a commit, so history and rollback come free."
+        },
+        {
+          "tone": "accent",
+          "_type": "card",
+          "title": "Nothing at runtime"
+        }
+      ]
+    }
+  ]
+}

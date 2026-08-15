@@ -1,0 +1,8 @@
+{
+  "slug": "measuring-latency",
+  "data": {
+    "title": "Measuring latency",
+    "date": "2026-08-14",
+    "content": "\nimport Chart from \"../../components/Chart.astro\";\n\nLatency fell once the reads stopped crossing a network.\n\n<Chart data={[240, 120, 18]} caption=\"p99, in milliseconds\" />\n\nThe prose around the component is ordinary Markdown. A reader stores this body\nbyte for byte: it does not parse the JSX, resolve the import, or care whether\n`Chart` exists.\n"
+  }
+}

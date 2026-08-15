@@ -256,6 +256,18 @@ The standard stores that body verbatim. It does not parse the JSX, resolve the
 imports, or care whether the components exist — that is the site's build, and
 it is deliberately none of the CMS's business.
 
+**Frontmatter is YAML, but the values are this document's types.** YAML has a
+native timestamp type, so an unconfigured parser resolves `date: 2026-08-14`
+into a date object; a `date` field here is an ISO 8601 **string**. A reader must
+keep it as one, or it produces documents no other implementation matches. The
+Python reader in `examples/reader-python` removes the timestamp resolver rather
+than converting afterwards, which is the smaller change.
+
+**A collection entry is not layered over defaults.** Unlike a region, what is in
+the file is the whole document: `default` on a collection's fields is an
+authoring convenience for a new entry, not a read-time rule. A reader that
+filled in defaults would report fields the file does not contain.
+
 Files are written with two-space JSON indentation, keys sorted alphabetically
 with `_`-prefixed keys last, and a trailing newline — so diffs stay readable and
 two tools writing the same content produce the same bytes.

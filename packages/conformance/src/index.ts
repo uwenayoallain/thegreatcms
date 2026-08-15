@@ -7,7 +7,9 @@ import {
   type CmsConfig,
   type CmsSchema,
   type RegionDocument,
+  entryExtension,
   parseConfig,
+  parseFrontmatter,
   parseRegionFile,
   parseSchema,
   regionFilePath,
@@ -55,6 +57,55 @@ export function readFixtureRegion(regionId: string): RegionDocument | null {
   return resolveRegion(schema, regionId, stored);
 }
 
+/** One collection entry, as every conforming reader must produce it. */
+export interface ExpectedEntry {
+  slug: string;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Entries a reader must produce, keyed `<collection>/<slug>`. Unlike a region,
+ * an entry is not layered over schema defaults: what is in the file is what it
+ * is. Defaults are an authoring convenience, not a read-time rule.
+ */
+export function expectedEntries(): Record<string, ExpectedEntry> {
+  const root = join(EXPECTED_DIR, "entries");
+  const out: Record<string, ExpectedEntry> = {};
+  for (const collection of readdirSync(root).toSorted()) {
+    const dir = join(root, collection);
+    for (const file of readdirSync(dir).toSorted()) {
+      if (!file.endsWith(".json")) continue;
+      const slug = file.slice(0, -".json".length);
+      out[`${collection}/${slug}`] = JSON.parse(readFileSync(join(dir, file), "utf8"));
+    }
+  }
+  return out;
+}
+
+/** Reference implementation for collections, matching the reader's rules. */
+export function readFixtureEntries(name: string): ExpectedEntry[] {
+  const schema = fixtureSchema();
+  const def = schema.collections[name];
+  if (!def) throw new Error(`Unknown collection "${name}".`);
+
+  const extension = `.${entryExtension(def.format)}`;
+  const dir = join(FIXTURES_DIR, def.path);
+
+  return readdirSync(dir)
+    .toSorted()
+    .filter((file) => file.endsWith(extension))
+    .map((file) => {
+      const source = readFileSync(join(dir, file), "utf8");
+      const slug = file.slice(0, -extension.length);
+      if (def.format === "json") {
+        return { slug, data: JSON.parse(source) as Record<string, unknown> };
+      }
+      const { data, body } = parseFrontmatter(source, file);
+      if (def.body) data[def.body] = body;
+      return { slug, data };
+    });
+}
+
 export interface Failure {
   regionId: string;
   reason: string;
@@ -92,6 +143,36 @@ export function verifyRegions(actual: Record<string, unknown>): ConformanceResul
   for (const regionId of Object.keys(actual)) {
     if (!(regionId in expected)) {
       failures.push({ regionId, reason: "unexpected region in output" });
+    }
+  }
+
+  return { ok: failures.length === 0, checked: Object.keys(expected).length, failures };
+}
+
+/** Compares collection entries against the expected set. */
+export function verifyEntries(actual: Record<string, unknown>): ConformanceResult {
+  const expected = expectedEntries();
+  const failures: Failure[] = [];
+
+  for (const [key, want] of Object.entries(expected)) {
+    if (!(key in actual)) {
+      failures.push({ regionId: key, reason: "missing from output" });
+      continue;
+    }
+    const got = stripMeta(actual[key]);
+    if (!deepEqual(stripMeta(want), got)) {
+      failures.push({
+        regionId: key,
+        reason: "does not match expected entry",
+        expected: want,
+        actual: got,
+      });
+    }
+  }
+
+  for (const key of Object.keys(actual)) {
+    if (!(key in expected)) {
+      failures.push({ regionId: key, reason: "unexpected entry in output" });
     }
   }
 
