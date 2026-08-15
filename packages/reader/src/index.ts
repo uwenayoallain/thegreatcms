@@ -15,6 +15,7 @@ import {
   parseSchema,
   regionFilePath,
   resolveRegion,
+  entryExtension,
 } from "@greatcms/spec";
 
 export interface ReaderOptions {
@@ -131,7 +132,7 @@ export class CmsReader {
     const dir = join(this.root, def.path);
     if (!existsSync(dir)) return [];
 
-    const extension = def.format === "markdown" ? ".md" : ".json";
+    const extension = `.${entryExtension(def.format)}`;
     const entries: CollectionEntry[] = [];
 
     for (const file of readdirSync(dir).toSorted()) {

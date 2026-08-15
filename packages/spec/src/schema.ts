@@ -41,8 +41,8 @@ const CollectionSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   path: z.string().min(1),
-  format: z.enum(["markdown", "json"]).default("markdown"),
-  /** Field whose value becomes the Markdown body. Ignored for `json`. */
+  format: z.enum(["markdown", "mdx", "json"]).default("markdown"),
+  /** Field whose value becomes the prose body. Ignored for `json`. */
   body: z.string().optional(),
   /** Field used to derive the file name. Defaults to `title`, then the entry id. */
   slug: z.string().optional(),

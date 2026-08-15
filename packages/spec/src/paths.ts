@@ -19,12 +19,42 @@ export function regionIdFromPath(config: CmsConfig, filePath: string): string | 
   return REGION_ID_RE.test(id) ? id : null;
 }
 
+/** A slug names one file inside the collection, so it is one path segment and nothing else. */
+export function isSafeSlug(slug: string): boolean {
+  if (slug.length === 0 || slug.length > 120) return false;
+  if (slug.startsWith(".")) return false; // ".", "..", and dotfiles
+  if (/[/\\]/.test(slug)) return false;
+  return ![...slug].some((character) => (character.codePointAt(0) ?? 0) < 0x20);
+}
+
+/** How a collection's entries are stored on disk. */
+export type CollectionFormat = "markdown" | "mdx" | "json";
+
+/**
+ * The file extension for a format. One function so that adding a format is one
+ * change rather than a hunt through every consumer for `=== "markdown"`.
+ */
+export function entryExtension(format: CollectionFormat): string {
+  if (format === "json") return "json";
+  return format === "mdx" ? "mdx" : "md";
+}
+
+/** Formats stored as frontmatter over a prose body, rather than as a data file. */
+export function hasFrontmatter(format: CollectionFormat): boolean {
+  return format !== "json";
+}
+
 export function collectionEntryPath(
   config: CmsConfig,
-  collection: { path: string; format: "markdown" | "json" },
+  collection: { path: string; format: CollectionFormat },
   slug: string,
 ): string {
-  const ext = collection.format === "markdown" ? "md" : "json";
+  if (!isSafeSlug(slug)) {
+    throw new Error(
+      `Invalid entry slug ${JSON.stringify(slug)}. A slug names one file inside the collection: no slashes, no leading dot.`,
+    );
+  }
+  const ext = entryExtension(collection.format);
   return `${trimSlashes(collection.path)}/${slug}.${ext}`;
 }
 

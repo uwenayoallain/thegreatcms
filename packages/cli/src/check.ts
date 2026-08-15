@@ -14,6 +14,8 @@ import {
   type CollectionDef,
   type FieldDef,
   type RegionDocument,
+  entryExtension,
+  hasFrontmatter,
 } from "@greatcms/spec";
 
 /** Reading the site. Separated so the checker is testable without a disk. */
@@ -97,7 +99,7 @@ export async function checkSite({ schema, config, files }: CheckOptions): Promis
 
   const collections = await Promise.all(
     Object.entries(schema.collections).map(async ([name, collection]) => {
-      const extension = collection.format === "markdown" ? ".md" : ".json";
+      const extension = `.${entryExtension(collection.format)}`;
       const paths = (await files.list(trimSlashes(collection.path))).filter((path) =>
         path.endsWith(extension),
       );
@@ -239,7 +241,7 @@ function readEntry(
       code: "unreadable_content",
       file: path,
       message: (error as Error).message.replace(`${path}: `, ""),
-      fix: collection.format === "markdown" ? "Check the YAML frontmatter." : "Fix the JSON.",
+      fix: hasFrontmatter(collection.format) ? "Check the YAML frontmatter." : "Fix the JSON.",
     });
   }
 }

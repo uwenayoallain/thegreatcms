@@ -20,6 +20,8 @@ import {
   resolveRegion,
   serializeRegion,
   type RegionDocument,
+  entryExtension,
+  type CollectionFormat,
 } from "@greatcms/spec";
 import type { Site } from "./db.js";
 import {
@@ -119,7 +121,7 @@ export class SiteClient {
   async listEntries(context: SiteContext, name: string): Promise<CollectionEntry[]> {
     const collection = this.collection(context, name);
     const paths = await this.repo.listDirectory(collection.path, this.site.branch);
-    const extension = collection.format === "markdown" ? ".md" : ".json";
+    const extension = `.${entryExtension(collection.format)}`;
 
     const entries = await Promise.all(
       paths
@@ -203,11 +205,7 @@ export class SiteClient {
   }
 
   private parseEntry(collection: CollectionDef, path: string, source: string): CollectionEntry {
-    const slug =
-      path
-        .split("/")
-        .pop()
-        ?.replace(/\.(md|json)$/, "") ?? path;
+    const slug = stripExtension(path.split("/").pop() ?? path, collection.format);
 
     if (collection.format === "json") {
       return { slug, path, data: JSON.parse(source) as RegionDocument };
@@ -307,7 +305,7 @@ export class SiteClient {
     for (const [name, collection] of Object.entries(context.schema.collections)) {
       const dir = `${collection.path.replace(/\/+$/, "")}/`;
       if (!path.startsWith(dir)) continue;
-      const slug = path.slice(dir.length).replace(/\.(md|json)$/, "");
+      const slug = stripExtension(path.slice(dir.length), collection.format);
       return {
         label: `${collection.label ?? name} — ${slug}`,
         href: `/sites/${this.site.id}/collections/${name}/${slug}`,
@@ -472,4 +470,10 @@ export class SiteClient {
     );
     return found.find((entry) => entry !== null) ?? null;
   }
+}
+
+/** A file name back to the slug it came from, for whatever format stores it. */
+function stripExtension(name: string, format: CollectionFormat): string {
+  const suffix = `.${entryExtension(format)}`;
+  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
 }
