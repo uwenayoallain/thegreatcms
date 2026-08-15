@@ -197,3 +197,27 @@ describe("compiling the result", () => {
     expect(result.ok).toBe(false);
   });
 }, 60_000);
+
+describe("staying current", () => {
+  it("emits what a formatter would emit, so --check does not fight oxfmt", () => {
+    // The two divergences that made this false at first: a multi-line union,
+    // and quoted keys that are already identifiers.
+    expect(source).toContain("export type CmsBlock = CardBlock | GridBlock;");
+    expect(source).toContain("blog: BlogEntry;");
+    expect(source).not.toContain('"blog": BlogEntry;');
+  });
+
+  it("is byte-identical run twice, which is what --check compares", () => {
+    expect(renderTypes(SCHEMA)).toBe(renderTypes(SCHEMA));
+  });
+
+  it("changes when the schema does", () => {
+    const renamed = parseSchema(
+      "version: 1\nregions:\n  home.hero:\n    fields:\n      headline: { type: text }\n",
+      { file: "s" },
+    );
+
+    expect(renderTypes(renamed)).not.toBe(source);
+    expect(renderTypes(renamed)).toContain("headline?: string;");
+  });
+});

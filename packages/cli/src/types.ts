@@ -42,7 +42,7 @@ export function renderTypes(schema: CmsSchema, options: TypesOptions = {}): stri
   if (blockNames.length > 0) {
     out.push(
       "/** Any block this schema defines, discriminated by `_type`. */",
-      `export type CmsBlock =\n${blockNames.map((name) => `  | ${blockTypeName(name)}`).join("\n")};`,
+      `export type CmsBlock = ${blockNames.map(blockTypeName).join(" | ")};`,
       "",
     );
   }
@@ -100,11 +100,11 @@ export function renderTypes(schema: CmsSchema, options: TypesOptions = {}): stri
     " */",
     `declare module ${JSON.stringify(module)} {`,
     "  interface GreatCMSRegions {",
-    ...regionIds.map((id) => `    ${JSON.stringify(id)}: ${regionTypeName(id)};`),
+    ...regionIds.map((id) => `    ${propertyName(id)}: ${regionTypeName(id)};`),
     "  }",
     "",
     "  interface GreatCMSCollections {",
-    ...collectionNames.map((name) => `    ${JSON.stringify(name)}: ${entryTypeName(name)};`),
+    ...collectionNames.map((name) => `    ${propertyName(name)}: ${entryTypeName(name)};`),
     "  }",
     "}",
     "",

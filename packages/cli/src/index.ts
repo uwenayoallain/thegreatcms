@@ -620,6 +620,21 @@ async function typesCommand(options: RunOptions & { flags: Flags }): Promise<num
     return 0;
   }
 
+  // Committed types that no longer match the schema are worse than none: they
+  // describe a site that does not exist, and nothing complains.
+  if (flags.boolean("check")) {
+    const current = await nodeFiles(root).read(out);
+    if (current === source) {
+      stdout(`${out} is up to date.\n`);
+      return 0;
+    }
+    options.stderr(
+      `${out} does not match .cms/schema.yaml.\n` +
+        `  fix: run \`greatcms types --out ${out}\` and commit the result.\n`,
+    );
+    return 1;
+  }
+
   await nodeFiles(root).write(out, source);
   const counts = [
     `${Object.keys(schema.regions).length} regions`,
@@ -782,6 +797,9 @@ const HELP = `greatcms — local tools for a Git-backed site
                                  collection, plus the augmentation that types
                                  cms.region() by its id. Prints to stdout
                                  without --out.
+    --check                      exit non-zero if the file is out of date,
+                                 so CI catches types that drifted
+    --module <specifier>         module the augmentation targets
 
   greatcms doctor                check this repository's CMS setup
 
