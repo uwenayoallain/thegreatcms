@@ -21,9 +21,13 @@ export function fieldName(path: Array<string | number>, root: string = ROOT): st
 }
 
 /** Builds a nested document from submitted form entries, coercing each value according to its. */
+/** Resolves a block name to its fields, for nested `blocks` fields. */
+export type BlockFields = (type: string) => Record<string, FieldDef> | undefined;
+
 export function decodeForm(
   entries: Iterable<[string, string]>,
   fields: Record<string, FieldDef>,
+  blockFields?: BlockFields,
 ): Record<string, unknown> {
   const raw: Record<string, unknown> = {};
 
@@ -33,7 +37,7 @@ export function decodeForm(
     setPath(raw, path, value);
   }
 
-  return coerceFields(raw, fields);
+  return coerceFields(raw, fields, blockFields);
 }
 
 function setPath(target: Record<string, unknown>, path: string[], value: string): void {
@@ -63,16 +67,17 @@ function toArrayIfIndexed(value: unknown): unknown {
 function coerceFields(
   raw: Record<string, unknown>,
   fields: Record<string, FieldDef>,
+  blockFields?: BlockFields,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, def] of Object.entries(fields)) {
-    const value = coerceField(def, raw[name]);
+    const value = coerceField(def, raw[name], blockFields);
     if (value !== undefined) out[name] = value;
   }
   return out;
 }
 
-function coerceField(def: FieldDef, value: unknown): unknown {
+function coerceField(def: FieldDef, value: unknown, blockFields?: BlockFields): unknown {
   switch (def.type) {
     case "text":
     case "date": {
@@ -142,11 +147,28 @@ function coerceField(def: FieldDef, value: unknown): unknown {
     case "list": {
       const list = toArrayIfIndexed(value);
       if (!Array.isArray(list)) return [];
-      return list.map((item) => coerceField(def.of, item)).filter((item) => item !== undefined);
+      return list
+        .map((item) => coerceField(def.of, item, blockFields))
+        .filter((item) => item !== undefined);
+    }
+
+    case "blocks": {
+      const list = toArrayIfIndexed(value);
+      if (!Array.isArray(list)) return [];
+      const blocks: Array<Record<string, unknown>> = [];
+      for (const entry of list) {
+        const object = asObject(entry);
+        const type = asString(object._type);
+        if (!def.allow.includes(type)) continue;
+        const nested = blockFields?.(type);
+        if (!nested) continue; // a type the schema no longer defines
+        blocks.push({ _type: type, ...coerceFields(object, nested, blockFields) });
+      }
+      return blocks;
     }
 
     case "group":
-      return coerceFields(asObject(value), def.fields);
+      return coerceFields(asObject(value), def.fields, blockFields);
   }
 }
 
@@ -171,7 +193,7 @@ export function decodeBlocks(
     const type = asString(object._type);
     const fields = blockFields(type);
     if (!fields) continue; // a block type the schema no longer knows about
-    blocks.push({ _type: type, ...coerceFields(object, fields) });
+    blocks.push({ _type: type, ...coerceFields(object, fields, blockFields) });
   }
   return blocks;
 }

@@ -24,6 +24,10 @@ export function fieldDefaults(fields: Record<string, FieldDef>): RegionDocument 
     if (def.type === "list") {
       continue; // an empty list is the only sensible default
     }
+    if (def.type === "blocks") {
+      if (def.default) out[name] = def.default;
+      continue;
+    }
     if ("default" in def && def.default !== undefined) {
       out[name] = def.default;
     }

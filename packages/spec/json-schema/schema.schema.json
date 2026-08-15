@@ -460,6 +460,51 @@
                         },
                         "type": {
                           "type": "string",
+                          "const": "blocks"
+                        },
+                        "allow": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1
+                        },
+                        "min": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "max": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "default": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "allow"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
+                        },
+                        "description": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
+                        },
+                        "required": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
+                        },
+                        "type": {
+                          "type": "string",
                           "const": "group"
                         },
                         "fields": {
@@ -582,6 +627,7 @@
                 "type": "string",
                 "enum": [
                   "markdown",
+                  "mdx",
                   "json"
                 ],
                 "default": "markdown"

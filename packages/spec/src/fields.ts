@@ -93,6 +93,22 @@ export type FieldDef =
       max?: number;
     }
   | {
+      /**
+       * A nested, reorderable list of blocks. This is what lets a managed
+       * section hold real composed components — a grid of cards, a tabbed
+       * panel — rather than only flat fields.
+       */
+      type: "blocks";
+      label?: string;
+      description?: string;
+      required?: boolean;
+      /** Block names, defined at the top level of the schema. */
+      allow: string[];
+      min?: number;
+      max?: number;
+      default?: Array<Record<string, unknown>>;
+    }
+  | {
       type: "group";
       label?: string;
       description?: string;
@@ -226,6 +242,14 @@ export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
       of: FieldDefSchema,
       min: z.number().int().nonnegative().optional(),
       max: z.number().int().positive().optional(),
+    }),
+    z.object({
+      ...common,
+      type: z.literal("blocks"),
+      allow: z.array(z.string()).min(1),
+      min: z.number().int().nonnegative().optional(),
+      max: z.number().int().positive().optional(),
+      default: z.array(z.record(z.unknown())).optional(),
     }),
     z.object({
       ...common,

@@ -11,6 +11,8 @@ export interface ValidateOptions {
   basePath?: string;
   /** File shown in errors. */
   file?: string;
+  /** Block definitions, so a nested `blocks` field can check what it holds. */
+  blocks?: Record<string, BlockDef>;
 }
 
 export type ValidationResult =
@@ -285,6 +287,67 @@ function validateField(
       return;
     }
 
+    case "blocks": {
+      if (!Array.isArray(value)) {
+        push(issues, opts, path, "expected_blocks", "Expected a list of blocks.");
+        return;
+      }
+      if (def.min !== undefined && value.length < def.min) {
+        push(
+          issues,
+          opts,
+          path,
+          "too_few",
+          `Needs at least ${def.min} blocks (has ${value.length}).`,
+        );
+      }
+      if (def.max !== undefined && value.length > def.max) {
+        push(
+          issues,
+          opts,
+          path,
+          "too_many",
+          `Allows at most ${def.max} blocks (has ${value.length}).`,
+        );
+      }
+      // The block definitions live on the schema, which a field does not carry;
+      // validateRegion supplies them, and a bare validateFields call cannot.
+      const blocks = opts.blocks;
+      value.forEach((block, index) => {
+        const at = `${path}[${index}]`;
+        const type = (block as { _type?: unknown })?._type;
+        if (typeof type !== "string") {
+          push(issues, opts, at, "missing_block_type", "Block has no `_type`.");
+          return;
+        }
+        if (!def.allow.includes(type)) {
+          push(
+            issues,
+            opts,
+            at,
+            "block_not_allowed",
+            `Block type "${type}" is not allowed here.`,
+            `Allowed here: ${def.allow.join(", ")}.`,
+          );
+          return;
+        }
+        const nested = blocks?.[type];
+        if (!nested) {
+          if (blocks)
+            push(
+              issues,
+              opts,
+              at,
+              "unknown_block",
+              `Block type "${type}" is not defined in the schema.`,
+            );
+          return;
+        }
+        issues.push(...validateFields(nested.fields, block, { ...opts, basePath: at }).issues);
+      });
+      return;
+    }
+
     case "group": {
       const result = validateFields(def.fields, value, { ...opts, basePath: path });
       issues.push(...result.issues);
@@ -325,8 +388,10 @@ function validateRegionAgainst(
   document: unknown,
   opts: ValidateOptions,
 ): ValidationResult {
+  const withBlocks = { ...opts, blocks: schema.blocks };
+
   if (!isBlocksRegion(region)) {
-    return validateFields(region.fields, document, opts);
+    return validateFields(region.fields, document, withBlocks);
   }
 
   const issues: SpecIssue[] = [];
@@ -403,7 +468,7 @@ function validateRegionAgainst(
       );
       return;
     }
-    issues.push(...validateFields(def.fields, block, { ...opts, basePath: path }).issues);
+    issues.push(...validateFields(def.fields, block, { ...withBlocks, basePath: path }).issues);
   });
 
   return issues.length === 0 ? { ok: true, issues } : { ok: false, issues };

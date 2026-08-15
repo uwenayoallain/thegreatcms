@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { ConflictError, GitHubError } from "@greatcms/git";
 import {
   isBlocksRegion,
+  isSafeSlug,
   type RegionDocument,
   validateFields,
   validateRegion,
@@ -15,6 +16,7 @@ import {
   createSessionCookie,
   isSameOrigin,
   readSession,
+  sessionKey,
 } from "./auth.js";
 import type { Site, SiteKind, Store } from "./db.js";
 import { decodeBlocks, decodeForm, fieldName, MEDIA_ROOT, parsePath } from "./form.js";
@@ -53,7 +55,18 @@ export interface AppOptions {
   /** Names pull requests. Defaults to the deterministic, model-free one. */
   summarizer?: Summarizer;
   rateLimiter?: RateLimiter;
+  signInLimiter?: RateLimiter;
+  /**
+   * Whether a forwarding header may name the client. Off by default: when the
+   * studio is reachable directly, anyone can set `x-forwarded-for` and give
+   * themselves a fresh rate-limit bucket per request.
+   */
+  trustProxy?: boolean;
 }
+
+/** Bodies a public visitor can post, past which this is not a contact form. */
+const MAX_SUBMISSION_BYTES = 64 * 1024;
+const MAX_SUBMISSION_FIELDS = 64;
 
 type Variables = { actor: string };
 
@@ -63,6 +76,27 @@ export function createApp(options: AppOptions) {
 
   const clientFor = (site: Site) => new SiteClient(site, options.fetch);
   const limiter = options.rateLimiter ?? new RateLimiter();
+  // Ten guesses per quarter hour: no bother to a person who mistyped, a wall to a script.
+  const signInLimiter = options.signInLimiter ?? new RateLimiter(10, 15 * 60_000);
+  const signingKey = sessionKey(secret, password);
+
+  /** Who is asking, for rate limiting. */
+  const addressOf = (c: { req: { header(name: string): string | undefined }; env: unknown }) => {
+    if (options.trustProxy) {
+      const forwarded =
+        c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
+      if (forwarded) return forwarded;
+    }
+    const socket = (c.env as { incoming?: { socket?: { remoteAddress?: string } } })?.incoming
+      ?.socket;
+    return socket?.remoteAddress ?? "unknown";
+  };
+
+  /** Whether this request arrived over TLS, deciding the cookie's Secure flag. */
+  const isSecure = (c: { req: { header(name: string): string | undefined; url: string } }) =>
+    options.trustProxy && c.req.header("x-forwarded-proto")
+      ? c.req.header("x-forwarded-proto") === "https"
+      : new URL(c.req.url).protocol === "https:";
 
   /** The public submission endpoint. */
   app.post("/f/:siteId/:form", async (c) => {
@@ -71,21 +105,37 @@ export function createApp(options: AppOptions) {
     const site = store.getSite(siteId);
     if (!site) return c.text("Unknown site.", 404);
 
-    const address =
-      c.req.header("cf-connecting-ip") ??
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-      "unknown";
-    const limit = limiter.check(`${siteId}:${address}`);
+    const limit = limiter.check(`${siteId}:${addressOf(c)}`);
     if (!limit.allowed) {
       return c.text("Too many submissions. Try again shortly.", 429, {
         "retry-after": String(limit.retryAfterSeconds),
       });
     }
 
-    const body = await c.req.formData();
+    // A contact form is not a file upload endpoint. Measured rather than believed:
+    // content-length is the sender's claim about the sender's own body.
+    const declared = Number(c.req.header("content-length") ?? "0");
+    if (Number.isFinite(declared) && declared > MAX_SUBMISSION_BYTES) {
+      return c.text("That submission is too large.", 413);
+    }
+
+    const raw = await c.req.arrayBuffer();
+    if (raw.byteLength > MAX_SUBMISSION_BYTES) {
+      return c.text("That submission is too large.", 413);
+    }
+
+    const body = await new Response(raw, {
+      headers: { "content-type": c.req.header("content-type") ?? "" },
+    }).formData();
     const fields: Record<string, string> = {};
-    for (const [key, value] of body.entries()) {
-      if (typeof value === "string") fields[key.slice(0, 64)] = value.slice(0, 10_000);
+    let count = 0;
+    for (const [name, value] of body.entries()) {
+      if (typeof value !== "string") continue;
+      count += 1;
+      if (count > MAX_SUBMISSION_FIELDS) {
+        return c.text("That submission has too many fields.", 413);
+      }
+      fields[name.slice(0, 64)] = value.slice(0, 10_000);
     }
 
     const spam = assessSpam(fields);
@@ -123,7 +173,7 @@ export function createApp(options: AppOptions) {
     const path = new URL(c.req.url).pathname;
     if (path === "/sign-in") return next();
 
-    const session = readSession(c.req.header("cookie"), secret);
+    const session = readSession(c.req.header("cookie"), signingKey);
     if (!session) {
       return c.req.method === "GET"
         ? c.redirect("/sign-in", 303)
@@ -149,18 +199,33 @@ export function createApp(options: AppOptions) {
   app.get("/sign-in", (c) => c.html(signInPage()));
 
   app.post("/sign-in", async (c) => {
+    // One password guards everything here, so guessing has to cost something.
+    const address = addressOf(c);
+    const limit = signInLimiter.check(`sign-in:${address}`);
+    if (!limit.allowed) {
+      return c.html(
+        signInPage({
+          error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+        }),
+        429,
+        { "retry-after": String(limit.retryAfterSeconds) },
+      );
+    }
+
     const form = await c.req.formData();
     const supplied = String(form.get("password") ?? "");
     if (!checkPassword(supplied, password)) {
       // Deliberately vague, and the same shape whether or not a password was supplied: there.
       return c.html(signInPage({ error: "That password did not work." }), 401);
     }
-    c.header("Set-Cookie", createSessionCookie(secret));
+
+    signInLimiter.clear(`sign-in:${address}`);
+    c.header("Set-Cookie", createSessionCookie(signingKey, { secure: isSecure(c) }));
     return c.redirect("/", 303);
   });
 
   app.post("/sign-out", (c) => {
-    c.header("Set-Cookie", clearSessionCookie());
+    c.header("Set-Cookie", clearSessionCookie(isSecure(c)));
     return c.redirect("/sign-in", 303);
   });
 
@@ -313,6 +378,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const name = c.req.param("name");
     const slug = c.req.param("slug");
+    if (!isSafeSlug(slug)) return c.notFound();
 
     try {
       const client = clientFor(site);
@@ -330,6 +396,9 @@ export function createApp(options: AppOptions) {
           label: collection.label ?? name,
           slug: entry?.slug ?? null,
           fields: collection.fields,
+          format: collection.format,
+          body: collection.body,
+          blocks: context.schema.blocks,
           document: client.entryDocument(context, name, entry),
           errors: new Map(),
           headSha: context.headSha,
@@ -345,6 +414,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const name = c.req.param("name");
     const slug = c.req.param("slug");
+    if (!isSafeSlug(slug)) return c.notFound();
 
     try {
       const client = clientFor(site);
@@ -364,6 +434,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const name = c.req.param("name");
     const requested = c.req.param("slug");
+    if (!isSafeSlug(requested)) return c.notFound();
     const actor = c.get("actor");
 
     const client = clientFor(site);
@@ -382,9 +453,12 @@ export function createApp(options: AppOptions) {
       ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
     );
     const headSha = String(form.get("headSha") ?? "");
-    const document = decodeForm(entries, collection.fields);
+    const document = decodeForm(entries, collection.fields, blockFieldsOf(context));
 
-    const validation = validateFields(collection.fields, document, { strict: false });
+    const validation = validateFields(collection.fields, document, {
+      strict: false,
+      blocks: context.schema.blocks,
+    });
     if (!validation.ok) {
       return c.html(
         editEntryPage({
@@ -393,6 +467,9 @@ export function createApp(options: AppOptions) {
           label: collection.label ?? name,
           slug: requested === "new" ? null : requested,
           fields: collection.fields,
+          format: collection.format,
+          body: collection.body,
+          blocks: context.schema.blocks,
           document,
           errors: errorsByPath(validation.issues),
           headSha,
@@ -437,6 +514,9 @@ export function createApp(options: AppOptions) {
           label: collection.label ?? name,
           slug,
           fields: collection.fields,
+          format: collection.format,
+          body: collection.body,
+          blocks: context.schema.blocks,
           document,
           errors: new Map(),
           headSha: result.commitSha,
@@ -454,6 +534,9 @@ export function createApp(options: AppOptions) {
           label: collection.label ?? name,
           slug: requested === "new" ? null : slug,
           fields: collection.fields,
+          format: collection.format,
+          body: collection.body,
+          blocks: context.schema.blocks,
           document,
           errors: new Map(),
           headSha,
@@ -478,7 +561,7 @@ export function createApp(options: AppOptions) {
     const entries = await formEntries(c.req.raw);
     const document = isBlocksRegion(region)
       ? { blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields) }
-      : decodeForm(entries, region.fields);
+      : decodeForm(entries, region.fields, blockFieldsOf(context));
 
     const written = await client.writeLiveDraft({ context, regionId, document });
     return c.body(null, written ? 204 : 409);
@@ -500,6 +583,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const name = c.req.param("name");
     const slug = c.req.param("slug");
+    if (!isSafeSlug(slug)) return c.notFound();
 
     const client = clientFor(site);
     await client.clearLiveDraft({ context: await client.context(), collection: { name, slug } });
@@ -511,13 +595,18 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const name = c.req.param("name");
     const slug = c.req.param("slug");
+    if (!isSafeSlug(slug)) return c.notFound();
 
     const client = clientFor(site);
     const context = await client.context();
     const collection = context.schema.collections[name];
     if (!collection || slug === "new") return c.notFound();
 
-    const document = decodeForm(await formEntries(c.req.raw), collection.fields);
+    const document = decodeForm(
+      await formEntries(c.req.raw),
+      collection.fields,
+      blockFieldsOf(context),
+    );
     const written = await client.writeLiveDraft({
       context,
       collection: { name, slug },
@@ -617,7 +706,7 @@ export function createApp(options: AppOptions) {
           region,
           document: isBlocksRegion(region)
             ? { blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields) }
-            : decodeForm(entries, region.fields),
+            : decodeForm(entries, region.fields, blockFieldsOf(context)),
           errors: new Map(),
           headSha,
           flash: { kind: "error", message: error.message },
@@ -630,7 +719,7 @@ export function createApp(options: AppOptions) {
       ? {
           blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields),
         }
-      : decodeForm(entries, region.fields);
+      : decodeForm(entries, region.fields, blockFieldsOf(context));
 
     // Nothing is uploaded for a block-list shuffle; those never reach a commit.
     if (action !== "publish" && action !== "draft") media = [];
@@ -846,6 +935,11 @@ function thanksPage(): string {
     { title: "Message received" },
     "<h1>Thank you</h1><p>Your message has been received.</p>",
   );
+}
+
+/** Resolves a block name to its fields, for nested `blocks` fields. */
+function blockFieldsOf(context: SiteContext) {
+  return (type: string) => context.schema.blocks[type]?.fields;
 }
 
 /** Form fields as string pairs; uploads are not part of an unsaved draft. */
