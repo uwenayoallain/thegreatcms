@@ -13,6 +13,7 @@ import {
   regionFilePath,
   SpecError,
   type CmsConfig,
+  type CollectionFormat,
   type CmsSchema,
 } from "@greatcms/spec";
 import {
@@ -22,6 +23,16 @@ import {
   type CheckPort,
   type CheckReport,
 } from "./check.js";
+import {
+  AddError,
+  applyPlan,
+  FIELD_TYPES,
+  labelFor,
+  parseFieldSpec,
+  readSnippet,
+  type AddPlan,
+  type FieldSpec,
+} from "./add.js";
 import { detectFramework, FRAMEWORKS, type Framework, type FrameworkId } from "./detect.js";
 import {
   DEFAULT_SCHEMA_URL,
@@ -190,6 +201,8 @@ export async function run(options: RunOptions): Promise<number> {
     switch (command) {
       case "init":
         return await initCommand({ ...options, flags });
+      case "add":
+        return await addCommand({ ...options, flags, rest });
       case "preview":
         return await previewCommand({ ...options, flags });
       case "check":
@@ -207,7 +220,7 @@ export async function run(options: RunOptions): Promise<number> {
     }
   } catch (error) {
     if (error instanceof PromptCancelled) return 130;
-    if (error instanceof PreviewError || error instanceof SpecError) {
+    if (error instanceof AddError || error instanceof PreviewError || error instanceof SpecError) {
       stderr(`${error.message}\n`);
       return 1;
     }
@@ -302,6 +315,179 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
 
   stdout(nextSteps(answers, plan));
   return 0;
+}
+
+/**
+ * `greatcms add` — the step between `init` and having a site. Everything it
+ * writes could be typed into the schema by hand; the point is that the YAML
+ * indentation, the field syntax, and the file path are no longer yours to get
+ * right.
+ */
+async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }): Promise<number> {
+  const { cwd, stdout, flags, rest } = options;
+  const root = resolve(cwd);
+
+  const kind = rest[0];
+  if (kind !== "region" && kind !== "block" && kind !== "collection") {
+    throw new AddError(
+      kind ? `Cannot add a "${kind}".` : "Say what to add.",
+      "greatcms add region <id> | add block <name> | add collection <name>",
+    );
+  }
+
+  const name = rest[1] && !rest[1].startsWith("--") ? rest[1] : undefined;
+
+  const prompt =
+    options.prompt ??
+    (flags.boolean("yes") || !process.stdin.isTTY
+      ? defaultsOnlyPrompt(stdout)
+      : terminalPrompt({ input: process.stdin, output: process.stdout }));
+
+  const found = await firstReadable(root, [
+    ".cms/schema.json",
+    ".cms/schema.yaml",
+    ".cms/schema.yml",
+  ]);
+  if (!found) {
+    throw new AddError(
+      `No .cms/schema.yaml found in ${root}.`,
+      "Run `greatcms init` first, or run this from the root of the site.",
+    );
+  }
+
+  const config = await loadConfig(root);
+  const id = name ?? (await prompt.text(`What is the ${kind} called?`, suggestedName(kind)));
+  const label = flags.string("label") ?? labelFor(id);
+
+  // --field can appear several times; the flag parser keeps the last, so the raw
+  // argument list is the honest source for a repeated flag.
+  const fieldArgs = repeatedFlag(rest, "field");
+  const allow = flags
+    .string("blocks")
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const fields =
+    fieldArgs.length > 0
+      ? fieldArgs.map(parseFieldSpec)
+      : allow
+        ? []
+        : await askForFields(prompt, kind);
+
+  if (fields.length === 0 && !allow) {
+    throw new AddError(
+      `A ${kind} with no fields would give an editor nothing to edit.`,
+      "Add one with --field, e.g. --field heading:text!",
+    );
+  }
+
+  const plan: AddPlan =
+    kind === "region"
+      ? { kind: "region", id, label, fields, ...(allow ? { allow } : {}) }
+      : kind === "block"
+        ? { kind: "block", name: id, label, fields }
+        : {
+            kind: "collection",
+            name: id,
+            label,
+            path: flags.string("dir") ?? `${defaultCollectionsDir(root, config)}/${id}`,
+            format: collectionFormat(flags.string("format")),
+            body: fields.find((field) => field.type === "richtext")?.name,
+            fields,
+          };
+
+  const result = applyPlan({ plan, source: found.source, file: found.name, config });
+  await nodeFiles(root).write(found.name, result.schema);
+
+  const detection = detectFramework({
+    files: await listRoot(root),
+    packageJson: await readPackageJson(root),
+  });
+  const snippet = readSnippet(plan, detection.framework, config);
+
+  const lines = ["", `Added ${kind} ${id} to ${found.name}.`, ""];
+  if (result.contentPath) {
+    lines.push(
+      plan.kind === "region"
+        ? `It renders its defaults now, and the studio writes ${result.contentPath} the first time someone edits it.`
+        : `Entries land in ${result.contentPath}/.`,
+      "",
+    );
+  }
+  if (snippet) {
+    lines.push(
+      `Read it in your ${detection.framework.label} templates:`,
+      "",
+      indentBlock(snippet),
+      "",
+    );
+  }
+  lines.push("  greatcms check     confirm the content still matches the schema", "");
+
+  stdout(lines.join("\n"));
+  return 0;
+}
+
+/** One question per field, until the answer is empty. */
+async function askForFields(prompt: PromptPort, kind: string): Promise<FieldSpec[]> {
+  if (!prompt.interactive) {
+    throw new AddError(
+      `This ${kind} needs at least one field.`,
+      "Pass them with --field, e.g. --field heading:text! --field body:richtext",
+    );
+  }
+
+  prompt.note(
+    `Add fields one at a time, as name:type. Types: ${FIELD_TYPES.map((entry) => entry.id).join(", ")}.\nA trailing ! means required. Leave it empty to finish.`,
+  );
+
+  const fields: FieldSpec[] = [];
+  for (;;) {
+    // eslint-disable-next-line no-await-in-loop -- a person answers one question at a time
+    const answer = (await prompt.text(`Field ${fields.length + 1}?`, "")).trim();
+    if (answer === "") break;
+    try {
+      fields.push(parseFieldSpec(answer));
+    } catch (error) {
+      prompt.note((error as Error).message);
+    }
+  }
+  return fields;
+}
+
+function suggestedName(kind: string): string {
+  return kind === "region" ? "home.hero" : kind === "block" ? "feature" : "blog";
+}
+
+function collectionFormat(value: string | undefined): CollectionFormat {
+  if (value === undefined) return "markdown";
+  if (value === "markdown" || value === "mdx" || value === "json") return value;
+  throw new AddError(`Unknown collection format "${value}".`, "Use markdown, mdx, or json.");
+}
+
+function defaultCollectionsDir(root: string, config: CmsConfig): string {
+  const regions = config.content.regions.replace(/\/+$/, "");
+  // Collections sit beside regions rather than inside them: they are separate content.
+  return regions.includes("/") ? regions.slice(0, regions.lastIndexOf("/")) : "content";
+}
+
+/** Every occurrence of `--name value`, because some flags are meant to repeat. */
+export function repeatedFlag(argv: string[], name: string): string[] {
+  const found: string[] = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] !== `--${name}`) continue;
+    const value = argv[i + 1];
+    if (value && !value.startsWith("--")) found.push(value);
+  }
+  return found;
+}
+
+function indentBlock(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => (line ? `  ${line}` : line))
+    .join("\n");
 }
 
 async function listRoot(root: string): Promise<string[]> {
@@ -540,6 +726,17 @@ const HELP = `greatcms — local tools for a Git-backed site
     --dir <path>                 where content files live
     --branch <name>              publish branch (default: current branch)
     --force                      overwrite an existing setup
+
+  greatcms add region <id>       add a managed section to an existing schema
+  greatcms add block <name>      add a block type a blocks region can hold
+  greatcms add collection <name> add a folder of entries
+    --field name:type            repeatable. text richtext image link number
+                                 boolean date file, select(a|b), list(text);
+                                 a trailing ! means required
+    --label "<text>"             what an editor sees (default: from the id)
+    --blocks a,b                 make the region a reorderable list of blocks
+    --format markdown|json       collections only (default: markdown)
+    --dir <path>                 collections only, where entries live
 
   greatcms preview [options]     overlay draft content and run your dev server
     --run "<command>"            dev server to run; restored when it exits

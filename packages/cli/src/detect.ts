@@ -17,6 +17,13 @@ export interface Framework {
   snippet(regionId: string, regionsDir: string): string;
 }
 
+/** A variable name for a region: the last segment is the part that reads well. */
+function nameFor(regionId: string): string {
+  const last = regionId.split(".").at(-1) ?? regionId;
+  const camel = last.replace(/[-_](.)/g, (_, character: string) => character.toUpperCase());
+  return /^[a-z]/.test(camel) ? camel : `region${camel}`;
+}
+
 export const FRAMEWORKS: Record<FrameworkId, Framework> = {
   astro: {
     id: "astro",
@@ -28,15 +35,15 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     snippet: (regionId, dir) =>
       [
         "---",
-        `import hero from "../../${dir}/${regionId}.json";`,
+        `import ${nameFor(regionId)} from "../../${dir}/${regionId}.json";`,
         "---",
         "",
-        "<h1>{hero.heading}</h1>",
+        `<h1>{${nameFor(regionId)}.heading}</h1>`,
         "",
         "// or, with types and schema defaults applied:",
         '// import { createReader } from "@greatcms/reader";',
         "// const cms = createReader();",
-        `// const hero = cms.region("${regionId}");`,
+        `// const ${nameFor(regionId)} = cms.region("${regionId}");`,
       ].join("\n"),
   },
   next: {
@@ -48,10 +55,10 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     mediaUrlPrefix: "/media",
     snippet: (regionId, dir) =>
       [
-        `import hero from "@/${dir}/${regionId}.json";`,
+        `import ${nameFor(regionId)} from "@/${dir}/${regionId}.json";`,
         "",
         "export default function Page() {",
-        "  return <h1>{hero.heading}</h1>;",
+        `  return <h1>{${nameFor(regionId)}.heading}</h1>;`,
         "}",
       ].join("\n"),
   },
@@ -65,10 +72,10 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     snippet: (regionId, dir) =>
       [
         "<script setup>",
-        `import hero from "~/${dir}/${regionId}.json";`,
+        `import ${nameFor(regionId)} from "~/${dir}/${regionId}.json";`,
         "</script>",
         "",
-        "<template><h1>{{ hero.heading }}</h1></template>",
+        `<template><h1>{{ ${nameFor(regionId)}.heading }}</h1></template>`,
       ].join("\n"),
   },
   sveltekit: {
@@ -81,10 +88,10 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     snippet: (regionId, dir) =>
       [
         "<script>",
-        `  import hero from "$lib/../${dir}/${regionId}.json";`,
+        `  import ${nameFor(regionId)} from "$lib/../${dir}/${regionId}.json";`,
         "</script>",
         "",
-        "<h1>{hero.heading}</h1>",
+        `<h1>{${nameFor(regionId)}.heading}</h1>`,
       ].join("\n"),
   },
   eleventy: {
@@ -113,7 +120,7 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
         "// It is JSON on disk. Read it however your language reads JSON:",
         `//   ${dir}/${regionId}.json`,
         "",
-        `const hero = JSON.parse(readFileSync("${dir}/${regionId}.json", "utf8"));`,
+        `const ${nameFor(regionId)} = JSON.parse(readFileSync("${dir}/${regionId}.json", "utf8"));`,
       ].join("\n"),
   },
 };
