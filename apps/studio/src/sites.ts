@@ -32,6 +32,15 @@ import {
 } from "./repo.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
+
+/** Parsed schema and config per site and commit, shared across requests. */
+const contextCache = new Map<string, SiteContext>();
+const CONTEXT_CACHE_LIMIT = 64;
+
+/** Drops every cached context, so a test starts from a cold cache. */
+export function clearContextCache(): void {
+  contextCache.clear();
+}
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
 
 export interface UnsavedDraft {
@@ -82,26 +91,56 @@ export class SiteClient {
     return this.site.kind === "local" ? this.site.path : `${this.site.owner}/${this.site.repo}`;
   }
 
-  /** Loads the schema fresh on every request rather than caching it. */
+  /**
+   * The schema and config for this site at its current head.
+   *
+   * Reading them cost eight GitHub calls on every page view, because six of
+   * those are guesses at which spelling of the file name exists. The commit sha
+   * settles it: every write to a GitHub repository goes through a commit, so a
+   * matching sha means the files cannot have changed, and one call answers what
+   * eight used to.
+   *
+   * Deliberately not cached for a folder on this machine. Editing
+   * `.cms/schema.yaml` by hand does not move HEAD, so a cache would show you a
+   * schema you had already changed — and a local read is filesystem-cheap
+   * anyway, which is the half of this that made the cost worth paying.
+   */
   async context(): Promise<SiteContext> {
-    const [schemaFile, configFile, headSha] = await Promise.all([
-      this.firstFile(SCHEMA_CANDIDATES),
-      this.firstFile(CONFIG_CANDIDATES),
-      this.repo.getBranchHead(this.site.branch),
-    ]);
-
-    if (!schemaFile) throw new SiteNotConfiguredError(this.site);
+    const headSha = await this.repo.getBranchHead(this.site.branch);
     if (!headSha) {
       throw new Error(
         `Branch "${this.site.branch}" does not exist in ${this.site.owner}/${this.site.repo}.`,
       );
     }
 
-    return {
+    const key = `${this.location}:${this.site.branch}:${headSha}`;
+    const cacheable = this.repo.kind === "github";
+    if (cacheable) {
+      const hit = contextCache.get(key);
+      if (hit) return hit;
+    }
+
+    const [schemaFile, configFile] = await Promise.all([
+      this.firstFile(SCHEMA_CANDIDATES),
+      this.firstFile(CONFIG_CANDIDATES),
+    ]);
+    if (!schemaFile) throw new SiteNotConfiguredError(this.site);
+
+    const context: SiteContext = {
       schema: parseSchema(schemaFile.content, { file: schemaFile.path }),
       config: configFile ? parseConfig(configFile.content, configFile.path) : DEFAULT_CONFIG,
       headSha,
     };
+
+    if (cacheable) {
+      // Old shas are dead weight the moment a publish lands, so the map is
+      // trimmed rather than left to grow for the life of the process.
+      if (contextCache.size >= CONTEXT_CACHE_LIMIT) {
+        contextCache.delete(contextCache.keys().next().value as string);
+      }
+      contextCache.set(key, context);
+    }
+    return context;
   }
 
   /** The stored document for a region, or null when nobody has edited it yet. */

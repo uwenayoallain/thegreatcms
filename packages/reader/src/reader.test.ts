@@ -104,3 +104,49 @@ describe("unsaved drafts", () => {
     expect(live.region<{ heading: string }>("home.hero").heading).toBe("Second");
   });
 });
+
+describe("reading the same collection more than once", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "greatcms-cache-"));
+    cpSync(FIXTURES_DIR, root, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const entryPath = (slug: string) => join(root, "content/blog", `${slug}.md`);
+
+  it("does not go back to disk for a build, which is O(pages x entries) otherwise", () => {
+    const build = createReader({ root });
+    expect(build.collection("blog")).toHaveLength(1);
+
+    // A page rendered after the first read must not see a later write: this is
+    // the cache doing its job, not a staleness bug.
+    writeFileSync(entryPath("late-arrival"), "---\ntitle: Late\ndate: 2026-01-01\n---\n\nBody.\n");
+
+    expect(build.collection("blog")).toHaveLength(1);
+  });
+
+  it("hands back the same array, so callers can compare cheaply", () => {
+    const build = createReader({ root });
+    expect(build.collection("blog")).toBe(build.collection("blog"));
+  });
+
+  it("reads afresh in dev, where the next read must see the edit you just made", () => {
+    const dev = createReader({ root, drafts: true });
+    expect(dev.collection("blog")).toHaveLength(1);
+
+    writeFileSync(entryPath("just-written"), "---\ntitle: New\ndate: 2026-01-01\n---\n\nBody.\n");
+
+    expect(dev.collection("blog")).toHaveLength(2);
+  });
+
+  it("keeps collections apart from each other", () => {
+    const build = createReader({ root });
+    expect(build.collection("blog").map((entry) => entry.slug)).toEqual(["publish-from-anywhere"]);
+    expect(build.collection("guides").map((entry) => entry.slug)).toEqual(["measuring-latency"]);
+  });
+});

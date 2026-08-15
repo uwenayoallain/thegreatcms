@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
+import { clearContextCache } from "../src/sites.js";
 
 const PASSWORD = "mdx-password";
 const SECRET = "mdx-secret";
@@ -118,6 +119,7 @@ let github: ReturnType<typeof fakeGitHub>;
 let app: ReturnType<typeof createApp>;
 
 beforeEach(() => {
+  clearContextCache();
   github = fakeGitHub();
   const store = new Store(":memory:");
   store.addSite(SITE);

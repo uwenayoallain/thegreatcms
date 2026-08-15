@@ -45,6 +45,7 @@ export class CmsReader {
   private readonly strictRegions: boolean;
   private readonly drafts: boolean;
   private readonly cache = new Map<string, RegionDocument | null>();
+  private readonly entryCache = new Map<string, CollectionEntry[]>();
 
   constructor(options: ReaderOptions = {}) {
     this.root = resolve(options.root ?? process.cwd());
@@ -122,6 +123,18 @@ export class CmsReader {
   }
 
   collection(name: string): CollectionEntry[] {
+    // Same rule as regions: cached for a build, never in dev, where the whole
+    // point is that the next read sees the edit you just made.
+    if (!this.drafts) {
+      const cached = this.entryCache.get(name);
+      if (cached) return cached;
+    }
+    const entries = this.readCollection(name);
+    this.entryCache.set(name, entries);
+    return entries;
+  }
+
+  private readCollection(name: string): CollectionEntry[] {
     const def: CollectionDef | undefined = this.schema.collections[name];
     if (!def) {
       throw new Error(

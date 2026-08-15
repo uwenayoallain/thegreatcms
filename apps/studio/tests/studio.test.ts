@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
+import { clearContextCache } from "../src/sites.js";
 
 const PASSWORD = "correct-horse-battery-staple";
 const SECRET = "test-secret";
@@ -150,6 +151,7 @@ let store: Store;
 let app: ReturnType<typeof createApp>;
 
 beforeEach(() => {
+  clearContextCache();
   github = fakeGitHub();
   store = new Store(":memory:");
   store.addSite(SITE);
@@ -402,7 +404,12 @@ describe("block lists", () => {
 
 describe("connecting a site", () => {
   it("rejects a repository with no schema, before storing anything", async () => {
-    const empty = (async () => json({ message: "Not Found" }, 404)) as unknown as typeof fetch;
+    // The repository and branch exist; there is simply no schema in them, which
+    // is the case this is about.
+    const empty = (async (url: string | URL) =>
+      String(url).includes("/git/ref/heads/")
+        ? json({ object: { sha: "head-1" } })
+        : json({ message: "Not Found" }, 404)) as unknown as typeof fetch;
     const isolated = createApp({
       store: new Store(":memory:"),
       password: PASSWORD,
