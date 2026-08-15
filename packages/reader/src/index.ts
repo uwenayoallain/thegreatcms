@@ -27,6 +27,50 @@ export interface ReaderOptions {
   drafts?: boolean;
 }
 
+/**
+ * Ids this site defines, filled in by the file `greatcms types` generates.
+ * Empty here on purpose: with no augmentation in scope the reader still takes
+ * any string, so a site that never runs the generator is unaffected.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- augmented by generated code
+export interface GreatCMSRegions {}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- augmented by generated code
+export interface GreatCMSCollections {}
+
+/**
+ * True until a generated file augments `GreatCMSRegions`. It is what lets the
+ * loose `string` overload exist for a site that has not run `greatcms types`,
+ * and disappear for one that has — so an unknown id is a compile error there
+ * rather than `undefined` at build time.
+ */
+type NoRegionsDeclared = [keyof GreatCMSRegions] extends [never] ? true : false;
+type NoCollectionsDeclared = [keyof GreatCMSCollections] extends [never] ? true : false;
+
+/** The stored shapes, named so generated types can refer to them. */
+export interface RichText {
+  html: string;
+  _ast?: unknown;
+}
+
+export interface CmsLink {
+  href: string;
+  label?: string;
+  external?: boolean;
+}
+
+export interface CmsImage {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}
+
+export interface CmsFile {
+  src: string;
+  name?: string;
+  size?: number;
+}
+
 export interface CollectionEntry {
   /** File-name slug, e.g. `publish-from-anywhere`. */
   slug: string;
@@ -77,9 +121,11 @@ export class CmsReader {
   }
 
   /** Resolves a region: schema defaults, then the stored file layered on top. */
-  region<T = RegionDocument>(regionId: string): T {
+  region<K extends keyof GreatCMSRegions>(regionId: K): GreatCMSRegions[K];
+  region<T = RegionDocument>(regionId: NoRegionsDeclared extends true ? string : never): T;
+  region(regionId: string): unknown {
     // The cache is a build-time optimisation; in dev it would pin the content to startup.
-    if (!this.drafts && this.cache.has(regionId)) return this.cache.get(regionId) as T;
+    if (!this.drafts && this.cache.has(regionId)) return this.cache.get(regionId);
 
     if (!(regionId in this.schema.regions)) {
       if (this.strictRegions) {
@@ -88,7 +134,7 @@ export class CmsReader {
         );
       }
       this.cache.set(regionId, null);
-      return null as T;
+      return null;
     }
 
     const relative = regionFilePath(this.config, regionId);
@@ -97,7 +143,7 @@ export class CmsReader {
 
     const resolved = resolveRegion(this.schema, regionId, stored);
     this.cache.set(regionId, resolved);
-    return resolved as T;
+    return resolved;
   }
 
   /** Blocks of a blocks region, ready to map onto components. */
@@ -122,6 +168,8 @@ export class CmsReader {
     return Object.keys(this.schema.regions);
   }
 
+  collection<K extends keyof GreatCMSCollections>(name: K): Array<GreatCMSCollections[K]>;
+  collection(name: NoCollectionsDeclared extends true ? string : never): CollectionEntry[];
   collection(name: string): CollectionEntry[] {
     // Same rule as regions: cached for a build, never in dev, where the whole
     // point is that the next read sees the edit you just made.

@@ -245,6 +245,17 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
     "  2. Connect this repository in the studio with a token that has contents: write.",
     "  3. Edit, publish, and your existing deploy pipeline does the rest.",
     "",
+    "To manage another part of the page, do not hand-edit the schema:",
+    "",
+    indent(
+      [
+        "greatcms add region about.intro --field heading:text! --field body:richtext",
+        "greatcms add block card --field title:text! --field body:text",
+        "greatcms add collection blog --field title:text! --field content:richtext",
+      ].join("\n"),
+    ),
+    "",
+    "  greatcms check     confirm the content still matches the schema",
     "  greatcms doctor    check this setup any time",
     "",
   );

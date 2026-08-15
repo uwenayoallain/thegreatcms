@@ -39,7 +39,7 @@ submissions from any site land in one inbox.
 ```
 apps/studio/            The CMS: sign in, connect repos, edit regions, publish
 apps/docs/              The website — landing page and docs, managed by GreatCMS itself
-packages/cli/           `greatcms init`, `preview`, `check`, `doctor` — the local half
+packages/cli/           `greatcms init`, `add`, `types`, `preview`, `check`, `doctor`
 packages/spec/          The standard: schema parsing, validation, resolution rules
 packages/git/           Atomic multi-file commits via the GitHub Git Data API
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
@@ -105,6 +105,50 @@ region **in your framework's own syntax**.
 `--yes` takes every default; `--framework`, `--template`, `--name`, `--dir`, and
 `--branch` override individually, so it scripts as well as it prompts. It
 refuses to overwrite an existing setup without `--force`.
+
+## Managing one more part of the page
+
+The second section is the one that used to mean hand-editing YAML. It does not:
+
+```bash
+npx greatcms add region about.intro --field heading:text! --field body:richtext
+npx greatcms add block card --field title:text! --field body:text
+npx greatcms add block grid --field cards:'blocks(card)'
+npx greatcms add collection guides --format mdx --field content:richtext
+```
+
+`name:type` per field, a trailing `!` for required, `select(a|b)`,
+`list(text)`, and `blocks(card|grid)` for a nested list of components. Run it
+with no fields and a terminal, and it asks.
+
+It edits the schema **as text**, so the comments explaining your site's own
+decisions survive — a parse-and-redump would throw them away. It refuses rather
+than corrupts: a duplicate name, an id the standard would reject, or a nested
+block type nobody has defined stops the command and names the one that fixes
+it. Then it prints how to read the new section in your framework's syntax.
+
+## Types from the schema you already wrote
+
+```bash
+npx greatcms types --out src/cms.d.ts
+```
+
+Interfaces for every region, block, and collection — select options as unions,
+blocks discriminated by `_type`, nested blocks typed by what they allow — plus a
+module augmentation that types the reader by id:
+
+```ts
+const hero = cms.region("home.hero"); //  HomeHeroRegion
+hero.headng; //  compile error, not undefined at build time
+cms.region("home.heroo"); //  compile error
+```
+
+A field with a `default` is non-optional, because resolution guarantees it a
+value. Run it in a build script or in CI, and a schema change that breaks a
+template fails the build instead of quietly rendering nothing.
+
+Nothing changes for a site that does not run it: without the generated file the
+reader takes any string, as it always did.
 
 ## Two kinds of site
 

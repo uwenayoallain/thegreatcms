@@ -34,6 +34,7 @@ import {
   type FieldSpec,
 } from "./add.js";
 import { detectFramework, FRAMEWORKS, type Framework, type FrameworkId } from "./detect.js";
+import { renderTypes } from "./types.js";
 import {
   DEFAULT_SCHEMA_URL,
   nextSteps,
@@ -207,6 +208,8 @@ export async function run(options: RunOptions): Promise<number> {
         return await previewCommand({ ...options, flags });
       case "check":
         return await checkCommand({ ...options, flags });
+      case "types":
+        return await typesCommand({ ...options, flags });
       case "doctor":
         return await doctorCommand({ ...options, flags });
       case "help":
@@ -604,6 +607,33 @@ async function checkCommand(options: RunOptions & { flags: Flags }): Promise<num
   return 1;
 }
 
+/** Types for the schema, so a schema change is a compile error, not a blank page. */
+async function typesCommand(options: RunOptions & { flags: Flags }): Promise<number> {
+  const { cwd, stdout, flags } = options;
+  const root = resolve(cwd);
+  const schema = await loadSchema(root);
+  const source = renderTypes(schema, { module: flags.string("module") });
+
+  const out = flags.string("out");
+  if (!out) {
+    stdout(source);
+    return 0;
+  }
+
+  await nodeFiles(root).write(out, source);
+  const counts = [
+    `${Object.keys(schema.regions).length} regions`,
+    `${Object.keys(schema.blocks).length} blocks`,
+    `${Object.keys(schema.collections).length} collections`,
+  ];
+  stdout(
+    `\nWrote ${out} (${counts.join(", ")}).\n\n` +
+      `Include it in your tsconfig and \`cms.region("home.hero")\` is typed by its id.\n` +
+      `Regenerate it when the schema changes — in a build script, or in CI with --check.\n\n`,
+  );
+  return 0;
+}
+
 async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<number> {
   const { cwd, stdout } = options;
   const root = resolve(cwd);
@@ -747,6 +777,11 @@ const HELP = `greatcms — local tools for a Git-backed site
 
   greatcms check [--json]        validate this repository's content against the
                                  schema; exits non-zero, so CI can run it
+
+  greatcms types [--out <path>]  TypeScript for every region, block, and
+                                 collection, plus the augmentation that types
+                                 cms.region() by its id. Prints to stdout
+                                 without --out.
 
   greatcms doctor                check this repository's CMS setup
 
