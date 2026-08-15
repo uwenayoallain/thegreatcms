@@ -1,10 +1,4 @@
-/**
- * Accessibility gate.
- *
- * Runs axe against the *built* HTML, so it checks what actually ships rather
- * than what a component looked like in isolation. This runs in CI and failing
- * it fails the build — accessibility is a gate here, not a checklist.
- */
+/** Accessibility gate. */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -41,9 +35,7 @@ describe.each(PAGES)("$name", ({ file }) => {
 
     const results = await axe.run(window.document.documentElement, {
       resultTypes: ["violations"],
-      // Colour contrast needs real layout, which jsdom does not do. It is
-      // covered by the palette being checked by hand and by the Playwright
-      // pass; asserting it here would only produce false confidence.
+      // Colour contrast needs real layout, which jsdom does not do.
       rules: { "color-contrast": { enabled: false } },
     });
 
@@ -95,14 +87,7 @@ describe("the contact form", () => {
   });
 });
 
-/**
- * Performance budget.
- *
- * "Resource efficient" decays silently unless something fails when it stops
- * being true. These numbers are generous against today's output (~50 KB total)
- * and exist to catch a regression — a font, an analytics snippet, a framework
- * island — not to police every byte.
- */
+/** Performance budget. */
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
     entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],

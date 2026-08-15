@@ -39,6 +39,12 @@ jobs:
       - name: Agent docs are current
         run: pnpm docs:check
 
+      # The studio's browser tests skip themselves when no browser is present,
+      # which is right for a fresh checkout and wrong for CI: a gate that skips
+      # is not a gate.
+      - name: Install Chromium
+        run: pnpm --filter @greatcms/studio exec playwright install --with-deps chromium
+
       - name: Test (includes the accessibility gate)
         run: pnpm test
 

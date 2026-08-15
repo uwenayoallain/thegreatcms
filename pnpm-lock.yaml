@@ -31,7 +31,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   apps/docs:
     dependencies:
@@ -53,7 +53,7 @@ importers:
         version: 30.0.1
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   apps/studio:
     dependencies:
@@ -106,9 +106,12 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   examples/site-astro:
     dependencies:
@@ -128,9 +131,12 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   packages/cli:
     dependencies:
@@ -140,7 +146,7 @@ importers:
     devDependencies:
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   packages/conformance:
     dependencies:
@@ -150,13 +156,13 @@ importers:
     devDependencies:
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   packages/git:
     devDependencies:
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   packages/reader:
     dependencies:
@@ -169,7 +175,7 @@ importers:
         version: link:../conformance
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
 
   packages/spec:
     dependencies:
@@ -182,7 +188,7 @@ importers:
     devDependencies:
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
       zod-to-json-schema:
         specifier: ^3.25.2
         version: 3.25.2(zod@3.25.76)
@@ -1774,6 +1780,11 @@ packages:
     resolution: {integrity: sha512-Wp1zXWPVUPBmfoa3Cqc9ctaKuzKAV6uLstRqlR56kSjplf5uAce+qeyYym7F+PHbGTk+tCEdkCW6RD7DX/gBZw==}
     engines: {node: '>=20'}
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -2236,6 +2247,16 @@ packages:
   picomatch@4.0.5:
     resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
     engines: {node: '>=12'}
+
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.62.1:
+    resolution: {integrity: sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
@@ -3602,7 +3623,7 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.10(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))':
+  '@vitest/mocker@4.1.10(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
@@ -4064,6 +4085,9 @@ snapshots:
   fontkitten@1.0.3:
     dependencies:
       tiny-inflate: 1.0.3
+
+  fsevents@2.3.2:
+    optional: true
 
   fsevents@2.3.3:
     optional: true
@@ -4755,6 +4779,14 @@ snapshots:
 
   picomatch@4.0.5: {}
 
+  playwright-core@1.62.1: {}
+
+  playwright@1.62.1:
+    dependencies:
+      playwright-core: 1.62.1
+    optionalDependencies:
+      fsevents: 2.3.2
+
   postcss@8.5.26:
     dependencies:
       nanoid: 3.3.18
@@ -5332,10 +5364,10 @@ snapshots:
     optionalDependencies:
       vite: rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0)
 
-  vitest@4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0)):
+  vitest@4.1.10(@types/node@26.2.0)(jsdom@30.0.1)(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
+      '@vitest/mocker': 4.1.10(rolldown-vite@7.3.1(@types/node@26.2.0)(esbuild@0.27.7)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
