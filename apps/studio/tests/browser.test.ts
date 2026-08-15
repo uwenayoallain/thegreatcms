@@ -9,12 +9,13 @@ import { serve } from "@hono/node-server";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie } from "../src/auth.js";
+import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 
 const require = createRequire(import.meta.url);
 const AXE = require.resolve("axe-core/axe.min.js");
 const SECRET = "browser-test-secret";
+const PASSWORD = "browser-test-password";
 
 /** Playwright's own browser first; a system Chrome is the fallback. */
 async function launch(): Promise<Browser | null> {
@@ -66,7 +67,7 @@ beforeAll(async () => {
   );
 
   const store = new Store(":memory:");
-  const app = createApp({ store, password: "not-used-here", secret: SECRET });
+  const app = createApp({ store, password: PASSWORD, secret: SECRET });
   server = serve({ fetch: app.fetch, port: 0, createServer });
   const address = server.address();
   origin = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -111,7 +112,9 @@ afterEach(async () => {
 /** A signed-in browser context: the studio has one password and one cookie. */
 async function newSignedInContext(javaScriptEnabled = true): Promise<BrowserContext> {
   const fresh = await browser!.newContext({ javaScriptEnabled });
-  const [name, value] = createSessionCookie(SECRET).split(";")[0]!.split("=") as [string, string];
+  const [name, value] = createSessionCookie(sessionKey(SECRET, PASSWORD))
+    .split(";")[0]!
+    .split("=") as [string, string];
   await fresh.addCookies([{ name, value, url: origin }]);
   return fresh;
 }

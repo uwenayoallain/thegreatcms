@@ -71,6 +71,12 @@ in the inbox — set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emai
 about them too. Or run it as a
 container — `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
 
+Behind a reverse proxy, set `STUDIO_TRUST_PROXY=1` so rate limiting sees the
+visitor's address rather than the proxy's, and so the session cookie is marked
+`Secure`. Leave it unset when the studio is reachable directly: the forwarding
+headers are then the visitor's to forge. Changing `STUDIO_PASSWORD` signs every
+open session out.
+
 Then look at the example site:
 
 ```bash

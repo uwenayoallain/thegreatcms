@@ -7,7 +7,7 @@ import axe from "axe-core";
 import { JSDOM } from "jsdom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie } from "../src/auth.js";
+import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 
 const PASSWORD = "correct-horse-battery-staple";
@@ -156,7 +156,9 @@ beforeEach(() => {
   app = createApp({ store, password: PASSWORD, secret: SECRET, fetch: github.fetchImpl });
 });
 
-const signedIn = { cookie: createSessionCookie(SECRET).split(";")[0] as string };
+const signedIn = {
+  cookie: createSessionCookie(sessionKey(SECRET, PASSWORD)).split(";")[0] as string,
+};
 
 function get(path: string, headers: Record<string, string> = signedIn) {
   return app.request(path, { headers });
@@ -206,7 +208,7 @@ describe("access", () => {
   });
 
   it("rejects a tampered session cookie", async () => {
-    const tampered = `${createSessionCookie(SECRET).split(";")[0]}tampered`;
+    const tampered = `${createSessionCookie(sessionKey(SECRET, PASSWORD)).split(";")[0]}tampered`;
     const response = await get("/", { cookie: tampered });
     expect(response.status).toBe(303);
   });

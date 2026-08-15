@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { JSDOM } from "jsdom";
 import axe from "axe-core";
 import { createApp } from "../src/app.js";
-import { createSessionCookie } from "../src/auth.js";
+import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 import { assessSpam, RateLimiter, toCsv } from "../src/submissions.js";
 
@@ -42,7 +42,9 @@ beforeEach(() => {
   });
 });
 
-const signedIn = { cookie: createSessionCookie(SECRET).split(";")[0] as string };
+const signedIn = {
+  cookie: createSessionCookie(sessionKey(SECRET, PASSWORD)).split(";")[0] as string,
+};
 
 function submit(fields: Record<string, string>, headers: Record<string, string> = {}) {
   return app.request("/f/site-1/contact", {

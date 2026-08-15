@@ -87,6 +87,11 @@ export class RateLimiter {
     return { allowed: true, retryAfterSeconds: 0 };
   }
 
+  /** Forgets a key, so a correct password does not leave failures counting against you. */
+  clear(key: string): void {
+    this.hits.delete(key);
+  }
+
   /** Expired buckets are dropped opportunistically so the map cannot grow forever. */
   private sweep(now: number): void {
     if (this.hits.size < 5000) return;

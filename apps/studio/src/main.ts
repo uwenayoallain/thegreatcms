@@ -41,8 +41,11 @@ const summarizer =
       })
     : undefined;
 
+// Only behind a proxy you control: the headers it sets are otherwise the visitor's to forge.
+const trustProxy = process.env.STUDIO_TRUST_PROXY === "1";
+
 const store = new Store(databaseFile);
-const app = createApp({ store, password, secret, notifier, summarizer });
+const app = createApp({ store, password, secret, notifier, summarizer, trustProxy });
 
 serve({ fetch: app.fetch, port }, (info) => {
   process.stdout.write(`GreatCMS studio on http://localhost:${info.port}\n`);

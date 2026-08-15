@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie } from "../src/auth.js";
+import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 import { LocalRepository } from "../src/repo.js";
 
@@ -18,7 +18,9 @@ let store: Store;
 let app: ReturnType<typeof createApp>;
 
 const git = (args: string[]) => execFileSync("git", args, { cwd: root, stdio: "ignore" });
-const signedIn = { cookie: createSessionCookie(SECRET).split(";")[0] as string };
+const signedIn = {
+  cookie: createSessionCookie(sessionKey(SECRET, PASSWORD)).split(";")[0] as string,
+};
 
 function site(overrides: Record<string, unknown> = {}) {
   return {

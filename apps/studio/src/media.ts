@@ -59,6 +59,16 @@ export function prepareUpload(config: CmsConfig, input: UploadInput): UploadResu
     );
   }
 
+  // The browser's content type is a claim; the bytes are the fact. Without this,
+  // a script-bearing document uploads happily under the name `logo.png`.
+  const actual = detectType(input.bytes);
+  if (actual !== input.type) {
+    throw new UploadError(
+      `${input.fileName} is not ${input.type}: its contents are ${actual ?? "not an image this studio recognises"}.`,
+      "Re-export it in one of the supported image formats, then upload it again.",
+    );
+  }
+
   // Content-addressed suffix: re-uploading identical bytes reuses the same path (so no duplicate blobs), while.
   const digest = createHash("sha256").update(input.bytes).digest("hex").slice(0, 8);
   const base = slugify(input.fileName.replace(/\.[^.]+$/, "")) || "upload";
@@ -72,6 +82,19 @@ export function prepareUpload(config: CmsConfig, input: UploadInput): UploadResu
     ...size,
     base64: Buffer.from(input.bytes).toString("base64"),
   };
+}
+
+/** The format the bytes actually are, read from the header rather than believed. */
+export function detectType(bytes: Uint8Array): string | null {
+  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
+  if (startsWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (ascii(bytes, 0, 6) === "GIF87a" || ascii(bytes, 0, 6) === "GIF89a") return "image/gif";
+  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP") return "image/webp";
+  // AVIF is an ISO base-media file: a `ftyp` box whose brand names the codec.
+  if (ascii(bytes, 4, 4) === "ftyp" && ["avif", "avis"].includes(ascii(bytes, 8, 4))) {
+    return "image/avif";
+  }
+  return null;
 }
 
 export interface ImageSize {
