@@ -9,6 +9,12 @@ export interface WatchOptions {
   root?: string;
   /** Extra directories to watch, relative to the root. */
   include?: string[];
+  /**
+   * Hide framework dev overlays when the page is being previewed inside the
+   * studio. On by default: the studio frames your real dev server, so Astro's
+   * dev toolbar and Nuxt's devtools sit on top of the page you are editing.
+   */
+  hideDevOverlays?: boolean;
 }
 
 /** Minimal shape of the Vite server this plugin touches. */
@@ -27,6 +33,43 @@ export interface VitePluginLike {
   name: string;
   apply: "serve";
   configureServer(server: DevServer): void;
+  transformIndexHtml?: (html: string) => string;
+}
+
+/**
+ * Hides the dev overlays a framework paints over its own pages, but only when
+ * the page is in a frame — which in dev means the studio's live preview. The
+ * toolbar belongs on your own tab, not on top of the section you are editing,
+ * and the studio cannot reach into a cross-origin frame to remove it.
+ *
+ * Injected by the dev server only, so a built page never carries it.
+ */
+export const PREVIEW_SCRIPT = `
+// Comparing the window references is allowed across origins; reading them is not.
+if (window.top !== window.self) {
+  document.documentElement.setAttribute("data-greatcms-framed", "");
+  const style = document.createElement("style");
+  style.dataset.greatcmsPreview = "";
+  style.textContent = [
+    "astro-dev-toolbar",
+    "#nuxt-devtools-anchor",
+    "#nuxt-devtools-container",
+    "#__next-build-watcher",
+    "nextjs-portal",
+  ].map((selector) => selector + " { display: none !important; }").join("\\n");
+  document.head.append(style);
+}
+`;
+
+/** The same thing as markup, for frameworks that do run Vite's HTML transform. */
+export const PREVIEW_CHROME = `<script type="module" data-greatcms-preview>${PREVIEW_SCRIPT}</script>`;
+
+/** Puts the snippet last in <head>, or at the end when there is no head. */
+export function injectPreviewChrome(html: string): string {
+  if (html.includes("data-greatcms-preview")) return html;
+  return html.includes("</head>")
+    ? html.replace("</head>", `${PREVIEW_CHROME}</head>`)
+    : `${PREVIEW_CHROME}${html}`;
 }
 
 export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
@@ -34,6 +77,9 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
     name: "greatcms:watch-content",
     // Dev only: a build reads the files once, from disk, and is already correct.
     apply: "serve",
+
+    transformIndexHtml: (html: string) =>
+      options.hideDevOverlays === false ? html : injectPreviewChrome(html),
 
     configureServer(server: DevServer) {
       const root = resolve(options.root ?? process.cwd());

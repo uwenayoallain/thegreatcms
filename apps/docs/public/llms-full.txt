@@ -573,13 +573,25 @@ build, updating as soon as your dev server reloads.
 **A GitHub repository.** Publishing commits over the API and your pipeline
 deploys it, as below.
 
-For a Vite-based site, add the dev-time watcher so an edit — published or still
-being typed — reloads the page:
+For an Astro site, add the integration so an edit — published or still being
+typed — reloads the page:
+
+```js
+import greatcms from "@greatcms/reader/astro";
+export default defineConfig({ integrations: [greatcms()] });
+```
+
+For any other Vite-based site, the plugin does the same:
 
 ```js
 import { greatcmsWatch } from "@greatcms/reader/vite";
 export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
 ```
+
+Both are dev-only, and both also hide the framework's dev toolbar **while the
+page is framed by the studio** — it belongs on your own tab, not on top of the
+section you are editing. Your own tab keeps it. Pass
+`{ hideDevOverlays: false }` to keep it everywhere.
 
 The reader uses the filesystem on purpose — that is what keeps it
 framework-neutral — which also means Vite cannot know a content file is a

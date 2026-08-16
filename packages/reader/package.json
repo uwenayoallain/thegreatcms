@@ -17,6 +17,10 @@
     "./vite": {
       "types": "./dist/vite.d.ts",
       "default": "./dist/vite.js"
+    },
+    "./astro": {
+      "types": "./dist/astro.d.ts",
+      "default": "./dist/astro.js"
     }
   },
   "scripts": {
