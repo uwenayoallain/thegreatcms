@@ -336,3 +336,72 @@ describe("the public submission endpoint", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 });
+
+describe("headers on every page", () => {
+  it("refuses to be framed, so nobody can overlay their UI on Publish", async () => {
+    const response = await app.request("/sign-in");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+  });
+
+  it("confines scripts and forms to this origin", async () => {
+    const csp = (await app.request("/sign-in")).headers.get("content-security-policy") ?? "";
+
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain("base-uri 'none'");
+  });
+
+  it("allows framing a dev server over http, but not javascript: or data:", async () => {
+    const csp = (await app.request("/sign-in")).headers.get("content-security-policy") ?? "";
+    const frame = csp.split("; ").find((directive) => directive.startsWith("frame-src"));
+
+    expect(frame).toBe("frame-src 'self' http: https:");
+  });
+
+  it("sends nosniff, a same-origin referrer policy, and no-store", async () => {
+    const response = await app.request("/sign-in");
+
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    // Deliberately not `no-referrer`: with it Chrome sends `Origin: null` on a
+    // same-origin form post, which the CSRF check refuses, and every form in
+    // this app stops working without JavaScript. The browser suite catches it.
+    expect(response.headers.get("referrer-policy")).toBe("same-origin");
+  });
+
+  it("leaves the cacheable asset route alone", async () => {
+    const response = await app.request("/assets/editor.js", { headers: signedIn });
+
+    // Only documents get no-store; a bundle that changes with a deploy should
+    // still be cached the way it was.
+    expect(response.headers.get("cache-control")).not.toBe("no-store");
+  });
+});
+
+describe("the dev server URL", () => {
+  const connect = (devUrl: string) =>
+    post("/sites", {
+      name: "Local",
+      kind: "local",
+      path: "/tmp/whatever",
+      devUrl,
+    });
+
+  it("refuses a javascript: URL, which would run as the studio", async () => {
+    const response = await connect("javascript:fetch('/sites/site-1/delete',{method:'POST'})");
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("http:// or https://");
+    expect(store.listSites().map((site) => site.name)).not.toContain("Local");
+  });
+
+  it("refuses a data: URL, which is an origin of its own", async () => {
+    expect((await connect("data:text/html,<script>alert(1)</script>")).status).toBe(422);
+  });
+
+  it("still takes an ordinary dev server", async () => {
+    // It gets as far as reading the folder, which is past the URL check.
+    const response = await connect("http://localhost:4321");
+    expect(await response.text()).not.toContain("http:// or https://");
+  });
+});

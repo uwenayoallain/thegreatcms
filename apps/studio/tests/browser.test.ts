@@ -14,6 +14,13 @@ import { Store } from "../src/db.js";
 
 const require = createRequire(import.meta.url);
 const AXE = require.resolve("axe-core/axe.min.js");
+/**
+ * Evaluated rather than injected with addScriptTag: the studio serves
+ * `script-src 'self'`, which correctly refuses an injected tag. Running the
+ * source through CDP tests the page as shipped instead of relaxing its policy
+ * for the benefit of the test.
+ */
+const AXE_SOURCE = readFileSync(AXE, "utf8");
 const SECRET = "browser-test-secret";
 const PASSWORD = "browser-test-password";
 
@@ -267,7 +274,7 @@ describe.skipIf(!browser)("accessibility with real layout", () => {
     ["the editor", "/sites/site-1/regions/home.hero"],
   ])("%s has no axe violations, colour contrast included", async (_name, path) => {
     const page = await open(path);
-    await page.addScriptTag({ path: AXE });
+    await page.evaluate(AXE_SOURCE);
 
     const violations = await page.evaluate(async () => {
       const results = await (

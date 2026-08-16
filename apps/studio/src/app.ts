@@ -98,6 +98,54 @@ export function createApp(options: AppOptions) {
       ? c.req.header("x-forwarded-proto") === "https"
       : new URL(c.req.url).protocol === "https:";
 
+  /**
+   * Headers that cost nothing and remove whole classes of attack.
+   *
+   * `frame-ancestors` stops the studio being framed, so a page cannot overlay
+   * its own UI on top of Publish or Disconnect. `form-action 'self'` means a
+   * hijacked form cannot post your session anywhere else. `script-src 'self'`
+   * confines the page to the two bundles this app serves.
+   *
+   * `style-src` keeps 'unsafe-inline' because the stylesheet is inlined in
+   * every page. That is the weakest line here and it is worth naming: CSS
+   * injection is a real if lesser problem, and the fix is to serve the styles
+   * as a file, not to pretend the directive is strict.
+   */
+  app.use("*", async (c, next) => {
+    await next();
+
+    // Only documents: the asset route sets its own, and 304s must stay small.
+    const type = c.res.headers.get("content-type") ?? "";
+    if (!type.includes("text/html")) return;
+
+    c.res.headers.set(
+      "content-security-policy",
+      [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        // The live preview frames the operator's own dev server, wherever it
+        // runs. Naming the schemes still rules out javascript: and data:.
+        "frame-src 'self' http: https:",
+        "img-src 'self' data: http: https:",
+        "connect-src 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'none'",
+        "object-src 'none'",
+      ].join("; "),
+    );
+    c.res.headers.set("x-content-type-options", "nosniff");
+    // `same-origin`, not `no-referrer`. With no-referrer Chrome sends
+    // `Origin: null` on a same-origin form post, which the CSRF check above
+    // refuses — every form in this app would break for anyone without
+    // JavaScript. This keeps the referrer inside the studio and sends none to
+    // anywhere else, which is the part that was actually worth having.
+    c.res.headers.set("referrer-policy", "same-origin");
+    // A studio is never a search result, and never a shared browser's history.
+    c.res.headers.set("cache-control", "no-store");
+  });
+
   /** The public submission endpoint. */
   app.post("/f/:siteId/:form", async (c) => {
     const siteId = c.req.param("siteId");
@@ -279,6 +327,18 @@ export function createApp(options: AppOptions) {
       branch: String(form.get("branch") ?? "main").trim() || "main",
     };
     const token = String(form.get("token") ?? "").trim();
+
+    // A dev server is reached over HTTP. Anything else here ends up as an
+    // iframe src on the editor page, where `javascript:` would run as us.
+    if (values.devUrl && !isHttpUrl(values.devUrl)) {
+      return c.html(
+        newSitePage({
+          error: "The dev server URL must start with http:// or https://.",
+          values,
+        }),
+        422,
+      );
+    }
 
     const missing =
       !values.name || (kind === "local" ? !values.path : !values.owner || !values.repo || !token);
@@ -923,6 +983,16 @@ function applyBlockAction(
   if (target < 0 || target >= blocks.length) return;
   const [moved] = blocks.splice(index, 1);
   if (moved) blocks.splice(target, 0, moved);
+}
+
+/** A URL a browser will fetch, rather than one it will execute. */
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /** Only same-site paths: an open redirect would make this a phishing tool. */
