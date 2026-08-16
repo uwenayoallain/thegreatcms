@@ -1,7 +1,6 @@
 /** The studio's HTTP surface. */
 
 import { readFile } from "node:fs/promises";
-import { ConflictError, GitHubError } from "@greatcms/git";
 import {
   isBlocksRegion,
   isSafeSlug,
@@ -18,10 +17,9 @@ import {
   readSession,
   sessionKey,
 } from "./auth.js";
-import type { Site, SiteKind, Store } from "./db.js";
+import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm, fieldName, MEDIA_ROOT, parsePath } from "./form.js";
 import { prepareUpload, UploadError } from "./media.js";
-import { deterministicSummarizer, diffDocuments, type Summarizer } from "./summarize.js";
 import {
   assessSpam,
   contentFields,
@@ -30,7 +28,8 @@ import {
   SPAM_THRESHOLD,
   toCsv,
 } from "./submissions.js";
-import { SiteClient, SiteNotConfiguredError, type SiteContext } from "./sites.js";
+import { SiteClient, type SiteContext } from "./sites.js";
+import { ConflictError } from "./repo.js";
 import { errorsByPath } from "./views/fields.js";
 import { page } from "./views/layout.js";
 import {
@@ -52,8 +51,6 @@ export interface AppOptions {
   fetch?: typeof globalThis.fetch;
   /** Optional email notifier for new submissions. */
   notifier?: Notifier;
-  /** Names pull requests. Defaults to the deterministic, model-free one. */
-  summarizer?: Summarizer;
   rateLimiter?: RateLimiter;
   signInLimiter?: RateLimiter;
   /**
@@ -74,7 +71,6 @@ export function createApp(options: AppOptions) {
   const { store, password, secret } = options;
   const app = new Hono<{ Variables: Variables }>();
 
-  const clientFor = (site: Site) => new SiteClient(site, options.fetch);
   const limiter = options.rateLimiter ?? new RateLimiter();
   // Ten guesses per quarter hour: no bother to a person who mistyped, a wall to a script.
   const signInLimiter = options.signInLimiter ?? new RateLimiter(10, 15 * 60_000);
@@ -316,17 +312,11 @@ export function createApp(options: AppOptions) {
 
   app.post("/sites", async (c) => {
     const form = await c.req.formData();
-    const kind: SiteKind = form.get("kind") === "local" ? "local" : "github";
     const values = {
-      kind,
       name: String(form.get("name") ?? "").trim(),
       path: String(form.get("path") ?? "").trim(),
       devUrl: String(form.get("devUrl") ?? "").trim(),
-      owner: String(form.get("owner") ?? "").trim(),
-      repo: String(form.get("repo") ?? "").trim(),
-      branch: String(form.get("branch") ?? "main").trim() || "main",
     };
-    const token = String(form.get("token") ?? "").trim();
 
     // A dev server is reached over HTTP. Anything else here ends up as an
     // iframe src on the editor page, where `javascript:` would run as us.
@@ -340,17 +330,9 @@ export function createApp(options: AppOptions) {
       );
     }
 
-    const missing =
-      !values.name || (kind === "local" ? !values.path : !values.owner || !values.repo || !token);
-    if (missing) {
+    if (!values.name || !values.path) {
       return c.html(
-        newSitePage({
-          error:
-            kind === "local"
-              ? "A name and the folder's path are required."
-              : "Name, owner, repository, and token are all required.",
-          values,
-        }),
+        newSitePage({ error: "A name and the folder's path are required.", values }),
         422,
       );
     }
@@ -358,17 +340,12 @@ export function createApp(options: AppOptions) {
     const candidate: Site = {
       id: crypto.randomUUID(),
       ...values,
-      token,
-      // A folder has no pull requests to open.
-      publishMode:
-        kind === "github" && form.get("publishMode") === "pull-request" ? "pull-request" : "direct",
-      aiTitles: form.get("aiTitles") === "yes",
       createdAt: new Date().toISOString(),
     };
 
     // Verify before storing: a site that cannot be read is not connected, and finding.
     try {
-      await clientFor(candidate).context();
+      await new SiteClient(candidate).context();
     } catch (error) {
       return c.html(newSitePage({ error: describeError(error), values }), 422);
     }
@@ -382,7 +359,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
 
     try {
-      const client = clientFor(site);
+      const client = new SiteClient(site);
       const context = await client.context();
       return c.html(
         sitePage(
@@ -410,7 +387,7 @@ export function createApp(options: AppOptions) {
     const name = c.req.param("name");
 
     try {
-      const client = clientFor(site);
+      const client = new SiteClient(site);
       const context = await client.context();
       const collection = context.schema.collections[name];
       if (!collection) return c.notFound();
@@ -441,7 +418,7 @@ export function createApp(options: AppOptions) {
     if (!isSafeSlug(slug)) return c.notFound();
 
     try {
-      const client = clientFor(site);
+      const client = new SiteClient(site);
       const context = await client.context();
       const collection = context.schema.collections[name];
       if (!collection) return c.notFound();
@@ -477,7 +454,7 @@ export function createApp(options: AppOptions) {
     if (!isSafeSlug(slug)) return c.notFound();
 
     try {
-      const client = clientFor(site);
+      const client = new SiteClient(site);
       const context = await client.context();
       const entry = await client.readEntry(context, name, slug);
       if (!entry) return c.notFound();
@@ -497,7 +474,7 @@ export function createApp(options: AppOptions) {
     if (!isSafeSlug(requested)) return c.notFound();
     const actor = c.get("actor");
 
-    const client = clientFor(site);
+    const client = new SiteClient(site);
     let context: SiteContext;
     try {
       context = await client.context();
@@ -613,7 +590,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const regionId = c.req.param("regionId");
 
-    const client = clientFor(site);
+    const client = new SiteClient(site);
     const context = await client.context();
     const region = context.schema.regions[regionId];
     if (!region) return c.notFound();
@@ -633,7 +610,7 @@ export function createApp(options: AppOptions) {
     if (!site) return c.notFound();
     const regionId = c.req.param("regionId");
 
-    const client = clientFor(site);
+    const client = new SiteClient(site);
     await client.clearLiveDraft({ context: await client.context(), regionId });
     return c.redirect(`/sites/${site.id}/regions/${regionId}`, 303);
   });
@@ -645,7 +622,7 @@ export function createApp(options: AppOptions) {
     const slug = c.req.param("slug");
     if (!isSafeSlug(slug)) return c.notFound();
 
-    const client = clientFor(site);
+    const client = new SiteClient(site);
     await client.clearLiveDraft({ context: await client.context(), collection: { name, slug } });
     return c.redirect(`/sites/${site.id}/collections/${name}/${slug}`, 303);
   });
@@ -657,7 +634,7 @@ export function createApp(options: AppOptions) {
     const slug = c.req.param("slug");
     if (!isSafeSlug(slug)) return c.notFound();
 
-    const client = clientFor(site);
+    const client = new SiteClient(site);
     const context = await client.context();
     const collection = context.schema.collections[name];
     if (!collection || slug === "new") return c.notFound();
@@ -681,7 +658,7 @@ export function createApp(options: AppOptions) {
     const regionId = c.req.param("regionId");
 
     try {
-      const client = clientFor(site);
+      const client = new SiteClient(site);
       const context = await client.context();
       const region = context.schema.regions[regionId];
       if (!region) return c.notFound();
@@ -709,7 +686,7 @@ export function createApp(options: AppOptions) {
     const regionId = c.req.param("regionId");
     const actor = c.get("actor");
 
-    const client = clientFor(site);
+    const client = new SiteClient(site);
     let context: SiteContext;
     try {
       context = await client.context();
@@ -821,87 +798,6 @@ export function createApp(options: AppOptions) {
         }),
         422,
       );
-    }
-
-    if (action === "draft") {
-      try {
-        const draft = await client.saveDraft({ context, regionId, document, actor, media });
-        return c.html(
-          editRegionPage({
-            site,
-            schema: context.schema,
-            regionId,
-            region,
-            document,
-            errors: new Map(),
-            headSha,
-            preview: { url: draft.previewUrl, branch: draft.branch },
-            flash: {
-              kind: "success",
-              message: `Saved to ${draft.branch}. Nothing on ${site.branch} has changed.`,
-            },
-          }),
-        );
-      } catch (error) {
-        return c.html(errorPage(site.name, describeError(error)), 502);
-      }
-    }
-
-    if (site.publishMode === "pull-request") {
-      try {
-        const published = await client.readRegion(context, regionId);
-        const changes = diffDocuments(published, document);
-        const summarizer =
-          site.aiTitles && options.summarizer ? options.summarizer : deterministicSummarizer;
-
-        const summary = await summarizer.summarize({
-          siteName: site.name,
-          regionId,
-          regionLabel: region.label ?? regionId,
-          changes,
-        });
-
-        const proposal = await client.proposeRegion({
-          context,
-          regionId,
-          document,
-          title: summary.title,
-          body: summary.body,
-          actor,
-          media,
-        });
-
-        store.recordPublish({
-          siteId: site.id,
-          regionId,
-          commitSha: proposal.commit.commitSha,
-          commitUrl: proposal.commit.url,
-          actor,
-          pullRequestUrl: proposal.pullRequest.url,
-        });
-
-        return c.html(
-          editRegionPage({
-            site,
-            schema: context.schema,
-            regionId,
-            region,
-            document,
-            errors: new Map(),
-            headSha,
-            preview: { url: proposal.previewUrl, branch: proposal.commit.branch },
-            pullRequest: { ...proposal.pullRequest, fromModel: summary.fromModel },
-            flash: {
-              kind: "success",
-              message: proposal.pullRequest.created
-                ? `Opened pull request #${proposal.pullRequest.number}. Nothing is live until it is merged.`
-                : `Updated pull request #${proposal.pullRequest.number}. Nothing is live until it is merged.`,
-            },
-          }),
-        );
-      } catch (error) {
-        return c.html(errorPage(site.name, describeError(error)), 502);
-      }
     }
 
     try {
@@ -1044,8 +940,6 @@ async function clientAsset(file: string): Promise<string | null> {
 }
 
 function describeError(error: unknown): string {
-  if (error instanceof SiteNotConfiguredError) return error.message;
-  if (error instanceof GitHubError) return error.message;
   if (error instanceof Error) return error.message;
   return "Something went wrong.";
 }

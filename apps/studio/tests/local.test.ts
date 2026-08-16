@@ -26,15 +26,8 @@ function site(overrides: Record<string, unknown> = {}) {
   return {
     id: "local-1",
     name: "On disk",
-    kind: "local" as const,
     path: root,
     devUrl: "http://localhost:4321",
-    owner: "",
-    repo: "",
-    branch: "main",
-    token: "",
-    publishMode: "direct" as const,
-    aiTitles: false,
     createdAt: "2026-08-13",
     ...overrides,
   };
@@ -170,21 +163,29 @@ describe("editing live, before anything is published", () => {
     expect(readFileSync(join(root, ".cms/draft/.gitignore"), "utf8")).toBe("*\n");
   });
 
-  it("never offers a draft branch, which on a working copy would commit to main", async () => {
+  it("offers one way to publish, because there is only one place to publish to", async () => {
     const body = await (
       await app.request("/sites/local-1/regions/home.hero", { headers: signedIn })
     ).text();
-    expect(body).not.toContain("Save draft");
 
-    // And refuses it even if the request is made by hand: this one already.
+    // Draft branches and pull requests were the GitHub story. What replaced
+    // them for a working copy is the live draft below, which never commits.
+    expect(body).not.toContain("Save draft");
+    expect(body).not.toContain("Propose change");
+    expect(body).toContain("Publish");
+  });
+
+  it("shows an unsaved edit in the site without committing it", async () => {
     const before = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
-    const response = await post("/sites/local-1/regions/home.hero", {
-      headSha: "",
-      action: "draft",
+
+    const response = await post("/sites/local-1/regions/home.hero/draft", {
       "f[heading]": "Meant as a preview",
     });
 
-    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBe(204);
+    expect(readFileSync(join(root, ".cms/draft/content/cms/home.hero.json"), "utf8")).toContain(
+      "Meant as a preview",
+    );
     expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" })).toBe(
       before,
     );

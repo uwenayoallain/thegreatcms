@@ -5,7 +5,6 @@ import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
 import { Store } from "./db.js";
 import { ResendNotifier } from "./submissions.js";
-import { ModelSummarizer } from "./summarize.js";
 
 const password = process.env.STUDIO_PASSWORD;
 if (!password) {
@@ -30,22 +29,11 @@ const notifier =
       })
     : undefined;
 
-// Any OpenAI-compatible endpoint: Groq, Google, Cloudflare, Mistral, Ollama.
-const summarizer =
-  process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL
-    ? new ModelSummarizer({
-        baseUrl: process.env.AI_BASE_URL,
-        apiKey: process.env.AI_API_KEY,
-        model: process.env.AI_MODEL,
-        onError: (message) => process.stderr.write(`${message}\n`),
-      })
-    : undefined;
-
 // Only behind a proxy you control: the headers it sets are otherwise the visitor's to forge.
 const trustProxy = process.env.STUDIO_TRUST_PROXY === "1";
 
 const store = new Store(databaseFile);
-const app = createApp({ store, password, secret, notifier, summarizer, trustProxy });
+const app = createApp({ store, password, secret, notifier, trustProxy });
 
 serve({ fetch: app.fetch, port }, (info) => {
   process.stdout.write(`GreatCMS studio on http://localhost:${info.port}\n`);
@@ -54,11 +42,6 @@ serve({ fetch: app.fetch, port }, (info) => {
     notifier
       ? "  submissions: stored and emailed\n"
       : "  submissions: stored (set RESEND_API_KEY, NOTIFY_FROM, NOTIFY_TO to email them)\n",
-  );
-  process.stdout.write(
-    summarizer
-      ? `  pull request titles: ${process.env.AI_MODEL} (per-site opt-in)\n`
-      : "  pull request titles: generated from the diff (set AI_BASE_URL, AI_API_KEY, AI_MODEL for model-written ones)\n",
   );
   if (!process.env.STUDIO_SECRET) {
     process.stdout.write("  sessions reset on restart (set STUDIO_SECRET to persist them)\n");

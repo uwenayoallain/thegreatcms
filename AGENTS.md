@@ -44,7 +44,6 @@ SPEC.md                 the standard — the actual product
 apps/studio/            the CMS: auth, editor, publishing, inbox
 apps/docs/              the website: landing page and docs, managed by GreatCMS
 packages/spec/          schema parsing, validation, resolution rules
-packages/git/           atomic commits and pull requests
 packages/reader/        build-time reader for JS frameworks
 packages/cli/           greatcms init / preview / check / doctor
 packages/conformance/   fixtures + verifier proving a reader is correct
@@ -54,10 +53,12 @@ docs/                   generated agent surface — never edit by hand
 
 ## Current focus
 
-Local sites — a folder on this machine — are the path in use. The GitHub
-publishing path (commits, pull requests, AI titles) is built, tested, and
-deliberately parked until deployment is picked up; keep it working, do not build
-on it. The submissions runtime is kept for work in progress.
+A site is a folder on this machine, and that is the only kind. The hosted
+path — a GitHub backend, draft branches, pull-request publishing, model-written
+PR titles — was built and then removed: it doubled every screen and every test
+for a workflow that is not the one being got right. Do not reintroduce a second
+backend without a reason that survives the cost of the branching it brings back.
+The submissions runtime is kept for work in progress.
 
 `greatcms init` scaffolds JavaScript frameworks only. The _standard_ remains
 language-agnostic and the conformance kit still proves it with a Python reader —

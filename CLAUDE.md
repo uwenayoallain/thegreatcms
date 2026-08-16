@@ -84,26 +84,21 @@ The layering:
 - `main.ts` wires env → `Store` (SQLite via `node:sqlite`) → `createApp`.
 - `app.ts` is the whole HTTP surface: auth, site CRUD, the editor, publish,
   media upload, form intake, inbox.
-- `repo.ts` defines `Repository` — the seven operations the studio needs from a
-  site's files — with `GitHubRepository` and `LocalRepository` implementations.
+- `repo.ts` defines `Repository` — read a file, list a directory, read the head,
+  commit a set of files — with `LocalRepository` as the only implementation.
   **Adding a backend means implementing that interface, not branching in
   `app.ts`.** Everything above this line is backend-agnostic.
 - `sites.ts` (`SiteClient`) sits on `Repository` and speaks in schema/config/
   regions/collections rather than files.
 - `views/` renders HTML: `pages.ts` (screens), `fields.ts` (one renderer per
-  field type, plus error attachment), `preview.ts` (the studio-layout live
-  preview), `layout.ts`.
+  field type, plus error attachment), `layout.ts`.
 - `client/*.ts` is the only browser JavaScript (ProseMirror editor + live
   preview). tsdown builds it to `public/*.js` in the same `pnpm build`; those
   files are build output, and are loaded only on screens with a richtext field.
 
-**`packages/git`** implements the atomic publish: blob → tree → commit → ref via
-the GitHub Git Data API, plus PRs and `ConflictError` when a branch moved. Never
-use the contents API here — it is one commit per file.
-
 **`packages/cli`** is `greatcms init` (framework detection in `detect.ts`,
-scaffolding in `init.ts`), `preview` (overlays a draft branch onto the working
-copy, restores it exactly on exit), and `doctor`.
+scaffolding in `init.ts`), `add` (edits an existing schema as text, preserving
+its comments), `types` (TypeScript from the schema), `check`, and `doctor`.
 
 **`packages/conformance`** is fixtures plus a verifier; it defines what "reads
 the standard correctly" means for any implementation in any language. The

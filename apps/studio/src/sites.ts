@@ -1,7 +1,5 @@
 /** Talking to a managed repository. */
 
-import type { CommitResult, PullRequest } from "@greatcms/git";
-import type { FileChange } from "@greatcms/git";
 import {
   collectionEntryPath,
   DEFAULT_CONFIG,
@@ -24,23 +22,9 @@ import {
   type CollectionFormat,
 } from "@greatcms/spec";
 import type { Site } from "./db.js";
-import {
-  GitHubRepository,
-  LocalRepository,
-  LocalRepositoryError,
-  type Repository,
-} from "./repo.js";
+import { LocalRepository, type CommitResult, type FileChange } from "./repo.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
-
-/** Parsed schema and config per site and commit, shared across requests. */
-const contextCache = new Map<string, SiteContext>();
-const CONTEXT_CACHE_LIMIT = 64;
-
-/** Drops every cached context, so a test starts from a cold cache. */
-export function clearContextCache(): void {
-  contextCache.clear();
-}
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
 
 export interface UnsavedDraft {
@@ -67,86 +51,52 @@ export interface SiteContext {
 export class SiteNotConfiguredError extends Error {
   constructor(site: Site) {
     super(
-      `${site.owner}/${site.repo} has no .cms/schema.yaml on ${site.branch}.\n  fix: add one to the repository — see SPEC.md — then reload this page.`,
+      `${site.path} has no .cms/schema.yaml.\n  fix: add one — see SPEC.md, or run \`greatcms init\` in that folder — then reload this page.`,
     );
     this.name = "SiteNotConfiguredError";
   }
 }
 
 export class SiteClient {
-  private readonly repo: Repository;
+  private readonly repo: LocalRepository;
 
-  constructor(
-    private readonly site: Site,
-    fetchImpl?: typeof globalThis.fetch,
-  ) {
-    this.repo =
-      site.kind === "local"
-        ? new LocalRepository(site.path)
-        : new GitHubRepository({ owner: site.owner, repo: site.repo }, site.token, fetchImpl);
+  constructor(private readonly site: Site) {
+    this.repo = new LocalRepository(site.path);
   }
 
   /** Where the files are, for messages that need to say. */
   get location(): string {
-    return this.site.kind === "local" ? this.site.path : `${this.site.owner}/${this.site.repo}`;
+    return this.site.path;
   }
 
   /**
-   * The schema and config for this site at its current head.
+   * The schema and config, read fresh every time.
    *
-   * Reading them cost eight GitHub calls on every page view, because six of
-   * those are guesses at which spelling of the file name exists. The commit sha
-   * settles it: every write to a GitHub repository goes through a commit, so a
-   * matching sha means the files cannot have changed, and one call answers what
-   * eight used to.
-   *
-   * Deliberately not cached for a folder on this machine. Editing
-   * `.cms/schema.yaml` by hand does not move HEAD, so a cache would show you a
-   * schema you had already changed — and a local read is filesystem-cheap
-   * anyway, which is the half of this that made the cost worth paying.
+   * Not cached on purpose. This is a working copy: `.cms/schema.yaml` changes
+   * when you edit it, which does not move HEAD, so anything keyed on the commit
+   * would hand back a schema you had already changed. Reading six small files
+   * off local disk costs less than being wrong about that.
    */
   async context(): Promise<SiteContext> {
-    const headSha = await this.repo.getBranchHead(this.site.branch);
-    if (!headSha) {
-      throw new Error(
-        `Branch "${this.site.branch}" does not exist in ${this.site.owner}/${this.site.repo}.`,
-      );
-    }
-
-    const key = `${this.location}:${this.site.branch}:${headSha}`;
-    const cacheable = this.repo.kind === "github";
-    if (cacheable) {
-      const hit = contextCache.get(key);
-      if (hit) return hit;
-    }
-
-    const [schemaFile, configFile] = await Promise.all([
+    const [schemaFile, configFile, headSha] = await Promise.all([
       this.firstFile(SCHEMA_CANDIDATES),
       this.firstFile(CONFIG_CANDIDATES),
+      this.repo.getHead(),
     ]);
+
     if (!schemaFile) throw new SiteNotConfiguredError(this.site);
 
-    const context: SiteContext = {
+    return {
       schema: parseSchema(schemaFile.content, { file: schemaFile.path }),
       config: configFile ? parseConfig(configFile.content, configFile.path) : DEFAULT_CONFIG,
       headSha,
     };
-
-    if (cacheable) {
-      // Old shas are dead weight the moment a publish lands, so the map is
-      // trimmed rather than left to grow for the life of the process.
-      if (contextCache.size >= CONTEXT_CACHE_LIMIT) {
-        contextCache.delete(contextCache.keys().next().value as string);
-      }
-      contextCache.set(key, context);
-    }
-    return context;
   }
 
   /** The stored document for a region, or null when nobody has edited it yet. */
   async readRegion(context: SiteContext, regionId: string): Promise<RegionDocument | null> {
     const path = regionFilePath(context.config, regionId);
-    const file = await this.repo.getFile(path, this.site.branch);
+    const file = await this.repo.getFile(path);
     return file ? parseRegionFile(file.content, path) : null;
   }
 
@@ -159,14 +109,14 @@ export class SiteClient {
   /** Entries in a collection, newest-looking first. */
   async listEntries(context: SiteContext, name: string): Promise<CollectionEntry[]> {
     const collection = this.collection(context, name);
-    const paths = await this.repo.listDirectory(collection.path, this.site.branch);
+    const paths = await this.repo.listDirectory(collection.path);
     const extension = `.${entryExtension(collection.format)}`;
 
     const entries = await Promise.all(
       paths
         .filter((path) => path.endsWith(extension))
         .map(async (path) => {
-          const file = await this.repo.getFile(path, this.site.branch);
+          const file = await this.repo.getFile(path);
           if (!file) return null;
           return this.parseEntry(collection, path, file.content);
         }),
@@ -188,7 +138,7 @@ export class SiteClient {
   ): Promise<CollectionEntry | null> {
     const collection = this.collection(context, name);
     const path = collectionEntryPath(context.config, collection, slug);
-    const file = await this.repo.getFile(path, this.site.branch);
+    const file = await this.repo.getFile(path);
     return file ? this.parseEntry(collection, path, file.content) : null;
   }
 
@@ -271,7 +221,6 @@ export class SiteClient {
     const file = this.entryFile(context, name, slug, document);
 
     return this.repo.commitFiles({
-      branch: this.site.branch,
       message: context.config.publish.commitMessage.replace("{summary}", `${name}/${slug}`),
       files: [file],
       expectedHeadSha,
@@ -287,7 +236,6 @@ export class SiteClient {
     const { context, name, slug } = options;
     const collection = this.collection(context, name);
     return this.repo.commitFiles({
-      branch: this.site.branch,
       message: `content: remove ${name}/${slug}`,
       files: [{ path: collectionEntryPath(context.config, collection, slug), delete: true }],
     });
@@ -300,11 +248,8 @@ export class SiteClient {
     collection?: { name: string; slug: string };
     document: RegionDocument;
   }): Promise<boolean> {
-    const repo = this.repo;
-    if (!(repo instanceof LocalRepository)) return false;
-
     const { path, content } = this.contentFile(options);
-    await repo.writeDraft(path, content);
+    await this.repo.writeDraft(path, content);
     return true;
   }
 
@@ -314,10 +259,7 @@ export class SiteClient {
    * never published.
    */
   async listLiveDrafts(context: SiteContext): Promise<UnsavedDraft[]> {
-    const repo = this.repo;
-    if (!(repo instanceof LocalRepository)) return [];
-
-    const paths = await repo.listDrafts();
+    const paths = await this.repo.listDrafts();
     const drafts: UnsavedDraft[] = [];
 
     for (const path of paths) {
@@ -360,9 +302,7 @@ export class SiteClient {
     regionId?: string;
     collection?: { name: string; slug: string };
   }): Promise<void> {
-    const repo = this.repo;
-    if (!(repo instanceof LocalRepository)) return;
-    await repo.clearDraft(this.contentFile({ ...options, document: {} }).path);
+    await this.repo.clearDraft(this.contentFile({ ...options, document: {} }).path);
   }
 
   /** The file a document belongs in, and the bytes that would be written to it. */
@@ -382,84 +322,6 @@ export class SiteClient {
     if (!collection) throw new Error("A draft needs a region or a collection entry.");
     const file = this.entryFile(context, collection.name, collection.slug, document);
     return { path: file.path, content: file.content ?? "" };
-  }
-
-  /** Saves to a draft branch instead of the publish branch, so the site's own CI builds a preview. */
-  async saveDraft(options: {
-    context: SiteContext;
-    regionId: string;
-    document: RegionDocument;
-    actor?: string;
-    /** Uploads that must land in the same commit as the content. */
-    media?: FileChange[];
-  }): Promise<{ branch: string; commit: CommitResult; previewUrl: string | null }> {
-    const { context, regionId, document, actor } = options;
-
-    // A working copy stays on its branch, so a "draft branch" commit lands on main.
-    if (this.repo instanceof LocalRepository) {
-      throw new LocalRepositoryError(
-        "A folder on this machine cannot save to a draft branch.",
-        "Your edits already show in the site beside the form. Publish when you are ready.",
-      );
-    }
-
-    const branch = `${context.config.publish.draftBranchPrefix}-${regionId}`.replace(
-      /[^\w./-]/g,
-      "-",
-    );
-
-    await this.repo.ensureBranch(branch, this.site.branch);
-
-    const commit = await this.repo.commitFiles({
-      branch,
-      message: `content(draft): ${regionId}`,
-      files: [
-        ...(options.media ?? []),
-        {
-          path: regionFilePath(context.config, regionId),
-          content: serializeRegion(document, {
-            updatedAt: new Date().toISOString(),
-            updatedBy: actor ?? "studio",
-            version: context.schema.version,
-          }),
-        },
-      ],
-    });
-
-    const template = context.config.preview?.urlTemplate;
-    return {
-      branch,
-      commit,
-      previewUrl: template ? template.replaceAll("{branch}", branch) : null,
-    };
-  }
-
-  /** Publishes by proposal: the change lands on a draft branch, then a pull request. */
-  async proposeRegion(options: {
-    context: SiteContext;
-    regionId: string;
-    document: RegionDocument;
-    title: string;
-    body: string;
-    actor?: string;
-    media?: FileChange[];
-  }): Promise<{ commit: CommitResult; pullRequest: PullRequest; previewUrl: string | null }> {
-    const draft = await this.saveDraft({
-      context: options.context,
-      regionId: options.regionId,
-      document: options.document,
-      actor: options.actor,
-      media: options.media,
-    });
-
-    const pullRequest = await this.repo.openOrUpdatePullRequest({
-      head: draft.branch,
-      base: this.site.branch,
-      title: options.title,
-      body: options.body,
-    });
-
-    return { commit: draft.commit, pullRequest, previewUrl: draft.previewUrl };
   }
 
   async publishRegion(options: {
@@ -483,18 +345,11 @@ export class SiteClient {
     const message = context.config.publish.commitMessage.replace("{summary}", regionId);
 
     const result = await this.repo.commitFiles({
-      branch: this.site.branch,
       message,
       // One commit: the image and the JSON pointing at it land together, or neither.
       files: [...(options.media ?? []), { path, content }],
       expectedHeadSha,
     });
-
-    // Some pipelines watch pushes; others want an explicit event.
-    const dispatchEvent = context.config.publish.dispatchEvent;
-    if (dispatchEvent) {
-      await this.repo.dispatch(dispatchEvent, { region: regionId });
-    }
 
     return result;
   }
@@ -503,7 +358,7 @@ export class SiteClient {
   private async firstFile(candidates: string[]): Promise<{ path: string; content: string } | null> {
     const found = await Promise.all(
       candidates.map(async (path) => {
-        const file = await this.repo.getFile(path, this.site.branch);
+        const file = await this.repo.getFile(path);
         return file ? { path, content: file.content } : null;
       }),
     );

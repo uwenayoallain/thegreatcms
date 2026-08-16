@@ -39,9 +39,8 @@ submissions from any site land in one inbox.
 ```
 apps/studio/            The CMS: sign in, connect repos, edit regions, publish
 apps/docs/              The website — landing page and docs, managed by GreatCMS itself
-packages/cli/           `greatcms init`, `add`, `types`, `preview`, `check`, `doctor`
+packages/cli/           `greatcms init`, `add`, `types`, `check`, `doctor`
 packages/spec/          The standard: schema parsing, validation, resolution rules
-packages/git/           Atomic multi-file commits via the GitHub Git Data API
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
 packages/reader/        Build-time reader for any JS framework
 examples/site-astro/    A real Astro site: managed regions beside hand-written markup
@@ -64,8 +63,8 @@ STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
 # http://localhost:8787
 ```
 
-Connect a repository containing a `.cms/schema.yaml` and a token with
-`contents: write`, and it builds the editor from your schema. Point any site's
+Point it at a folder containing a `.cms/schema.yaml` and it builds the editor
+from your schema. Point any site's
 contact form at `https://your-studio/f/{siteId}/contact` and the messages arrive
 in the inbox — set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emailed
 about them too. Or run it as a
@@ -150,16 +149,17 @@ template fails the build instead of quietly rendering nothing.
 Nothing changes for a site that does not run it: without the generated file the
 reader takes any string, as it always did.
 
-## Two kinds of site
+## Connecting a site
 
-**A folder on this machine.** Point the studio at a checkout and it reads and
-writes the working copy directly — no token, no network, no push. Publishing
-writes the files and commits them if the folder is a Git repository. Give it your
-dev server's URL and the editor shows **your real components**, from your own
-build, updating as soon as your dev server reloads.
+A site is **a folder on this machine**. The studio reads and writes the working
+copy directly — no token, no network, no push. Publishing writes the files and
+commits them if the folder is a Git repository. Give it your dev server's URL
+and the editor shows **your real components**, from your own build, updating as
+soon as your dev server reloads.
 
-**A GitHub repository.** Publishing commits over the API and your pipeline
-deploys it, as below.
+There is deliberately no hosted-repository backend. It existed, and it made
+every screen ask which of two worlds it was in; the local path is the one worth
+getting right first.
 
 For an Astro site, add the integration so an edit — published or still being
 typed — reloads the page:
@@ -186,93 +186,23 @@ framework-neutral — which also means Vite cannot know a content file is a
 dependency. Without the watcher the file changes and the page does not, which is
 worse than an error because it looks like nothing happened.
 
-The studio needs exactly seven operations from a repository, and nothing about
-them is specific to GitHub — which is why a folder works without a second code
-path through the editor, the validation, or the publish.
+The studio needs four operations from a repository — read a file, list a
+directory, read the head commit, commit a set of files. Everything above that
+line is backend-agnostic, which is what keeps the editor, the validation, and
+the publish free of any knowledge of where the bytes are.
 
 ## Publishing
 
-Local sites write to the working copy and commit there — that is the path in
-active use.
+A publish writes the files and commits them, in one commit. Your existing deploy
+pipeline takes it from there — the CMS is not in that path.
 
-The GitHub path below is built and tested, but is not the current focus:
-deployment is a later milestone. It is documented so it is not a surprise, not
-because you need it yet.
+If the folder is not a Git repository, the files are simply written, which is
+the whole job.
 
-**Direct** commits to your publish branch.
-
-**Pull request** commits to a draft branch and opens a PR against it, so a
-content change gets the same review, CI preview build, and revert-to-roll-back
-that a code change does. Saving again updates the open pull request rather than
-opening a second one.
-
-Pull request titles are generated **from the actual field diff**:
-
-> Update heading in Home hero on Example
-
-with a table of every changed field in the body. That is the default, it needs
-no model, and it is always accurate.
-
-A site can opt in to having a model write the title instead. Point the studio at
-any OpenAI-compatible endpoint and it works — Groq, Google's Gemini, Cloudflare
-Workers AI, Mistral, or a local Ollama:
-
-```bash
-AI_BASE_URL=https://api.groq.com/openai/v1 AI_API_KEY=... AI_MODEL=llama-3.3-70b-versatile
-```
-
-Two things hold regardless: **publishing never waits on a model** — the call is
-time-boxed and every failure falls back to the generated title — and the PR body
-stays machine-generated, because a reviewer needs the change list to be true
-rather than fluent. It is off by default per site, since it sends your content to
-a third party.
-
-## Images
-
-Upload one in the editor and it is committed **in the same commit** as the
-content that points at it. That is what the hand-built Git tree was for: if the
-picture and the JSON referencing it landed separately, every deploy in between
-would build a page with a broken image.
-
-Width and height are read from the file's own header — no dependency, no
-trusting the browser — so the stored value carries the intrinsic size and pages
-do not reflow as images load. Files are content-addressed
-(`hero-shot-a1b2c3d4.png`), so re-uploading identical bytes reuses the path
-while an edited image gets a fresh URL that busts any cache holding the old one.
-
-SVG is deliberately not accepted: it is a script-bearing document, and an editor
-uploading one would be a stored-XSS vector on the published site. Alt text stays
-required — uploading does not bypass validation.
-
-## Previewing a draft
-
-Three ways, at three speeds. None of them runs your code on our server.
-
-**As you type, in your own site.** For a folder on this machine, the editor
-shows your dev server beside the form. Each edit is written to `.cms/draft/` in
-your working copy, your dev server reloads, and your real components render
-content nobody has published. Nothing is committed, nothing leaves the machine,
-and a draft can never reach a live site: the reader only reads `.cms/draft/` in
-development, and the directory ignores itself in Git.
-
-Publishing writes the real file and clears the draft. There is no synthetic
-preview to disagree with your site, because the thing on screen _is_ your site.
-
-**Your CI builds it.** For a GitHub repository, "Save draft & preview" commits
-to `cms/draft-<region>`; set `preview.urlTemplate` in `.cms/config.yaml` and the
-studio iframes the resulting URL.
-
-**Or your own dev server builds it:**
-
-```bash
-npx greatcms preview --branch cms/draft-home.hero --run "npm run dev"
-```
-
-That overlays the draft's content files onto your working copy, starts your dev
-server, and restores the working copy exactly when you stop it — including
-deleting files that did not exist before. It refuses to run on top of
-uncommitted content changes, and refuses any draft branch carrying changes
-outside your content directories, because a draft is content, not code.
+**Your own dev server is the preview.** Connect the site with its dev server
+URL and the editor frames it, rendering your real components as you type — the
+unsaved edit is written to `.cms/draft/`, which the reader prefers over the
+committed file in development and never in a build.
 
 `npx greatcms doctor` prints what a repository's setup looks like: regions,
 where each one's file lives, which are still rendering schema defaults, and any
@@ -388,10 +318,9 @@ image a deliberate act rather than an oversight.
 a site is correct before the CMS has ever been opened. A missing _schema_ file
 is an error — failing loudly beats quietly rendering empty regions.
 
-**Publishing is one atomic commit.** Blob → tree → commit → ref via the GitHub
-Git Data API, so a region and its images land together or not at all. Repeated
-`PUT /contents` calls can half-apply, and half-applied content is how `main`
-stops building.
+**Publishing is one commit.** Every file a publish touches is written before
+anything is staged, so a region and the images it references land together or
+not at all. Half-applied content is how a branch stops building.
 
 ## The website
 

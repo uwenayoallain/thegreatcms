@@ -1,6 +1,5 @@
 /** @greatcms/cli — the local half of the workflow. */
 
-import { spawn } from "node:child_process";
 import { access, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
@@ -44,15 +43,7 @@ import {
   type TemplateId,
 } from "./init.js";
 import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } from "./prompt.js";
-import {
-  applyOverlay,
-  assertContentIsClean,
-  describePlan,
-  planPreview,
-  PreviewError,
-  type FilePort,
-  type GitPort,
-} from "./preview.js";
+import { CliError, type FilePort, type GitPort } from "./ports.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,7 +55,7 @@ export function nodeGit(cwd: string): GitPort {
         return stdout;
       } catch (error) {
         const details = (error as { stderr?: string }).stderr?.trim();
-        throw new PreviewError(
+        throw new CliError(
           `git ${args[0]} failed${details ? `: ${details}` : "."}`,
           args[0] === "fetch" ? "Check that the remote exists and you can reach it." : undefined,
         );
@@ -159,7 +150,7 @@ export async function loadSchema(root: string): Promise<CmsSchema> {
     ".cms/schema.yml",
   ]);
   if (!found) {
-    throw new PreviewError(
+    throw new CliError(
       `No .cms/schema.yaml found in ${root}.`,
       "Run this from the root of a site managed by GreatCMS.",
     );
@@ -204,8 +195,6 @@ export async function run(options: RunOptions): Promise<number> {
         return await initCommand({ ...options, flags });
       case "add":
         return await addCommand({ ...options, flags, rest });
-      case "preview":
-        return await previewCommand({ ...options, flags });
       case "check":
         return await checkCommand({ ...options, flags });
       case "types":
@@ -223,7 +212,7 @@ export async function run(options: RunOptions): Promise<number> {
     }
   } catch (error) {
     if (error instanceof PromptCancelled) return 130;
-    if (error instanceof AddError || error instanceof PreviewError || error instanceof SpecError) {
+    if (error instanceof AddError || error instanceof CliError || error instanceof SpecError) {
       stderr(`${error.message}\n`);
       return 1;
     }
@@ -253,7 +242,7 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
   );
   const clashes = existing.filter((file) => file.exists).map((file) => file.name);
   if (clashes.length > 0 && !flags.boolean("force")) {
-    throw new PreviewError(
+    throw new CliError(
       `This repository is already set up: ${clashes.join(", ")}.`,
       "Edit those files directly, run `greatcms doctor` to check them, or pass --force to start over.",
     );
@@ -525,7 +514,7 @@ async function currentBranch(root: string): Promise<string | null> {
 function frameworkFromFlag(value: string): Framework {
   const framework = FRAMEWORKS[value as FrameworkId];
   if (!framework) {
-    throw new PreviewError(
+    throw new CliError(
       `Unknown framework "${value}".`,
       `Choose one of: ${Object.keys(FRAMEWORKS).join(", ")}.`,
     );
@@ -536,50 +525,12 @@ function frameworkFromFlag(value: string): Framework {
 function templateFromFlag(value: string): TemplateId {
   const template = TEMPLATES.find((entry) => entry.id === value);
   if (!template) {
-    throw new PreviewError(
+    throw new CliError(
       `Unknown template "${value}".`,
       `Choose one of: ${TEMPLATES.map((entry) => entry.id).join(", ")}.`,
     );
   }
   return template.id;
-}
-
-async function previewCommand(options: RunOptions & { flags: Flags }): Promise<number> {
-  const { cwd, stdout, flags } = options;
-  const root = resolve(cwd);
-  const git = nodeGit(root);
-  const files = nodeFiles(root);
-  const config = await loadConfig(root);
-
-  await assertContentIsClean(git, config, flags.boolean("force"));
-
-  const plan = await planPreview(git, files, {
-    config,
-    branch: flags.string("branch"),
-    remote: flags.string("remote") ?? "origin",
-    force: flags.boolean("force"),
-  });
-
-  stdout(`${describePlan(plan)}\n`);
-
-  if (flags.boolean("diff")) return 0;
-
-  const restore = await applyOverlay(files, plan);
-  stdout("\nDraft content is in place.\n");
-
-  const command = flags.string("run");
-  if (!command) {
-    stdout(
-      `Start your dev server. When you are done, put your working copy back with:\n  git checkout -- ${config.content.regions} ${config.content.media}\n`,
-    );
-    return 0;
-  }
-
-  // The dev server runs here, on your machine, with your toolchain — the studio.
-  stdout(`Running: ${command}\n\n`);
-  const code = await runUntilExit(command, root, restore);
-  stdout("\nWorking copy restored.\n");
-  return code;
 }
 
 /** Exits non-zero when the content would not render, so a build can run it. */
@@ -660,9 +611,7 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
   lines.push(`  spec version   ${schema.version}`);
   lines.push(`  regions dir    ${config.content.regions}`);
   lines.push(`  publish branch ${config.publish.branch}`);
-  lines.push(
-    `  preview        ${config.preview?.urlTemplate ?? "not configured (set preview.urlTemplate for inline previews)"}`,
-  );
+  lines.push();
   lines.push("", `Regions (${Object.keys(schema.regions).length}):`);
 
   const statuses = await Promise.all(
@@ -704,33 +653,6 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
 
   stdout(`${lines.join("\n")}\n`);
   return 0;
-}
-
-function runUntilExit(command: string, cwd: string, restore: () => Promise<void>): Promise<number> {
-  return new Promise((resolvePromise) => {
-    const child = spawn(command, { cwd, shell: true, stdio: "inherit" });
-
-    let restored = false;
-    const cleanUp = async (code: number) => {
-      if (restored) return;
-      restored = true;
-      await restore();
-      resolvePromise(code);
-    };
-
-    // Ctrl-C must still restore the working copy, so the signal is handled here rather.
-    const onSignal = () => {
-      child.kill("SIGINT");
-    };
-    process.on("SIGINT", onSignal);
-    process.on("SIGTERM", onSignal);
-
-    child.on("exit", (code) => {
-      process.off("SIGINT", onSignal);
-      process.off("SIGTERM", onSignal);
-      void cleanUp(code ?? 0);
-    });
-  });
 }
 
 interface Flags {
@@ -783,13 +705,6 @@ const HELP = `greatcms — local tools for a Git-backed site
     --format markdown|json       collections only (default: markdown)
     --dir <path>                 collections only, where entries live
 
-  greatcms preview [options]     overlay draft content and run your dev server
-    --run "<command>"            dev server to run; restored when it exits
-    --branch <name>              one draft branch (default: all of them)
-    --remote <name>              default: origin
-    --diff                       show what would change, write nothing
-    --force                      overlay even with uncommitted content changes
-
   greatcms check [--json]        validate this repository's content against the
                                  schema; exits non-zero, so CI can run it
 
@@ -803,6 +718,6 @@ const HELP = `greatcms — local tools for a Git-backed site
 
   greatcms doctor                check this repository's CMS setup
 
-The preview build runs here, with your toolchain. Nothing from this repository
-is ever executed by the studio.
+Everything here runs on your machine, with your toolchain. Nothing from this
+repository is ever executed by the studio.
 `;

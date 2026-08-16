@@ -5,73 +5,60 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
-import {
-  ConflictError,
-  GitHubClient,
-  type CommitRequest,
-  type CommitResult,
-  type PullRequest,
-  type RepoRef,
-} from "@greatcms/git";
 
 const run = promisify(execFile);
 
-export interface Repository {
-  readonly kind: "github" | "local";
-  getFile(path: string, ref?: string): Promise<{ content: string; sha: string } | null>;
-  listDirectory(path: string, ref?: string): Promise<string[]>;
-  getBranchHead(branch: string): Promise<string | null>;
-  commitFiles(request: CommitRequest): Promise<CommitResult>;
-  ensureBranch(branch: string, from: string): Promise<string>;
-  openOrUpdatePullRequest(request: {
-    head: string;
-    base: string;
-    title: string;
-    body: string;
-  }): Promise<PullRequest>;
-  dispatch(event: string, payload?: Record<string, unknown>): Promise<void>;
+export interface FileChange {
+  /** Repo-relative path, e.g. `content/cms/home.hero.json`. */
+  path: string;
+  /** UTF-8 text content. Mutually exclusive with `base64`. */
+  content?: string;
+  /** Base64 content, for binary files such as uploads. */
+  base64?: string;
+  /** Delete the path instead of writing it. */
+  delete?: boolean;
 }
 
-/** The remote case: a thin binding of the repository coordinates to the client. */
-export class GitHubRepository implements Repository {
-  readonly kind = "github" as const;
-  private readonly client: GitHubClient;
+export interface CommitRequest {
+  message: string;
+  files: FileChange[];
+  /** The commit the editor started from. */
+  expectedHeadSha?: string;
+}
 
+export interface CommitResult {
+  commitSha: string;
+  url: string;
+}
+
+/** Someone committed while the editor was open, so publishing would overwrite them. */
+export class ConflictError extends Error {
   constructor(
-    private readonly repo: RepoRef,
-    token: string,
-    fetchImpl?: typeof globalThis.fetch,
+    readonly expected: string,
+    readonly actual: string,
   ) {
-    this.client = new GitHubClient({ token, fetch: fetchImpl });
+    super(
+      `The working copy moved while you were editing (expected ${short(expected)}, found ${short(actual)}).\n  fix: reload the region to pick up the newer content, then publish again.`,
+    );
+    this.name = "ConflictError";
   }
+}
 
-  getFile(path: string, ref?: string) {
-    return this.client.getFile(this.repo, path, ref);
-  }
+function short(sha: string): string {
+  return sha.slice(0, 7);
+}
 
-  listDirectory(path: string, ref?: string) {
-    return this.client.listDirectory(this.repo, path, ref);
-  }
-
-  getBranchHead(branch: string) {
-    return this.client.getBranchHead(this.repo, branch);
-  }
-
-  commitFiles(request: CommitRequest) {
-    return this.client.commitFiles(this.repo, request);
-  }
-
-  ensureBranch(branch: string, from: string) {
-    return this.client.ensureBranch(this.repo, branch, from);
-  }
-
-  openOrUpdatePullRequest(request: { head: string; base: string; title: string; body: string }) {
-    return this.client.openOrUpdatePullRequest(this.repo, request);
-  }
-
-  async dispatch(event: string, payload?: Record<string, unknown>) {
-    await this.client.dispatch(this.repo, event, payload);
-  }
+/**
+ * The operations the studio needs from a site's files. One implementation
+ * today; the interface stays because the editor, validation, and publish above
+ * it must not know or care where the bytes are.
+ */
+export interface Repository {
+  getFile(path: string): Promise<{ content: string; sha: string } | null>;
+  listDirectory(path: string): Promise<string[]>;
+  /** The current commit, or a marker when this is not a repository. */
+  getHead(): Promise<string>;
+  commitFiles(request: CommitRequest): Promise<CommitResult>;
 }
 
 export class LocalRepositoryError extends Error {
@@ -83,8 +70,6 @@ export class LocalRepositoryError extends Error {
 
 /** A checkout on this machine. */
 export class LocalRepository implements Repository {
-  readonly kind = "local" as const;
-
   constructor(private readonly root: string) {}
 
   async getFile(path: string): Promise<{ content: string; sha: string } | null> {
@@ -107,10 +92,9 @@ export class LocalRepository implements Repository {
     }
   }
 
-  /** The current commit, or a marker when this is not a repository. */
-  async getBranchHead(): Promise<string | null> {
+  async getHead(): Promise<string> {
     const sha = await this.git(["rev-parse", "HEAD"]);
-    return sha?.trim() ?? "working-copy";
+    return sha?.trim() || "working-copy";
   }
 
   async commitFiles(request: CommitRequest): Promise<CommitResult> {
@@ -119,9 +103,9 @@ export class LocalRepository implements Repository {
     }
 
     if (request.expectedHeadSha) {
-      const head = await this.getBranchHead();
-      if (head && head !== "working-copy" && head !== request.expectedHeadSha) {
-        throw new ConflictError(request.branch, request.expectedHeadSha, head);
+      const head = await this.getHead();
+      if (head !== "working-copy" && head !== request.expectedHeadSha) {
+        throw new ConflictError(request.expectedHeadSha, head);
       }
     }
 
@@ -145,40 +129,12 @@ export class LocalRepository implements Repository {
     const staged = await this.git(["add", "--", ...paths]);
     if (staged === null) {
       // Not a Git repository: the files are written, and that is the whole job.
-      return {
-        commitSha: "working-copy",
-        treeSha: "working-copy",
-        branch: request.branch,
-        url: `file://${this.root}`,
-      };
+      return { commitSha: "working-copy", url: `file://${this.root}` };
     }
 
     // "Nothing to commit" is a success: what is on disk already matches.
     await this.git(["commit", "-m", request.message, "--", ...paths]);
-    const sha = (await this.git(["rev-parse", "HEAD"]))?.trim() ?? "working-copy";
-
-    return {
-      commitSha: sha,
-      treeSha: sha,
-      branch: request.branch,
-      url: `file://${this.root}`,
-    };
-  }
-
-  async ensureBranch(): Promise<string> {
-    // A working copy is already on the branch it is on; drafts here are.
-    return (await this.getBranchHead()) ?? "working-copy";
-  }
-
-  async openOrUpdatePullRequest(): Promise<PullRequest> {
-    throw new LocalRepositoryError(
-      "A local folder cannot open a pull request.",
-      "Set this site's publishing mode to direct, or connect it as a GitHub repository.",
-    );
-  }
-
-  async dispatch(): Promise<void> {
-    // Nothing to notify: there is no pipeline watching a folder.
+    return { commitSha: await this.getHead(), url: `file://${this.root}` };
   }
 
   /** Writes an unsaved edit where the site's dev server will read it. */

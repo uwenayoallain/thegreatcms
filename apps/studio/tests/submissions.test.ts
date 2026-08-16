@@ -13,12 +13,8 @@ const SECRET = "test-secret";
 const SITE = {
   id: "site-1",
   name: "Example",
-  owner: "ada",
-  repo: "site",
-  branch: "main",
-  token: "token",
-  publishMode: "direct" as const,
-  aiTitles: false,
+  path: "/tmp/not-read-by-these-tests",
+  devUrl: "",
   createdAt: "2026-08-12",
 };
 

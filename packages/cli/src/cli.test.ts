@@ -124,62 +124,10 @@ describe("greatcms check", () => {
   });
 });
 
-describe("greatcms preview --diff", () => {
-  it("finds the draft and shows what it would change, writing nothing", async () => {
-    expect(await cli(["preview", "--diff"])).toBe(0);
-
-    const text = out.join("");
-    expect(text).toContain("cms/draft-home.hero");
-    expect(text).toContain("content/cms/home.hero.json");
-
-    expect(readFileSync(join(repo, "content/cms/home.hero.json"), "utf8")).toContain(
-      "Live heading",
-    );
-  });
-});
-
-describe("greatcms preview", () => {
-  it("overlays draft content into the working copy", async () => {
-    expect(await cli(["preview"])).toBe(0);
-    expect(readFileSync(join(repo, "content/cms/home.hero.json"), "utf8")).toContain(
-      "Draft heading",
-    );
-    expect(out.join("")).toContain("Draft content is in place");
-  });
-
-  it("restores the working copy when the dev command exits", async () => {
-    // Put it back first, then run with a command that exits immediately.
-    git(["checkout", "--", "content/cms/home.hero.json"]);
-
-    expect(await cli(["preview", "--run", "true"])).toBe(0);
-    expect(readFileSync(join(repo, "content/cms/home.hero.json"), "utf8")).toContain(
-      "Live heading",
-    );
-    expect(out.join("")).toContain("Working copy restored");
-  });
-
-  it("refuses to run on top of uncommitted content changes", async () => {
-    writeFileSync(join(repo, "content/cms/home.hero.json"), '{"heading":"Half-finished"}');
-
-    expect(await cli(["preview"])).toBe(1);
-    expect(err.join("")).toContain("uncommitted changes in your content directories");
-    // The half-finished edit is untouched.
-    expect(readFileSync(join(repo, "content/cms/home.hero.json"), "utf8")).toContain(
-      "Half-finished",
-    );
-
-    git(["checkout", "--", "content/cms/home.hero.json"]);
-  });
-
-  it("exits with the dev command status so CI can use it", async () => {
-    expect(await cli(["preview", "--run", "exit 3"])).toBe(3);
-  });
-});
-
 describe("unknown input", () => {
   it("prints help rather than a stack trace", async () => {
     expect(await cli(["wat"])).toBe(1);
-    expect(err.join("")).toContain("greatcms preview");
+    expect(err.join("")).toContain("greatcms init");
   });
 
   it("does not leave a stray overlay behind after all of that", () => {

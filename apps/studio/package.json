@@ -12,7 +12,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@greatcms/git": "workspace:*",
     "@greatcms/spec": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.14",

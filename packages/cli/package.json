@@ -1,7 +1,7 @@
 {
   "name": "@greatcms/cli",
   "version": "0.1.0",
-  "description": "Preview unpublished GreatCMS drafts against your own dev server, and check a repository's setup.",
+  "description": "Set up a GreatCMS site, add managed sections, generate types, and check content.",
   "license": "MIT",
   "bin": {
     "greatcms": "./bin/greatcms.mjs"

@@ -7,11 +7,6 @@ import { fieldName } from "../form.js";
 import { type ErrorsByPath, hasRichText, renderFields } from "./fields.js";
 import { page, type PageOptions } from "./layout.js";
 
-/** Where a site's files are. A folder has no owner and no repository name. */
-function locationOf(site: Site): string {
-  return site.kind === "local" ? site.path : `${site.owner}/${site.repo}`;
-}
-
 export function signInPage(options: { error?: string } = {}): string {
   return page(
     {
@@ -60,7 +55,7 @@ export function sitesPage(sites: Site[], unread = 0, flash?: PageOptions["flash"
               <div class="empty">
                 <h2>No sites yet</h2>
                 <p>
-                  Connect a folder on this machine, or a GitHub repository. Either one needs a
+                  Point the studio at a folder on this machine. It needs a
                   <code>.cms/schema.yaml</code> file describing what is editable.
                 </p>
                 <a class="button" href="/sites/new">Connect your first site</a>
@@ -72,10 +67,7 @@ export function sitesPage(sites: Site[], unread = 0, flash?: PageOptions["flash"
                   (site) => html`
                     <li class="card">
                       <h2><a href="/sites/${site.id}">${site.name}</a></h2>
-                      <p>
-                        <code>${locationOf(site)}</code>
-                        ${site.kind === "local" ? "" : html` · ${site.branch}`}
-                      </p>
+                      <p><code>${site.path}</code></p>
                     </li>
                   `,
                 )}
@@ -90,7 +82,6 @@ export function newSitePage(
   options: { error?: string; values?: Record<string, string> } = {},
 ): string {
   const values = options.values ?? {};
-  const local = (values.kind ?? "local") === "local";
 
   return page(
     {
@@ -106,8 +97,8 @@ export function newSitePage(
       <div class="page-head">
         <h1>Connect a site</h1>
         <p class="lede">
-          The site needs a <code>.cms/schema.yaml</code> file. The studio reads it to build the
-          editor — it never runs any code from your repository.
+          A folder on this machine containing a <code>.cms/schema.yaml</code>. The studio reads it
+          to build the editor — it never runs any code from your site.
         </p>
       </div>
 
@@ -118,138 +109,38 @@ export function newSitePage(
           <span class="hint">What you will call it in this studio.</span>
         </div>
 
-        <fieldset class="field">
-          <legend>Where does this site live?</legend>
-          <div class="checkbox">
-            <input
-              type="radio"
-              id="kind-local"
-              name="kind"
-              value="local"
-              ${local ? "checked" : ""}
-            />
-            <label for="kind-local">
-              A folder on this machine
-              <span class="hint">
-                Reads and writes the working copy directly. No token, no network, and your dev
-                server shows the change as you type it.
-              </span>
-            </label>
-          </div>
-          <div class="checkbox">
-            <input
-              type="radio"
-              id="kind-github"
-              name="kind"
-              value="github"
-              ${local ? "" : "checked"}
-            />
-            <label for="kind-github">
-              A GitHub repository
-              <span class="hint"
-                >Publishing commits over the API and your pipeline deploys it.</span
-              >
-            </label>
-          </div>
-        </fieldset>
+        <div class="field">
+          <label for="path">Folder path</label>
+          <input
+            type="text"
+            id="path"
+            name="path"
+            value="${values.path ?? ""}"
+            placeholder="/home/you/projects/my-site"
+            aria-describedby="path-hint"
+            required
+          />
+          <span class="hint" id="path-hint">
+            The directory containing <code>.cms/schema.yaml</code>. Publishing writes the files and
+            commits them if it is a Git repository.
+          </span>
+        </div>
 
-        <fieldset class="field">
-          <legend>If it is a folder</legend>
-          <div class="field">
-            <label for="path">Folder path</label>
-            <input
-              type="text"
-              id="path"
-              name="path"
-              value="${values.path ?? ""}"
-              placeholder="/home/you/projects/my-site"
-              aria-describedby="path-hint"
-            />
-            <span class="hint" id="path-hint">
-              The directory containing <code>.cms/schema.yaml</code>. Publishing writes the files
-              and commits them if it is a Git repository.
-            </span>
-          </div>
-
-          <div class="field">
-            <label for="devUrl">Dev server URL <span class="tag">optional</span></label>
-            <input
-              type="text"
-              id="devUrl"
-              name="devUrl"
-              value="${values.devUrl ?? ""}"
-              placeholder="http://localhost:4321"
-              aria-describedby="dev-hint"
-            />
-            <span class="hint" id="dev-hint">
-              If set, the editor shows your real site beside the form — your own components,
-              rendering what you are typing.
-            </span>
-          </div>
-        </fieldset>
-
-        <fieldset class="field">
-          <legend>If it is a GitHub repository</legend>
-          <div class="row">
-            <div class="field">
-              <label for="owner">Owner</label>
-              <input type="text" id="owner" name="owner" value="${values.owner ?? ""}" />
-            </div>
-            <div class="field">
-              <label for="repo">Repository</label>
-              <input type="text" id="repo" name="repo" value="${values.repo ?? ""}" />
-            </div>
-            <div class="field">
-              <label for="branch">Branch</label>
-              <input type="text" id="branch" name="branch" value="${values.branch ?? "main"}" />
-            </div>
-          </div>
-          <div class="field">
-            <label for="token">Access token</label>
-            <input
-              type="password"
-              id="token"
-              name="token"
-              autocomplete="off"
-              aria-describedby="token-hint"
-            />
-            <span class="hint" id="token-hint">
-              Needs <code>contents: write</code> on this repository only. Stored on this server.
-            </span>
-          </div>
-        </fieldset>
-
-        <fieldset class="field">
-          <legend>How should publishing work?</legend>
-          <div class="checkbox">
-            <input type="radio" id="mode-direct" name="publishMode" value="direct" checked />
-            <label for="mode-direct">
-              Commit straight to the branch
-              <span class="hint"
-                >Fastest. Publishing is a commit, and your pipeline deploys it.</span
-              >
-            </label>
-          </div>
-          <div class="checkbox">
-            <input type="radio" id="mode-pr" name="publishMode" value="pull-request" />
-            <label for="mode-pr">
-              Open a pull request
-              <span class="hint">
-                Review before it goes live, a CI preview build per change, and revert-to-roll-back.
-              </span>
-            </label>
-          </div>
-          <div class="checkbox">
-            <input type="checkbox" id="aiTitles" name="aiTitles" value="yes" />
-            <label for="aiTitles">
-              Let the configured model name pull requests
-              <span class="hint">
-                Sends the changed field names and values to that provider. Off by default; without
-                it, titles are generated from the diff.
-              </span>
-            </label>
-          </div>
-        </fieldset>
+        <div class="field">
+          <label for="devUrl">Dev server URL <span class="tag">optional</span></label>
+          <input
+            type="text"
+            id="devUrl"
+            name="devUrl"
+            value="${values.devUrl ?? ""}"
+            placeholder="http://localhost:4321"
+            aria-describedby="dev-hint"
+          />
+          <span class="hint" id="dev-hint">
+            If set, the editor shows your real site beside the form — your own components, rendering
+            what you are typing.
+          </span>
+        </div>
 
         <div class="form-actions">
           <button type="submit">Connect</button>
@@ -283,16 +174,7 @@ export function sitePage(
     html`
       <div class="page-head">
         <h1>${site.name}</h1>
-        <p class="lede">
-          <code>${locationOf(site)}</code> ·
-          ${
-            site.publishMode === "pull-request"
-              ? html`proposing changes as pull requests against ${site.branch}`
-              : site.kind === "local"
-                ? html`publishing straight to the working copy`
-                : html`publishing straight to ${site.branch}`
-          }
-        </p>
+        <p class="lede"><code>${site.path}</code> · publishing writes the files and commits them</p>
       </div>
 
       ${
@@ -368,12 +250,7 @@ export function sitePage(
                         <td><code>${entry.region_id}</code></td>
                         <td>${entry.created_at}</td>
                         <td>
-                          <a href="${entry.commit_url}">${entry.commit_sha.slice(0, 7)}</a>
-                          ${
-                            entry.pull_request_url
-                              ? html` · <a href="${entry.pull_request_url}">pull request</a>`
-                              : ""
-                          }
+                          <code>${entry.commit_sha.slice(0, 7)}</code>
                         </td>
                       </tr>
                     `,
@@ -386,7 +263,7 @@ export function sitePage(
 
       <section class="danger-zone" aria-labelledby="danger">
         <h2 id="danger">Danger zone</h2>
-        <p>Disconnects this site from the studio. Nothing is deleted from ${locationOf(site)}.</p>
+        <p>Disconnects this site from the studio. Nothing is deleted from ${site.path}.</p>
         <form method="POST" action="/sites/${site.id}/delete">
           <button class="danger" type="submit">Disconnect ${site.name}</button>
         </form>
@@ -405,12 +282,10 @@ export interface EditPageOptions {
   headSha: string;
   flash?: PageOptions["flash"];
   preview?: { url: string | null; branch: string };
-  pullRequest?: { number: number; url: string; title: string; fromModel: boolean };
 }
 
 export function editRegionPage(options: EditPageOptions): string {
-  const { site, schema, regionId, region, document, errors, headSha, flash, preview, pullRequest } =
-    options;
+  const { site, schema, regionId, region, document, errors, headSha, flash, preview } = options;
   const title = region.label ?? regionId;
 
   const editor = isBlocksRegion(region)
@@ -434,31 +309,9 @@ export function editRegionPage(options: EditPageOptions): string {
       <div class="page-head">
         <h1>${title}</h1>
         <p class="lede">
-          <code>${regionId}</code> — publishing writes one commit to
-          <code>${locationOf(site)}</code>${site.kind === "local" ? "" : html` on ${site.branch}`}.
+          <code>${regionId}</code> — publishing writes one commit to <code>${site.path}</code>.
         </p>
       </div>
-
-      ${
-        pullRequest
-          ? html`
-              <section class="card" aria-labelledby="pr">
-                <h2 id="pr">Pull request #${pullRequest.number}</h2>
-                <p>
-                  <a href="${pullRequest.url}">${pullRequest.title}</a>
-                </p>
-                <p class="muted">
-                  ${
-                    pullRequest.fromModel
-                      ? "Title written by the configured model; the change list below it is generated from the diff."
-                      : "Title generated from the diff — no model involved."
-                  }
-                  Nothing reaches ${site.branch} until this is merged.
-                </p>
-              </section>
-            `
-          : ""
-      }
 
       <div class="split">
         <form
@@ -477,18 +330,7 @@ export function editRegionPage(options: EditPageOptions): string {
           }
 
           <div class="form-actions">
-            <button type="submit" name="action" value="publish">
-              ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
-            </button>
-            ${
-              site.kind === "local"
-                ? ""
-                : html`
-                    <button class="secondary" type="submit" name="action" value="draft">
-                      Save draft &amp; preview
-                    </button>
-                  `
-            }
+            <button type="submit" name="action" value="publish">Publish</button>
             <a class="button secondary" href="/sites/${site.id}">Back to site</a>
           </div>
         </form>
@@ -497,11 +339,11 @@ export function editRegionPage(options: EditPageOptions): string {
           <div class="live-bar">
             <h2 id="live-heading">Your site</h2>
             <p class="muted" id="live-status" role="status">
-              ${site.kind === "local" && site.devUrl ? site.devUrl : "No dev server connected"}
+              ${site.devUrl || "No dev server connected"}
             </p>
           </div>
           ${
-            site.kind === "local" && site.devUrl
+            site.devUrl
               ? html`
                   <iframe
                     title="Your site, running locally"
@@ -809,7 +651,7 @@ export function collectionPage(options: {
               : ""
           }
         </div>
-        <p class="lede">Stored in <code>${locationOf(site)}</code>. Each entry is a file.</p>
+        <p class="lede">Stored in <code>${site.path}</code>. Each entry is a file.</p>
       </div>
 
       ${
@@ -866,10 +708,8 @@ export function editEntryPage(options: {
   errors: ErrorsByPath;
   headSha: string;
   flash?: PageOptions["flash"];
-  pullRequest?: { number: number; url: string; title: string; fromModel: boolean };
 }): string {
-  const { site, name, label, slug, fields, document, errors, headSha, flash, pullRequest } =
-    options;
+  const { site, name, label, slug, fields, document, errors, headSha, flash } = options;
   // MDX bodies are edited as source: the JSX in them is not HTML to round trip.
   const plain =
     options.format === "mdx" && options.body ? new Set([options.body]) : new Set<string>();
@@ -902,17 +742,6 @@ export function editEntryPage(options: {
         </p>
       </div>
 
-      ${
-        pullRequest
-          ? html`
-              <section class="card" aria-labelledby="pr">
-                <h2 id="pr">Pull request #${pullRequest.number}</h2>
-                <p><a href="${pullRequest.url}">${pullRequest.title}</a></p>
-              </section>
-            `
-          : ""
-      }
-
       <div class="split">
         <form
           method="POST"
@@ -925,9 +754,7 @@ export function editEntryPage(options: {
           ${renderFields(fields, document, errors, [], { plain, blocks: options.blocks })}
 
           <div class="form-actions">
-            <button type="submit" name="action" value="publish">
-              ${site.publishMode === "pull-request" ? "Propose change" : "Publish"}
-            </button>
+            <button type="submit" name="action" value="publish">Publish</button>
             <a class="button secondary" href="/sites/${site.id}/collections/${name}">Cancel</a>
           </div>
         </form>
@@ -936,11 +763,11 @@ export function editEntryPage(options: {
           <div class="live-bar">
             <h2 id="live-heading">Your site</h2>
             <p class="muted" id="live-status" role="status">
-              ${site.kind === "local" && site.devUrl ? site.devUrl : "No dev server connected"}
+              ${site.devUrl || "No dev server connected"}
             </p>
           </div>
           ${
-            site.kind === "local" && site.devUrl && slug
+            site.devUrl && slug
               ? html`
                   <iframe
                     title="Your site, running locally"

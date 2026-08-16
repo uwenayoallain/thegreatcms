@@ -2,113 +2,73 @@
 
 /* oxlint-disable no-await-in-loop -- a rate limit is a claim about order: these requests go one at a time */
 
-import { readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { FIXTURES_DIR } from "@greatcms/conformance";
-import { DEFAULT_CONFIG } from "@greatcms/spec";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie, sessionKey } from "../src/auth.js";
-import { Store } from "../src/db.js";
-import { clearContextCache } from "../src/sites.js";
+import { DEFAULT_CONFIG } from "@greatcms/spec";
 import { prepareUpload, UploadError } from "../src/media.js";
+import { makeSite, PASSWORD, SECRET, signedIn, type Fixture } from "./site.js";
 
-const PASSWORD = "correct-horse-battery-staple";
-const SECRET = "test-secret";
-const SITE = {
-  id: "site-1",
-  name: "Example",
-  owner: "ada",
-  repo: "site",
-  branch: "main",
-  token: "token",
-  publishMode: "direct" as const,
-  aiTitles: false,
-  createdAt: "2026-08-12",
-};
+const SCHEMA = `version: 1
+regions:
+  home.hero:
+    label: Home hero
+    fields:
+      heading: { type: text, required: true }
+      subtitle: { type: text }
+collections:
+  blog:
+    label: Blog
+    path: content/blog
+    format: markdown
+    body: content
+    slug: title
+    fields:
+      title: { type: text, required: true }
+      date: { type: date }
+      content: { type: richtext }
+`;
 
-const fixture = (path: string) => readFileSync(join(FIXTURES_DIR, path), "utf8");
-
-/** A fake GitHub that records every path a commit tries to write. */
-function fakeGitHub() {
-  const files = new Map<string, string>([
-    [".cms/schema.yaml", fixture(".cms/schema.yaml")],
-    [".cms/config.yaml", fixture(".cms/config.yaml")],
-  ]);
-  const written: string[] = [];
-  const state = { head: "head-1", blobs: new Map<string, string>() };
-
-  const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
-    const { pathname } = new URL(String(url));
-    const method = init?.method ?? "GET";
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-
-    if (method === "GET" && pathname.includes("/contents/")) {
-      const path = decodeURIComponent(pathname.split("/contents/")[1] ?? "");
-      const content = files.get(path);
-      if (content === undefined) return json({ message: "Not Found" }, 404);
-      return json({
-        type: "file",
-        sha: `sha-${path}`,
-        encoding: "base64",
-        content: Buffer.from(content).toString("base64"),
-      });
-    }
-    if (method === "GET" && pathname.includes("/git/ref/heads/")) {
-      return json({ object: { sha: state.head } });
-    }
-    if (method === "GET" && pathname.includes("/git/commits/"))
-      return json({ tree: { sha: "t1" } });
-    if (method === "POST" && pathname.endsWith("/git/blobs")) {
-      const sha = `blob-${state.blobs.size + 1}`;
-      state.blobs.set(sha, String(body.content));
-      return json({ sha });
-    }
-    if (method === "POST" && pathname.endsWith("/git/trees")) {
-      for (const entry of body.tree as Array<{ path: string }>) written.push(entry.path);
-      return json({ sha: "t2" });
-    }
-    if (method === "POST" && pathname.endsWith("/git/commits")) {
-      state.head = "commit-2";
-      return json({ sha: state.head, html_url: "https://gh/commit-2" });
-    }
-    if (method === "PATCH" && pathname.includes("/git/refs/heads/")) return json({ ok: true });
-    return json({ message: `unhandled ${method} ${pathname}` }, 500);
-  }) as unknown as typeof globalThis.fetch;
-
-  return { fetchImpl, written };
-}
-
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-let github: ReturnType<typeof fakeGitHub>;
-let store: Store;
-let app: ReturnType<typeof createApp>;
+let site: Fixture;
 
 beforeEach(() => {
-  clearContextCache();
-  github = fakeGitHub();
-  store = new Store(":memory:");
-  store.addSite(SITE);
-  app = createApp({ store, password: PASSWORD, secret: SECRET, fetch: github.fetchImpl });
+  site = makeSite({ schema: SCHEMA });
 });
 
-const signedIn = {
-  cookie: createSessionCookie(sessionKey(SECRET, PASSWORD)).split(";")[0] as string,
+afterEach(() => site.cleanup());
+
+/** Every path the site writes to, so a test can assert nothing escaped. */
+const written = () => {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(join(site.root, dir), { withFileTypes: true })) {
+      if (entry.name === ".git") continue;
+      const path = dir ? `${dir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(path);
+      else out.push(path);
+    }
+  };
+  walk("");
+  return out;
 };
 
 function post(path: string, fields: Record<string, string>, headers = signedIn) {
-  return app.request(path, {
+  return site.app.request(path, {
     method: "POST",
     headers: { ...headers, "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(fields),
   });
 }
+
+const app = {
+  request: (...args: Parameters<Fixture["app"]["request"]>) => site.app.request(...args),
+};
+const store = {
+  listSites: () => site.store.listSites(),
+  listSubmissions: (o: Parameters<Fixture["store"]["listSubmissions"]>[0]) =>
+    site.store.listSubmissions(o),
+};
 
 describe("guessing the password", () => {
   it("stops answering after ten wrong attempts, and says when to come back", async () => {
@@ -145,10 +105,9 @@ describe("guessing the password", () => {
 describe("sessions", () => {
   it("stops working when the password changes", async () => {
     const rotated = createApp({
-      store,
+      store: site.store,
       password: "a-brand-new-password",
       secret: SECRET,
-      fetch: github.fetchImpl,
     });
 
     const response = await rotated.request("/", { headers: signedIn });
@@ -212,7 +171,7 @@ describe("an entry slug is one file name", () => {
     });
 
     expect(response.status).toBe(404);
-    expect(github.written).toEqual([]);
+    expect(written().filter((path) => path.startsWith("content/"))).toEqual([]);
   });
 
   it("refuses to open or delete one either", async () => {
@@ -221,7 +180,7 @@ describe("an entry slug is one file name", () => {
         .status,
     ).toBe(404);
     expect((await post(`/sites/site-1/collections/blog/${climbing}/delete`, {})).status).toBe(404);
-    expect(github.written).toEqual([]);
+    expect(written().filter((path) => path.startsWith("content/"))).toEqual([]);
   });
 
   it("still publishes an ordinary slug", async () => {
@@ -231,7 +190,7 @@ describe("an entry slug is one file name", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(github.written).toContain("content/blog/hello-world.md");
+    expect(written()).toContain("content/blog/hello-world.md");
   });
 });
 
@@ -304,10 +263,9 @@ describe("the public submission endpoint", () => {
 
   it("honours the header when the studio is told it sits behind a proxy", async () => {
     const proxied = createApp({
-      store,
+      store: site.store,
       password: PASSWORD,
       secret: SECRET,
-      fetch: github.fetchImpl,
       trustProxy: true,
     });
 
@@ -380,19 +338,14 @@ describe("headers on every page", () => {
 
 describe("the dev server URL", () => {
   const connect = (devUrl: string) =>
-    post("/sites", {
-      name: "Local",
-      kind: "local",
-      path: "/tmp/whatever",
-      devUrl,
-    });
+    post("/sites", { name: "Local", path: "/tmp/whatever", devUrl });
 
   it("refuses a javascript: URL, which would run as the studio", async () => {
     const response = await connect("javascript:fetch('/sites/site-1/delete',{method:'POST'})");
 
     expect(response.status).toBe(422);
     expect(await response.text()).toContain("http:// or https://");
-    expect(store.listSites().map((site) => site.name)).not.toContain("Local");
+    expect(store.listSites().map((entry) => entry.name)).not.toContain("Local");
   });
 
   it("refuses a data: URL, which is an origin of its own", async () => {

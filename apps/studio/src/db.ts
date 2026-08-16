@@ -4,28 +4,13 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-export type PublishMode = "direct" | "pull-request";
-
-/** A GitHub repository, or a checkout on the machine running the studio. */
-export type SiteKind = "github" | "local";
-
 export interface Site {
   id: string;
   name: string;
-  kind: SiteKind;
-  /** Absolute path to the working copy. Local sites only. */
+  /** Absolute path to the working copy. */
   path: string;
   /** Where the site's dev server is listening, so the editor can show the real components rendering. */
   devUrl: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  /** Token with `contents: write` on this repository. GitHub sites only. */
-  token: string;
-  /** Whether a publish commits straight to the branch or opens a pull request. */
-  publishMode: PublishMode;
-  /** Opt-in: send this site's content to a model to name its pull requests. */
-  aiTitles: boolean;
   createdAt: string;
 }
 
@@ -97,6 +82,24 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       DROP INDEX IF EXISTS sites_repo;
     `,
   },
+  {
+    // Sites are folders on this machine now. A row pointing at a GitHub
+    // repository has no backend left to talk to, so it goes rather than
+    // lingering as a site that renders an error.
+    name: "006-local-only",
+    sql: `
+      DELETE FROM sites WHERE kind <> 'local';
+      DROP INDEX IF EXISTS sites_repo;
+      ALTER TABLE sites DROP COLUMN kind;
+      ALTER TABLE sites DROP COLUMN owner;
+      ALTER TABLE sites DROP COLUMN repo;
+      ALTER TABLE sites DROP COLUMN branch;
+      ALTER TABLE sites DROP COLUMN token;
+      ALTER TABLE sites DROP COLUMN publish_mode;
+      ALTER TABLE sites DROP COLUMN ai_titles;
+      ALTER TABLE publishes DROP COLUMN pull_request_url;
+    `,
+  },
 ];
 
 export interface Submission {
@@ -152,22 +155,8 @@ export class Store {
 
   addSite(site: NewSite): Site {
     this.db
-      .prepare(
-        "INSERT INTO sites (id, name, kind, path, dev_url, owner, repo, branch, token, publish_mode, ai_titles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        site.id,
-        site.name,
-        site.kind ?? "github",
-        site.path ?? "",
-        site.devUrl ?? "",
-        site.owner ?? "",
-        site.repo ?? "",
-        site.branch,
-        site.token ?? "",
-        site.publishMode ?? "direct",
-        site.aiTitles ? 1 : 0,
-      );
+      .prepare("INSERT INTO sites (id, name, path, dev_url) VALUES (?, ?, ?, ?)")
+      .run(site.id, site.name, site.path, site.devUrl ?? "");
     const created = this.getSite(site.id);
     if (!created) throw new Error(`Site "${site.id}" vanished immediately after insert.`);
     return created;
@@ -183,26 +172,18 @@ export class Store {
     commitSha: string;
     commitUrl: string;
     actor?: string;
-    pullRequestUrl?: string;
   }): void {
     this.db
       .prepare(
-        "INSERT INTO publishes (site_id, region_id, commit_sha, commit_url, actor, pull_request_url) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO publishes (site_id, region_id, commit_sha, commit_url, actor) VALUES (?, ?, ?, ?, ?)",
       )
-      .run(
-        entry.siteId,
-        entry.regionId,
-        entry.commitSha,
-        entry.commitUrl,
-        entry.actor ?? null,
-        entry.pullRequestUrl ?? null,
-      );
+      .run(entry.siteId, entry.regionId, entry.commitSha, entry.commitUrl, entry.actor ?? null);
   }
 
   recentPublishes(siteId: string, limit = 10): Publish[] {
     return this.db
       .prepare(
-        "SELECT region_id, commit_sha, commit_url, actor, pull_request_url, created_at FROM publishes WHERE site_id = ? ORDER BY id DESC LIMIT ?",
+        "SELECT region_id, commit_sha, commit_url, actor, created_at FROM publishes WHERE site_id = ? ORDER BY id DESC LIMIT ?",
       )
       .all(siteId, limit) as unknown as Publish[];
   }
@@ -283,7 +264,6 @@ export interface Publish {
   commit_sha: string;
   commit_url: string;
   actor: string | null;
-  pull_request_url: string | null;
   created_at: string;
 }
 
@@ -323,15 +303,8 @@ function safeParse<T>(value: string, fallback: T): T {
 interface RawSite {
   id: string;
   name: string;
-  kind: string;
   path: string;
   dev_url: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  token: string;
-  publish_mode: string;
-  ai_titles: number;
   created_at: string;
 }
 
@@ -339,15 +312,8 @@ function toSite(row: RawSite): Site {
   return {
     id: row.id,
     name: row.name,
-    kind: row.kind === "local" ? "local" : "github",
     path: row.path ?? "",
     devUrl: row.dev_url ?? "",
-    owner: row.owner,
-    repo: row.repo,
-    branch: row.branch,
-    token: row.token,
-    publishMode: row.publish_mode === "pull-request" ? "pull-request" : "direct",
-    aiTitles: row.ai_titles === 1,
     createdAt: row.created_at,
   };
 }
