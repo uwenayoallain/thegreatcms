@@ -702,7 +702,7 @@ const HELP = `greatcms — local tools for a Git-backed site
                                  a trailing ! means required
     --label "<text>"             what an editor sees (default: from the id)
     --blocks a,b                 make the region a reorderable list of blocks
-    --format markdown|json       collections only (default: markdown)
+    --format markdown|mdx|json   collections only (default: markdown)
     --dir <path>                 collections only, where entries live
 
   greatcms check [--json]        validate this repository's content against the

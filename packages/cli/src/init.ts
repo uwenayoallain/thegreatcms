@@ -242,7 +242,7 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
   lines.push(
     "Then:",
     "  1. Commit .cms/ — the schema is part of your site, and reviewable in PRs.",
-    "  2. Connect this repository in the studio with a token that has contents: write.",
+    "  2. Connect this folder in the studio, and give it your dev server's URL.",
     "  3. Edit, publish, and your existing deploy pipeline does the rest.",
     "",
     "To manage another part of the page, do not hand-edit the schema:",
