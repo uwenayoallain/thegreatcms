@@ -93,7 +93,8 @@ describe.skipIf(!browser).each(PAGES)("%s", (_name, path) => {
   it("has readable contrast against its real background", async () => {
     const page = await browser!.newPage();
     try {
-      await page.goto(origin + path, { waitUntil: "networkidle" });
+      // No script runs on these pages, so `load` means the layout is final; `networkidle` only adds a wait.
+      await page.goto(origin + path, { waitUntil: "load" });
       await page.addScriptTag({ path: AXE });
 
       const violations = await page.evaluate(async () => {

@@ -1,8 +1,15 @@
 /** A Vite plugin that makes content edits visible in dev. */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { DEFAULT_CONFIG, DRAFT_DIR, parseConfig, type CmsConfig } from "@greatcms/spec";
+import { join, resolve, sep } from "node:path";
+import { INSPECT_SCRIPT } from "./inspect.js";
+import {
+  DEFAULT_CONFIG,
+  DRAFT_DIR,
+  parseConfig,
+  parseSchema,
+  type CmsConfig,
+} from "@greatcms/spec";
 
 export interface WatchOptions {
   /** Site root — the directory containing `.cms/`. Defaults to the Vite root. */
@@ -37,10 +44,11 @@ export interface VitePluginLike {
 }
 
 /**
- * Hides the dev overlays a framework paints over its own pages, but only when
- * the page is in a frame — which in dev means the studio's live preview. The
- * toolbar belongs on your own tab, not on top of the section you are editing,
- * and the studio cannot reach into a cross-origin frame to remove it.
+ * What the dev server adds to a page while the studio frames it: it hides the
+ * dev overlays a framework paints over its own pages, and runs the inspector
+ * that lets the studio point at what it is editing. The toolbar belongs on
+ * your own tab, not on top of the section you are editing, and the studio
+ * cannot reach into a cross-origin frame to do any of this itself.
  *
  * Injected by the dev server only, so a built page never carries it.
  */
@@ -59,6 +67,7 @@ if (window.top !== window.self) {
   ].map((selector) => selector + " { display: none !important; }").join("\\n");
   document.head.append(style);
 }
+${INSPECT_SCRIPT}
 `;
 
 /** The same thing as markup, for frameworks that do run Vite's HTML transform. */
@@ -98,12 +107,25 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
 
       for (const directory of directories) server.watcher.add(directory);
 
-      // Chokidar will not report a directory that does not exist yet, and the draft.
+      // The reader holds the schema and config for the life of the server, so a change to
+      // either needs a fresh server rather than a page reload.
+      const definitions = [...SCHEMA_FILES, ...CONFIG_FILES].map((name) => join(root, name));
+      server.watcher.add(definitions);
+
+      // Chokidar will not report a directory that does not exist yet, and the draft folder appears on the first keystroke.
       server.watcher.add(join(root, DRAFT_DIR, "**"));
 
       let pending: NodeJS.Timeout | undefined;
       const onChange = (path: string) => {
-        if (!directories.some((directory) => path.startsWith(directory))) return;
+        if (definitions.includes(path)) {
+          server.config?.logger?.info("[greatcms] schema or config changed — restarting");
+          void server.restart();
+          return;
+        }
+        if (
+          !directories.some((directory) => path === directory || path.startsWith(directory + sep))
+        )
+          return;
 
         // A publish writes several files at once; one reload covers them all.
         clearTimeout(pending);
@@ -123,8 +145,11 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
   };
 }
 
+const SCHEMA_FILES = [".cms/schema.json", ".cms/schema.yaml", ".cms/schema.yml"];
+const CONFIG_FILES = [".cms/config.json", ".cms/config.yaml", ".cms/config.yml"];
+
 function loadConfig(root: string): CmsConfig {
-  for (const name of [".cms/config.json", ".cms/config.yaml", ".cms/config.yml"]) {
+  for (const name of CONFIG_FILES) {
     const path = join(root, name);
     if (existsSync(path)) return parseConfig(readFileSync(path, "utf8"), name);
   }
@@ -133,17 +158,22 @@ function loadConfig(root: string): CmsConfig {
 
 /** Collections live wherever the schema says, which is often outside `content/`. */
 function collectionPaths(root: string): string[] {
-  for (const name of [".cms/schema.json", ".cms/schema.yaml", ".cms/schema.yml"]) {
+  for (const name of SCHEMA_FILES) {
     const path = join(root, name);
     if (!existsSync(path)) continue;
+    let source: string;
     try {
-      // Parsed loosely: a schema this cannot read must not stop a dev server.
-      const source = readFileSync(path, "utf8");
-      return [...source.matchAll(/^\s{4}path:\s*(\S+)\s*$/gm)].map((match) =>
-        String(match[1]).replace(/^["']|["']$/g, ""),
-      );
+      source = readFileSync(path, "utf8");
     } catch {
       return [];
+    }
+    try {
+      return Object.values(parseSchema(source, { file: name }).collections).map((c) => c.path);
+    } catch {
+      // A schema mid-edit must not stop a dev server; watch what can still be made out.
+      return [...source.matchAll(/^\s+"?path"?:\s*"?([^"\s#,]+)/gm)].map((match) =>
+        String(match[1]).replace(/^'|'$/g, ""),
+      );
     }
   }
   return [];

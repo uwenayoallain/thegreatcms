@@ -47,7 +47,10 @@
               "default": "content: update {summary}"
             },
             "dispatchEvent": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "additionalProperties": false,
@@ -61,7 +64,26 @@
           "type": "object",
           "properties": {
             "urlTemplate": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "paths": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
             }
           },
           "additionalProperties": false

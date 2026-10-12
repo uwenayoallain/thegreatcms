@@ -1,50 +1,120 @@
 ---
 import Base from "../layouts/Base.astro";
 import { cms } from "../lib/cms";
+import { highlight } from "../lib/markdown";
+import type { ProofBlock } from "../cms";
 
 // Every word below the fold markers is managed content, resolved at build time.
 const hero = cms.region("home.hero");
-const claims = cms.blocks<{ title: string; body: string; proof?: string }>("home.claims");
+const claims = cms.blocks("home.claims");
 const closing = cms.region("home.closing");
+
+// Hand-written: the three files a managed region is made of.
+const files = [
+  {
+    name: ".cms/schema.yaml",
+    lang: "yaml",
+    note: "What may be edited. Committed with the code.",
+    code: `regions:
+  home.hero:
+    label: Home hero
+    fields:
+      heading: { type: text, required: true }
+      subtitle: { type: text, max: 160 }
+      cta: { type: link }
+    default:
+      heading: A CMS that gets out of the way`,
+  },
+  {
+    name: "content/cms/home.hero.json",
+    lang: "json",
+    note: "What the studio writes. One commit per publish.",
+    code: `{
+  "heading": "Publish from anywhere",
+  "subtitle": "Content in Git. Deploys on commit.",
+  "cta": { "href": "/docs/", "label": "Read the docs" },
+  "_meta": {
+    "updatedAt": "2026-08-12T18:00:00Z",
+    "version": 1
+  }
+}`,
+  },
+  {
+    name: "src/pages/index.astro",
+    lang: "astro",
+    note: "Your code. Reads a file; never calls a service.",
+    code: `const hero = cms.region("home.hero");
+// …then, in the template:
+<h1>{hero.heading}</h1>
+<p>{hero.subtitle}</p>`,
+  },
+];
+
+const highlighted = await Promise.all(files.map((file) => highlight(file.code, file.lang)));
+
+const proofs = cms.blocks<ProofBlock>("home.proofs");
 ---
 
 <Base title={`GreatCMS — ${hero.heading}`} description={hero.subtitle}>
+  <!-- A switch, not a script: with it on, every managed region on this page is labelled with the file it lives in. -->
+  <input type="checkbox" id="seams" class="seams-toggle" />
+
   <section class="hero">
     <div class="reveal">
       {hero.eyebrow && <p class="stamp">{hero.eyebrow}</p>}
-      <h1>{hero.heading}</h1>
-      {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
-      {
-        hero.cta?.href && (
-          <a class="cta" href={hero.cta.href}>
-            {hero.cta.label ?? "Read the docs"} →
-          </a>
-        )
-      }
+      <h1 class="seam" data-file="content/cms/home.hero.json · heading">{hero.heading}</h1>
+      {hero.subtitle && <p class="lede seam" data-file="content/cms/home.hero.json · subtitle">{hero.subtitle}</p>}
+      <div class="hero-actions">
+        {
+          hero.cta?.href && (
+            <a class="cta seam" data-file="content/cms/home.hero.json · cta" href={hero.cta.href}>
+              {hero.cta.label ?? "Get started"}
+              <span class="cta-arrow" aria-hidden="true">→</span>
+            </a>
+          )
+        }
+        <a class="cta quiet" href="/spec/">Read the standard</a>
+      </div>
+      <label class="seams-switch" for="seams">
+        <span class="switch" aria-hidden="true"></span>
+        Show the files behind this page
+      </label>
     </div>
 
-    <!-- Hand-written: a diagram of what the CMS does and does not touch. -->
-    <div class="plate reveal">
-      <div>your-site/</div>
-      <div><span class="managed">├── .cms/schema.yaml</span> <span class="plain">← what may be edited</span></div>
-      <div><span class="managed">├── content/cms/</span></div>
-      <div><span class="managed">│&nbsp;&nbsp; └── home.hero.json</span> <span class="plain">← the CMS writes this</span></div>
-      <div><span class="plain">└── src/pages/index.astro</span></div>
-      <div>
-        <span class="plain">&nbsp;&nbsp;&nbsp;&nbsp; ├── {"<Hero {...hero} />"}</span>
-        <span class="managed">managed</span>
+    <!-- Hand-written: one publish, as it happens — the field, the commit, the page. -->
+    <div class="sequence bezel" aria-label="A publish: an edit in the studio becomes one commit and a live page">
+      <div class="pane">
+        <div class="pane-bar"><span>Studio</span> <span class="mono">home.hero</span></div>
+        <div class="pane-body">
+          <span class="field-label">Heading</span>
+          <div class="field"><span class="typed">Publish from anywhere</span></div>
+          <span class="publish">Publish</span>
+        </div>
       </div>
-      <div><span class="plain">&nbsp;&nbsp;&nbsp;&nbsp; └── everything else</span> <span class="plain">yours</span></div>
-      <span class="caption">One repository · one commit per publish</span>
+      <div class="pane">
+        <div class="pane-bar"><span>Your repository</span> <span class="mono">content/cms/home.hero.json</span></div>
+        <pre class="diff"><span class="del">- "heading": "A CMS that gets out of the way"</span><span class="add">+ "heading": "Publish from anywhere"</span></pre>
+        <div class="commit"><span class="sha">c4a1f3e</span> <span>Update home hero</span></div>
+      </div>
+      <div class="pane">
+        <div class="pane-bar"><span class="live">Live</span> <span class="mono">your-site.com</span></div>
+        <div class="page">
+          <p class="h">Publish from anywhere</p>
+          <p class="p">Content in Git. Deploys on commit.</p>
+        </div>
+      </div>
     </div>
   </section>
 
   <section class="claims" aria-labelledby="claims-heading">
-    <h2 id="claims-heading" class="stamp">What it does</h2>
+    <div class="claims-intro">
+      <h2 id="claims-heading" class="stamp">What it does</h2>
+      <p class="claims-lede">Four promises, each with the thing that proves it.</p>
+    </div>
     <ol>
       {
-        claims.map((claim) => (
-          <li>
+        claims.map((claim, index) => (
+          <li class="seam" data-file={`content/cms/home.claims.json · blocks[${index}]`}>
             <h2>{claim.title}</h2>
             <p>{claim.body}</p>
             {claim.proof && <span class="proof">{claim.proof}</span>}
@@ -54,8 +124,48 @@ const closing = cms.region("home.closing");
     </ol>
   </section>
 
+  <!-- Hand-written: the whole integration surface, shown rather than described. -->
+  <section class="files" aria-labelledby="files-heading">
+    <div aria-hidden="true" class="corner corner-tr"></div>
+    <div class="files-intro">
+      <h2 id="files-heading" class="stamp">The whole integration</h2>
+      <p class="files-lede">Three files. The first two are the standard; the third is whatever you already write.</p>
+    </div>
+    <ol class="file-list">
+      {
+        files.map((file) => (
+          <li>
+            <h3 class="mono">{file.name}</h3>
+            <p>{file.note}</p>
+            <pre><code set:html={highlighted[files.indexOf(file)]} /></pre>
+          </li>
+        ))
+      }
+    </ol>
+    <p class="files-after">
+      A missing content file resolves to the schema's defaults, so the page is correct before the
+      studio has ever run. <a href="/docs/the-hybrid-model/">How resolution works</a>
+    </p>
+  </section>
+
+  <section class="proofs" aria-labelledby="proofs-heading">
+    <h2 id="proofs-heading" class="stamp">Proofs, not claims</h2>
+    <ul>
+      {
+        proofs.map((proof, index) => (
+          <li class="seam" data-file={`content/cms/home.proofs.json · blocks[${index}]`}>
+            <h3>{proof.title}</h3>
+            <p>{proof.body}</p>
+            <a class="more" href={proof.link.href}>{proof.link.label ?? "Read more"} <span aria-hidden="true">→</span></a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
   <section class="closing">
-    <h2>{closing.heading}</h2>
-    <p>{closing.body}</p>
+    <div aria-hidden="true" class="corner corner-br"></div>
+    <h2 class="seam" data-file="content/cms/home.closing.json · heading">{closing.heading}</h2>
+    <p class="seam" data-file="content/cms/home.closing.json · body">{closing.body}</p>
   </section>
 </Base>

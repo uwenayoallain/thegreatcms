@@ -1,0 +1,61 @@
+{
+  "eyebrow": "The cooperative",
+  "heading": "A small range, chosen around real fields.",
+  "kind": "standard",
+  "navigationLabel": "About",
+  "navigationOrder": 10,
+  "seoDescription": "How the fictional Kivu Seedworks cooperative connects field context, practical guidance, and a compact product range.",
+  "seoTitle": "About",
+  "sections": [
+    {
+      "_type": "story",
+      "body": {
+        "html": "<p>Kivu Seedworks began with one recurring problem: growers were offered long catalogues before anyone asked about the field.</p><p>The cooperative works in the other direction. It starts with location, crop, acreage, and planting week, then narrows the choice to what can be delivered and used well.</p>"
+      },
+      "eyebrow": "Why it exists",
+      "heading": "The recommendation comes before the bag",
+      "imageSide": "start"
+    },
+    {
+      "_type": "feature-grid",
+      "heading": "What stays consistent",
+      "introduction": "The product may change with the season. The way the work is done should not.",
+      "items": [
+        {
+          "_type": "feature",
+          "description": "Advice names the assumptions behind it, including crop, soil, and rain window.",
+          "icon": "notes",
+          "title": "Context is written down"
+        },
+        {
+          "_type": "feature",
+          "description": "A smaller range makes stock, delivery, and follow-up easier to keep honest.",
+          "icon": "route",
+          "title": "The catalogue stays compact"
+        },
+        {
+          "_type": "feature",
+          "description": "A field note remains useful after the order, when the planting work begins.",
+          "icon": "soil",
+          "title": "Support survives the sale"
+        }
+      ]
+    },
+    {
+      "_type": "cta",
+      "body": "Share four field details and get a useful next step.",
+      "heading": "Start with the field you actually have.",
+      "primary": {
+        "href": "/contact/",
+        "label": "Start a field note"
+      },
+      "secondary": {
+        "href": "/products/",
+        "label": "See the current range"
+      }
+    }
+  ],
+  "showInNavigation": true,
+  "summary": "Kivu Seedworks is a fictional cooperative built to demonstrate how one managed page entry can become a complete, site-owned Astro page.",
+  "title": "About"
+}

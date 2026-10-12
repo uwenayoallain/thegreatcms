@@ -33,11 +33,12 @@ export const ConfigFileSchema = z.object({
   publish: optionalSection(
     z
       .object({
+        // branch, draftBranchPrefix and dispatchEvent are no longer read; older configs still parse.
         branch: z.string().default("main"),
         draftBranchPrefix: z.string().default("cms/draft"),
         commitMessage: z.string().default("content: update {summary}"),
         /** Fire a repository_dispatch after publishing, for CI that needs a nudge. */
-        dispatchEvent: z.string().optional(),
+        dispatchEvent: z.string().nullable().optional(),
       })
       .default({
         branch: "main",
@@ -48,8 +49,16 @@ export const ConfigFileSchema = z.object({
   preview: optionalSection(
     z
       .object({
-        /** `{branch}` is substituted; used to iframe the site's own CI preview. */
-        urlTemplate: z.string().optional(),
+        // urlTemplate is no longer read; older configs still parse.
+        urlTemplate: z.string().nullable().optional(),
+        /**
+         * Where an entry is seen on the site, per collection: a path with `{slug}`,
+         * or a map of slug to path with `"*"` as the fallback, e.g.
+         * `pages: { home: "/", "*": "/{slug}" }`. The studio's preview opens it.
+         */
+        paths: z
+          .record(z.string(), z.union([z.string(), z.record(z.string(), z.string())]))
+          .optional(),
       })
       .optional(),
   ),
@@ -100,4 +109,25 @@ export function parseConfig(source: string, file = ".cms/config.yaml"): CmsConfi
   }
 
   return config;
+}
+
+const own = (map: Record<string, string>, key: string) =>
+  Object.hasOwn(map, key) && typeof map[key] === "string" ? map[key] : undefined;
+
+/**
+ * Where an entry is seen on the site, from `preview.paths`: the slug's own
+ * path, else the `*` template, else the front page. Regions are the front page.
+ */
+export function previewPath(
+  config: CmsConfig,
+  entry?: { collection: string; slug: string },
+): string {
+  if (!entry) return "/";
+  const paths = config.preview?.paths;
+  const rule =
+    paths && Object.hasOwn(paths, entry.collection) ? paths[entry.collection] : undefined;
+  const template =
+    typeof rule === "string" ? rule : rule ? (own(rule, entry.slug) ?? own(rule, "*")) : undefined;
+  if (!template) return "/";
+  return template.replaceAll("{slug}", encodeURIComponent(entry.slug));
 }

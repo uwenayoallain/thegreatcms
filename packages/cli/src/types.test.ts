@@ -77,6 +77,12 @@ describe("what it says about a field", () => {
     expect(source).toMatch(/note\?: string;/);
   });
 
+  it("types a Markdown entry's body as the Markdown string the reader hands back", () => {
+    const entry = source.slice(source.indexOf("export interface BlogEntry"));
+    expect(entry).toMatch(/content: string;/);
+    expect(entry).not.toMatch(/content\??: RichText;/);
+  });
+
   it("turns select options into a union, not a string", () => {
     expect(source).toContain('tone: "plain" | "accent";');
   });
@@ -207,6 +213,33 @@ describe("staying current", () => {
     expect(source).not.toContain('"blog": BlogEntry;');
   });
 
+  it("wraps wide block unions the same way as oxfmt", () => {
+    const schema = parseSchema(
+      `
+version: 1
+blocks:
+  feature-grid: { fields: {} }
+  statistics: { fields: {} }
+  story: { fields: {} }
+  products: { fields: {} }
+  faq-list: { fields: {} }
+  call-to-action: { fields: {} }
+  testimonial: { fields: {} }
+regions:
+  home.sections:
+    type: blocks
+    allow: [feature-grid, statistics, story, products, faq-list, call-to-action, testimonial]
+`,
+      { file: "s" },
+    );
+
+    const wide = renderTypes(schema);
+    expect(wide).toContain("export type CmsBlock =\n  | CallToActionBlock");
+    expect(wide).toContain(
+      "  blocks: Array<\n    | FeatureGridBlock\n    | StatisticsBlock\n    | StoryBlock\n    | ProductsBlock\n    | FaqListBlock\n    | CallToActionBlock\n    | TestimonialBlock\n  >;",
+    );
+  });
+
   it("is byte-identical run twice, which is what --check compares", () => {
     expect(renderTypes(SCHEMA)).toBe(renderTypes(SCHEMA));
   });
@@ -219,5 +252,48 @@ describe("staying current", () => {
 
     expect(renderTypes(renamed)).not.toBe(source);
     expect(renderTypes(renamed)).toContain("headline?: string;");
+  });
+});
+
+const schemaOf = (text: string) => parseSchema(text, { file: ".cms/schema.yaml" });
+
+describe("names a schema allows but TypeScript does not", () => {
+  it("prefixes a type name that would start with a digit", () => {
+    expect(regionTypeName("404")).toBe("_404Region");
+    expect(blockTypeName("2-col")).toBe("_2ColBlock");
+  });
+
+  it("refuses two names that would become the same type", () => {
+    const schema = schemaOf(`version: 1
+blocks:
+  hero-banner: { fields: { title: { type: text } } }
+  hero_banner: { fields: { title: { type: text } } }
+regions:
+  home.body: { type: blocks, allow: [hero-banner, hero_banner] }
+`);
+    expect(() => renderTypes(schema)).toThrow(/HeroBannerBlock/);
+  });
+
+  it("refuses a block that would shadow the CmsBlock union", () => {
+    const schema = schemaOf(`version: 1
+blocks:
+  cms: { fields: { title: { type: text } } }
+regions:
+  home.body: { type: blocks, allow: [cms] }
+`);
+    expect(() => renderTypes(schema)).toThrow(/CmsBlock/);
+  });
+
+  it("keeps a label containing a comment terminator inside the comment", () => {
+    const schema = schemaOf(`version: 1
+regions:
+  home.hero:
+    label: "Hero */ export const owned = 1; /*"
+    fields:
+      heading: { type: text, description: "Short */ line" }
+`);
+    const generated = renderTypes(schema);
+    expect(generated).not.toContain("*/ export const owned");
+    expect(generated).not.toContain("Short */ line");
   });
 });

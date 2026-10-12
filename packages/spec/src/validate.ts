@@ -1,8 +1,38 @@
 /** Content validation. */
 
 import { SpecIssue } from "./errors.js";
-import { type FieldDef, selectOptions } from "./fields.js";
-import { type BlockDef, type CmsSchema, type RegionDef, isBlocksRegion } from "./schema.js";
+import { conditionMet, type FieldDef, selectOptions } from "./fields.js";
+import {
+  type BlockDef,
+  type CmsSchema,
+  type RegionDef,
+  blockVariants,
+  isBlocksRegion,
+} from "./schema.js";
+
+/** `_variant` may be absent (the first applies) but, when named, must be one the block declares. */
+function checkVariant(
+  def: BlockDef,
+  block: unknown,
+  path: string,
+  issues: SpecIssue[],
+  opts: ValidateOptions,
+): void {
+  const named = (block as { _variant?: unknown })?._variant;
+  if (named === undefined || named === null || named === "") return;
+  const variants = blockVariants(def);
+  if (variants.length === 0) return;
+  if (!variants.some((v) => v.value === named)) {
+    push(
+      issues,
+      opts,
+      `${path}._variant`,
+      "unknown_variant",
+      `"${String(named)}" is not a variant of this block.`,
+      `One of: ${variants.map((v) => v.value).join(", ")}.`,
+    );
+  }
+}
 
 export interface ValidateOptions {
   /** Strict mode reports keys the schema does not know about. */
@@ -45,6 +75,8 @@ export function validateFields(
   const data = value as Record<string, unknown>;
 
   for (const [name, def] of Object.entries(fields)) {
+    // A field its condition hides is not asked for: whatever it holds is kept, not checked.
+    if (!conditionMet(def, data)) continue;
     validateField(def, data[name], joinPath(base, name), issues, opts);
   }
 
@@ -343,6 +375,7 @@ function validateField(
             );
           return;
         }
+        checkVariant(nested, block, at, issues, opts);
         issues.push(...validateFields(nested.fields, block, { ...opts, basePath: at }).issues);
       });
       return;
@@ -468,6 +501,7 @@ function validateRegionAgainst(
       );
       return;
     }
+    checkVariant(def, block, path, issues, opts);
     issues.push(...validateFields(def.fields, block, { ...withBlocks, basePath: path }).issues);
   });
 

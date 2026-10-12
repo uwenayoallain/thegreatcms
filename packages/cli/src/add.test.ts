@@ -2,12 +2,16 @@
 
 import { DEFAULT_CONFIG, parseSchema } from "@greatcms/spec";
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 import {
   AddError,
   applyPlan,
+  attachBlockToRegion,
+  blocksRegionIds,
   insertIntoSchema,
   labelFor,
   parseFieldSpec,
+  quote,
   renderPlan,
   type AddPlan,
 } from "./add.js";
@@ -79,6 +83,36 @@ describe("reading a field off the command line", () => {
 
   it("takes the item type of a list", () => {
     expect(parseFieldSpec("tags:list(text)").of).toBe("text");
+  });
+
+  it("directs grouped field definitions to the interactive builder", () => {
+    expect(() => parseFieldSpec("owner:group")).toThrow("greatcms setup");
+  });
+
+  it.each(["group", "select", "blocks", "list"])(
+    "refuses incomplete %s list items before generating invalid schema",
+    (type) => {
+      expect(() => parseFieldSpec(`items:list(${type})`)).toThrow("needs an item type");
+    },
+  );
+
+  it("validates block references inside grouped fields", () => {
+    expect(() =>
+      apply(
+        region({
+          fields: [
+            {
+              name: "details",
+              type: "group",
+              required: false,
+              fields: [
+                { name: "sections", type: "blocks", required: false, allow: ["missing-block"] },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toThrow('no block type called "missing-block"');
   });
 
   it("refuses a select with one option, which is not a choice", () => {
@@ -194,7 +228,7 @@ describe("what it writes", () => {
       fields: [parseFieldSpec("style:select(primary|secondary)")],
     });
 
-    expect(yaml).toContain("style: { type: select, options: [primary, secondary] }");
+    expect(yaml).toContain('style: { type: select, options: ["primary", "secondary"] }');
   });
 });
 
@@ -319,5 +353,146 @@ describe("nested blocks, the composed-component case", () => {
       type: "blocks",
       allow: ["quote"],
     });
+  });
+});
+
+describe("adding a reusable page section", () => {
+  const blocksSchema = `version: 1
+blocks:
+  quote:
+    fields:
+      text: { type: text }
+regions:
+  home.sections:
+    label: Home sections
+    type: blocks
+    allow: [quote] # rendered by SectionRenderer
+  about.intro:
+    fields:
+      heading: { type: text }
+`;
+
+  it("finds only regions that can accept a section", () => {
+    expect(blocksRegionIds(parseSchema(blocksSchema))).toEqual(["home.sections"]);
+  });
+
+  it("defines the block and attaches it in one valid schema edit", () => {
+    const { schema } = apply(
+      {
+        kind: "block",
+        name: "testimonial",
+        label: "Testimonial",
+        to: "home.sections",
+        fields: [parseFieldSpec("quote:richtext!"), parseFieldSpec("name:text!")],
+      },
+      blocksSchema,
+    );
+    const parsed = parseSchema(schema, { file: "s" });
+
+    expect(parsed.blocks.testimonial).toBeTruthy();
+    expect(parsed.regions["home.sections"]).toMatchObject({
+      allow: ["quote", "testimonial"],
+    });
+    expect(schema).toContain("allow: [quote, testimonial] # rendered by SectionRenderer");
+  });
+
+  it("also preserves a block-style allow list", () => {
+    const source = blocksSchema.replace(
+      "    allow: [quote] # rendered by SectionRenderer",
+      "    allow:\n      - quote",
+    );
+
+    expect(attachBlockToRegion(source, "home.sections", "testimonial")).toContain(
+      "    allow:\n      - quote\n      - testimonial",
+    );
+  });
+
+  it("refuses a destination that is not a section list", () => {
+    expect(() =>
+      apply(
+        {
+          kind: "block",
+          name: "testimonial",
+          label: "Testimonial",
+          to: "about.intro",
+          fields: [parseFieldSpec("quote:richtext!")],
+        },
+        blocksSchema,
+      ),
+    ).toThrow(/not a reorderable section list/);
+  });
+});
+
+describe("writing a label into YAML", () => {
+  it.each(["2024", "true", "null", "1e3", "Pricing", "Home hero", "Q&A: what next?"])(
+    "reads %s back as the same text",
+    (label) => {
+      expect(parseYaml(`label: ${quote(label)}`)).toEqual({ label });
+    },
+  );
+
+  it("leaves an ordinary word unquoted, so a hand-written schema stays readable", () => {
+    expect(quote("Pricing")).toBe("Pricing");
+  });
+});
+
+describe("schemas not laid out the way this command writes them", () => {
+  const FOUR_SPACES = `version: 1
+
+# Four-space indentation, as some editors default to.
+regions:
+    home.hero:
+        fields:
+            heading: { type: text }
+    home.body:
+        type: blocks
+        allow: [quote]
+blocks:
+    quote:
+        fields:
+            text: { type: text }
+`;
+
+  it("keeps Windows line endings throughout", () => {
+    const { schema } = apply(region(), SCHEMA.replaceAll("\n", "\r\n"));
+
+    expect(schema).toContain("about.intro:\r\n");
+    expect(schema.replaceAll("\r\n", "")).not.toContain("\n");
+    expect(parseSchema(schema, { file: "s" }).regions["about.intro"]).toBeDefined();
+  });
+
+  it("adds to a schema indented with four spaces, keeping its comments", () => {
+    const { schema } = apply(region(), FOUR_SPACES);
+    const parsed = parseSchema(schema, { file: "s" });
+
+    expect(parsed.regions["about.intro"]).toBeDefined();
+    expect(parsed.regions["home.hero"]).toBeDefined();
+    expect(schema).toContain("# Four-space indentation");
+  });
+
+  it("offers a new section in a four-space blocks region", () => {
+    const { schema } = apply(
+      {
+        kind: "block",
+        name: "gallery",
+        label: "Gallery",
+        fields: [parseFieldSpec("title:text")],
+        to: "home.body",
+      } as AddPlan,
+      FOUR_SPACES,
+    );
+    const body = parseSchema(schema, { file: "s" }).regions["home.body"];
+
+    expect(body && "allow" in body ? body.allow : []).toEqual(["quote", "gallery"]);
+  });
+
+  it("adds to a section written as an empty inline mapping", () => {
+    const { schema } = apply(
+      region(),
+      "version: 1\nregions: {}\ncollections:\n  blog:\n    path: content/blog\n    fields:\n      title: { type: text }\n",
+    );
+
+    expect(parseSchema(schema, { file: "s" }).regions["about.intro"]).toBeDefined();
+    expect(schema).not.toContain("regions: {");
   });
 });

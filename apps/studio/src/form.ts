@@ -1,5 +1,6 @@
 /** Form data ↔ content documents. */
 
+import { sanitizeRichText } from "./sanitize.js";
 import type { FieldDef } from "@greatcms/spec";
 
 export const ROOT = "f";
@@ -7,27 +8,33 @@ export const ROOT = "f";
 export const MEDIA_ROOT = "m";
 
 /** `f[seo][title]` → ['seo', 'title'] */
+const UNSAFE_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
 export function parsePath(name: string, root: string = ROOT): string[] | null {
   const match = /^([^[\]]+)((\[[^[\]]*\])*)$/.exec(name);
   if (!match) return null;
   const [, head = "", rest = ""] = match;
   if (head !== root) return null;
   const segments = [...rest.matchAll(/\[([^[\]]*)\]/g)].map((m) => m[1] ?? "");
-  return segments.every((segment) => segment !== "") ? segments : null;
+  // A segment naming the prototype chain would write into every object in the process.
+  const safe = segments.every((segment) => segment !== "" && !UNSAFE_KEYS.has(segment));
+  return safe ? segments : null;
 }
 
 export function fieldName(path: Array<string | number>, root: string = ROOT): string {
   return root + path.map((segment) => `[${segment}]`).join("");
 }
 
-/** Builds a nested document from submitted form entries, coercing each value according to its. */
 /** Resolves a block name to its fields, for nested `blocks` fields. */
 export type BlockFields = (type: string) => Record<string, FieldDef> | undefined;
 
+/** Builds a nested document from submitted form entries, coercing each value according to its field type. */
+/** `verbatim` names a top-level rich-text field kept as typed: an MDX body is source, not HTML. */
 export function decodeForm(
   entries: Iterable<[string, string]>,
   fields: Record<string, FieldDef>,
   blockFields?: BlockFields,
+  verbatim?: string,
 ): Record<string, unknown> {
   const raw: Record<string, unknown> = {};
 
@@ -37,7 +44,7 @@ export function decodeForm(
     setPath(raw, path, value);
   }
 
-  return coerceFields(raw, fields, blockFields);
+  return coerceFields(raw, fields, blockFields, verbatim);
 }
 
 function setPath(target: Record<string, unknown>, path: string[], value: string): void {
@@ -68,16 +75,22 @@ function coerceFields(
   raw: Record<string, unknown>,
   fields: Record<string, FieldDef>,
   blockFields?: BlockFields,
+  verbatim?: string,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, def] of Object.entries(fields)) {
-    const value = coerceField(def, raw[name], blockFields);
+    const value = coerceField(def, raw[name], blockFields, name !== verbatim);
     if (value !== undefined) out[name] = value;
   }
   return out;
 }
 
-function coerceField(def: FieldDef, value: unknown, blockFields?: BlockFields): unknown {
+function coerceField(
+  def: FieldDef,
+  value: unknown,
+  blockFields?: BlockFields,
+  sanitize = true,
+): unknown {
   switch (def.type) {
     case "text":
     case "date": {
@@ -87,8 +100,9 @@ function coerceField(def: FieldDef, value: unknown, blockFields?: BlockFields): 
     }
 
     case "richtext": {
-      const html = asString(value && typeof value === "object" ? (value as never)["html"] : value);
-      return html === "" ? undefined : { html };
+      const typed = asString(value && typeof value === "object" ? (value as never)["html"] : value);
+      const html = sanitize ? sanitizeRichText(typed) : typed;
+      return html.trim() === "" ? undefined : { html };
     }
 
     case "number": {
@@ -162,7 +176,11 @@ function coerceField(def: FieldDef, value: unknown, blockFields?: BlockFields): 
         if (!def.allow.includes(type)) continue;
         const nested = blockFields?.(type);
         if (!nested) continue; // a type the schema no longer defines
-        blocks.push({ _type: type, ...coerceFields(object, nested, blockFields) });
+        blocks.push({
+          _type: type,
+          ...variantOf(object),
+          ...coerceFields(object, nested, blockFields),
+        });
       }
       return blocks;
     }
@@ -193,9 +211,19 @@ export function decodeBlocks(
     const type = asString(object._type);
     const fields = blockFields(type);
     if (!fields) continue; // a block type the schema no longer knows about
-    blocks.push({ _type: type, ...coerceFields(object, fields, blockFields) });
+    blocks.push({
+      _type: type,
+      ...variantOf(object),
+      ...coerceFields(object, fields, blockFields),
+    });
   }
   return blocks;
+}
+
+/** The look an editor picked for a block, when the form offered one. */
+function variantOf(object: Record<string, unknown>): { _variant?: string } {
+  const variant = asString(object._variant);
+  return variant ? { _variant: variant } : {};
 }
 
 function asString(value: unknown): string {

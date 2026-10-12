@@ -39,10 +39,10 @@ export function defaultsOnlyPrompt(write: (text: string) => void = () => {}): Pr
   };
 }
 
-const DIM = "[2m";
-const BOLD = "[1m";
-const CYAN = "[36m";
-const RESET = "[0m";
+const DIM = "\x1b[2m";
+const BOLD = "\x1b[1m";
+const CYAN = "\x1b[36m";
+const RESET = "\x1b[0m";
 
 export interface TerminalPromptOptions {
   input: NodeJS.ReadStream;
@@ -66,7 +66,8 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
         let rendered = 0;
 
         const draw = () => {
-          if (rendered > 0) output.write(`[${rendered}A[0J`);
+          // Moving the cursor back only makes sense on a terminal; a log gets each redraw.
+          if (rendered > 0 && output.isTTY) output.write(`\x1b[${rendered}A\x1b[0J`);
           const lines = choices.map((choice, i) => {
             const selected = i === index;
             const marker = selected ? paint(CYAN, "❯") : " ";
@@ -84,11 +85,9 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
         const onKey = (chunk: Buffer) => {
           const key = chunk.toString();
 
-          if (key === "") {
-            // Ctrl-C during a scaffold should leave nothing behind.
-            cleanUp();
-            output.write("\nCancelled. Nothing was written.\n");
-            reject(new PromptCancelled());
+          if (key === "\x03" || key === "\x04") {
+            // Ctrl-C or Ctrl-D during a scaffold should leave nothing behind.
+            cancel();
             return;
           }
           if (key === "\r" || key === "\n") {
@@ -102,11 +101,11 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
             resolve(choice.value);
             return;
           }
-          if (key === "[A" || key === "k") {
+          if (key === "\x1b[A" || key === "k") {
             index = (index - 1 + choices.length) % choices.length;
             draw();
           }
-          if (key === "[B" || key === "j") {
+          if (key === "\x1b[B" || key === "j") {
             index = (index + 1) % choices.length;
             draw();
           }
@@ -114,13 +113,20 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
 
         const cleanUp = () => {
           input.off("data", onKey);
+          input.off("end", cancel);
           if (input.isTTY) input.setRawMode(false);
           input.pause();
+        };
+        // Input that closes mid-question is a cancel, not a promise left hanging forever.
+        const cancel = () => {
+          cleanUp();
+          reject(new PromptCancelled());
         };
 
         if (input.isTTY) input.setRawMode(true);
         input.resume();
         input.on("data", onKey);
+        input.once("end", cancel);
       });
     },
 
@@ -128,7 +134,9 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
       const { createInterface } = await import("node:readline");
       const rl: ReadlineInterface = createInterface({ input, output });
       try {
-        const answer = await new Promise<string>((resolve) => {
+        const answer = await new Promise<string>((resolve, reject) => {
+          rl.once("SIGINT", () => reject(new PromptCancelled()));
+          rl.once("close", () => reject(new PromptCancelled()));
           rl.question(`${paint(BOLD, question)} ${paint(DIM, `(${initial})`)} `, (value) =>
             resolve(value),
           );

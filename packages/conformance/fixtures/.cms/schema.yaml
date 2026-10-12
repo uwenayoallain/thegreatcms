@@ -24,6 +24,7 @@ blocks:
 
   cta:
     label: Call to action
+    variants: [{ value: panel, label: Panel }, { value: inline, label: Inline link }]
     fields:
       label: { type: text, required: true }
       link: { type: link, required: true }
@@ -84,6 +85,26 @@ regions:
   home.showcase:
     type: blocks
     allow: [grid]
+
+  # Region default over a group: objects merge deeply, so `description` survives.
+  home.seo:
+    fields:
+      seo:
+        type: group
+        fields:
+          title: { type: text, default: Untitled }
+          description: { type: text, default: A site managed by GreatCMS }
+    default:
+      seo: { title: Home }
+
+  # Never edited, and its default blocks still need their own field defaults.
+  home.cards:
+    fields:
+      cards:
+        type: blocks
+        allow: [card]
+        default:
+          - { _type: card, title: First card }
 
 collections:
   # MDX: stored exactly like Markdown, read exactly like Markdown. The

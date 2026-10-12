@@ -32,18 +32,15 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     collectionsDir: "src/content/blog",
     mediaDir: "public/media",
     mediaUrlPrefix: "/media",
-    snippet: (regionId, dir) =>
+    snippet: (regionId) =>
       [
         "---",
-        `import ${nameFor(regionId)} from "../../${dir}/${regionId}.json";`,
+        'import { createReader } from "@greatcms/reader";',
+        "const cms = createReader();",
+        `const ${nameFor(regionId)} = cms.region("${regionId}");`,
         "---",
         "",
         `<h1>{${nameFor(regionId)}.heading}</h1>`,
-        "",
-        "// or, with types and schema defaults applied:",
-        '// import { createReader } from "@greatcms/reader";',
-        "// const cms = createReader();",
-        `// const ${nameFor(regionId)} = cms.region("${regionId}");`,
       ].join("\n"),
   },
   next: {
@@ -53,11 +50,14 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     collectionsDir: "content/blog",
     mediaDir: "public/media",
     mediaUrlPrefix: "/media",
-    snippet: (regionId, dir) =>
+    snippet: (regionId) =>
       [
-        `import ${nameFor(regionId)} from "@/${dir}/${regionId}.json";`,
+        "// app/page.tsx — a server component",
+        'import { createReader } from "@greatcms/reader";',
         "",
         "export default function Page() {",
+        "  const cms = createReader();",
+        `  const ${nameFor(regionId)} = cms.region("${regionId}");`,
         `  return <h1>{${nameFor(regionId)}.heading}</h1>;`,
         "}",
       ].join("\n"),
@@ -69,13 +69,17 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     collectionsDir: "content/blog",
     mediaDir: "public/media",
     mediaUrlPrefix: "/media",
-    snippet: (regionId, dir) =>
+    snippet: (regionId) =>
       [
         "<script setup>",
-        `import ${nameFor(regionId)} from "~/${dir}/${regionId}.json";`,
+        `const { data: ${nameFor(regionId)} } = await useAsyncData("cms:${regionId}", async () => {`,
+        "  if (!import.meta.server) return null;",
+        '  const { createReader } = await import("@greatcms/reader");',
+        `  return createReader().region("${regionId}");`,
+        "});",
         "</script>",
         "",
-        `<template><h1>{{ ${nameFor(regionId)}.heading }}</h1></template>`,
+        `<template><h1>{{ ${nameFor(regionId)}?.heading }}</h1></template>`,
       ].join("\n"),
   },
   sveltekit: {
@@ -85,26 +89,39 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     collectionsDir: "src/content/blog",
     mediaDir: "static/media",
     mediaUrlPrefix: "/media",
-    snippet: (regionId, dir) =>
+    snippet: (regionId) =>
       [
-        "<script>",
-        `  import ${nameFor(regionId)} from "$lib/../${dir}/${regionId}.json";`,
-        "</script>",
+        "// src/routes/+page.server.ts",
+        'import { createReader } from "@greatcms/reader";',
+        "export function load() {",
+        `  return { ${nameFor(regionId)}: createReader().region("${regionId}") };`,
+        "}",
         "",
-        `<h1>{${nameFor(regionId)}.heading}</h1>`,
+        "<!-- src/routes/+page.svelte -->",
+        '<script lang="ts">',
+        `  export let data: { ${nameFor(regionId)}: { heading: string } };`,
+        "</script>",
+        `<h1>{data.${nameFor(regionId)}.heading}</h1>`,
       ].join("\n"),
   },
   eleventy: {
     id: "eleventy",
     label: "Eleventy",
-    // Anything under _data becomes global data automatically, so a managed region needs no wiring.
+    // One global data module makes every schema region available to templates.
     regionsDir: "_data/cms",
     collectionsDir: "content/blog",
     mediaDir: "public/media",
     mediaUrlPrefix: "/media",
     snippet: (regionId) =>
       [
-        "<!-- _data is global data in Eleventy, so this just works: -->",
+        "// _data/cms.mjs",
+        'import { createReader } from "@greatcms/reader";',
+        "export default function () {",
+        "  const cms = createReader();",
+        "  return Object.fromEntries(cms.regionIds().map((id) => [id, cms.region(id)]));",
+        "}",
+        "",
+        "<!-- Every schema region is now global data in Eleventy: -->",
         `<h1>{{ cms["${regionId}"].heading }}</h1>`,
       ].join("\n"),
   },
@@ -115,12 +132,14 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     collectionsDir: "content/blog",
     mediaDir: "public/media",
     mediaUrlPrefix: "/media",
-    snippet: (regionId, dir) =>
+    snippet: (regionId) =>
       [
-        "// It is JSON on disk. Read it however your language reads JSON:",
-        `//   ${dir}/${regionId}.json`,
+        "// JavaScript build or server code:",
+        'import { createReader } from "@greatcms/reader";',
+        "const cms = createReader();",
+        `const ${nameFor(regionId)} = cms.region("${regionId}");`,
         "",
-        `const ${nameFor(regionId)} = JSON.parse(readFileSync("${dir}/${regionId}.json", "utf8"));`,
+        "// Other languages can implement SPEC.md and verify against @greatcms/conformance.",
       ].join("\n"),
   },
 };

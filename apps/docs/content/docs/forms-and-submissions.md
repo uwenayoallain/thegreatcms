@@ -37,5 +37,13 @@ never a CAPTCHA, which taxes every legitimate visitor to inconvenience a bot
 that solves them anyway. Suspected spam is stored and hidden rather than
 discarded, so nothing is lost silently.
 
+## Limits
+
+Each visitor address may submit 20 times a minute. Each site stores at most
+1,000 submissions a day and sends at most 60 notification emails an
+hour, however many addresses the traffic comes from. Past the email limit,
+submissions are still stored; they just stop arriving in your mailbox until the
+hour turns over.
+
 Submissions across every site land in one inbox, with read state, CSV export,
 and optional email notification.

@@ -1,7 +1,6 @@
 /** `greatcms check` — validate what is actually in the repository. */
 
 import {
-  fieldDefaults,
   isBlocksRegion,
   parseFrontmatter,
   parseRegionFile,
@@ -9,6 +8,7 @@ import {
   SpecIssue,
   validateFields,
   validateRegion,
+  unknownSchemaKeys,
   type CmsConfig,
   type CmsSchema,
   type CollectionDef,
@@ -38,10 +38,19 @@ export interface CheckOptions {
   schema: CmsSchema;
   config: CmsConfig;
   files: CheckPort;
+  /** The schema as written, so keys the format does not define can be reported. */
+  schemaSource?: { name: string; source: string };
 }
 
-export async function checkSite({ schema, config, files }: CheckOptions): Promise<CheckReport> {
-  const issues: SpecIssue[] = [];
+export async function checkSite({
+  schema,
+  config,
+  files,
+  schemaSource,
+}: CheckOptions): Promise<CheckReport> {
+  const issues: SpecIssue[] = schemaSource
+    ? unknownSchemaKeys(schemaSource.source, { file: schemaSource.name })
+    : [];
   const defaults: string[] = [];
   const media = new Map<string, { file: string; path: string }>();
 
@@ -122,14 +131,15 @@ export async function checkSite({ schema, config, files }: CheckOptions): Promis
         continue;
       }
 
-      const document = { ...fieldDefaults(collection.fields), ...entry };
+      // Readers do not layer entries over defaults, so neither does the check.
       issues.push(
-        ...validateFields(collection.fields, document, {
+        ...validateFields(collection.fields, entry, {
           strict: true,
           file: path,
+          blocks: schema.blocks,
         }).issues.map((issue) => withCollection(issue, name)),
       );
-      collectMedia(media, path, document, collection.fields, schema);
+      collectMedia(media, path, entry, collection.fields, schema);
     }
   }
 
@@ -282,6 +292,15 @@ function collectMedia(
     }
     if (def.type === "list") {
       if (Array.isArray(value)) value.forEach((item, i) => walk(def.of, item, `${path}[${i}]`));
+      return;
+    }
+    if (def.type === "blocks") {
+      if (!Array.isArray(value)) return;
+      value.forEach((block, i) => {
+        const type = (block as { _type?: unknown })?._type;
+        const nested = typeof type === "string" ? schema.blocks[type] : undefined;
+        if (nested) walkFields(nested.fields, block, `${path}[${i}]`);
+      });
       return;
     }
     if (def.type !== "image" && def.type !== "file") return;

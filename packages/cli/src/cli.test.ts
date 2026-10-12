@@ -4,8 +4,9 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseSchema } from "@greatcms/spec";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { run } from "./index.js";
+import { parseFlags, repeatedFlag, run } from "./index.js";
 
 let repo: string;
 const out: string[] = [];
@@ -75,6 +76,51 @@ describe("greatcms doctor", () => {
     expect(text).toMatch(/edited\s+home\.hero/);
     expect(text).toMatch(/default\s+about\.intro/);
     expect(text).toContain("will render schema defaults. That is normal, not a problem.");
+  });
+});
+
+describe("command help", () => {
+  it.each(["init", "add", "check", "types", "doctor"])(
+    "shows help for greatcms %s --help without touching the repository",
+    async (command) => {
+      const before = git(["status", "--short"]);
+
+      expect(await cli([command, "--help"])).toBe(0);
+      expect(out.join("")).toContain("greatcms — local tools for a Git-backed site");
+      expect(err).toEqual([]);
+      expect(git(["status", "--short"])).toBe(before);
+    },
+  );
+});
+
+describe("reading flags", () => {
+  it("never lets a switch swallow the argument after it", () => {
+    const flags = parseFlags(["region", "--yes", "hero.banner"]);
+
+    expect(flags.boolean("yes")).toBe(true);
+    expect(flags.positionals).toEqual(["region", "hero.banner"]);
+  });
+
+  it("takes --name=value as well as --name value", () => {
+    expect(parseFlags(["--out=src/cms.d.ts"]).string("out")).toBe("src/cms.d.ts");
+    expect(parseFlags(["--out", "src/cms.d.ts"]).string("out")).toBe("src/cms.d.ts");
+    expect(repeatedFlag(["--field=a:text", "--field", "b:image"], "field")).toEqual([
+      "a:text",
+      "b:image",
+    ]);
+  });
+
+  it("reports a misspelt flag instead of silently ignoring it", async () => {
+    expect(await cli(["check", "--jsno"])).toBe(1);
+    expect(err.join("")).toContain("Unknown option --jsno");
+  });
+});
+
+describe("greatcms types --check", () => {
+  it("fails without --out, because a check with nothing to compare can never fail", async () => {
+    expect(await cli(["types", "--check"])).toBe(1);
+    expect(err.join("")).toContain("--out");
+    expect(out.join("")).toBe("");
   });
 });
 
@@ -171,6 +217,20 @@ describe("greatcms init", () => {
     expect(out.join("")).toContain("Detected Astro");
   });
 
+  it("leaves a note for the next agent, and updates it rather than repeating it", async () => {
+    writeFileSync(join(fresh, "astro.config.mjs"), "export default {};\n");
+    writeFileSync(join(fresh, "AGENTS.md"), "# Our rules\n\nRun the tests.\n");
+
+    await initIn(fresh, ["init", "--yes"]);
+    await initIn(fresh, ["init", "--yes", "--force"]);
+
+    const agents = readFileSync(join(fresh, "AGENTS.md"), "utf8");
+    expect(agents.startsWith("# Our rules\n\nRun the tests.\n")).toBe(true);
+    expect(agents.match(/greatcms:start/g)).toHaveLength(1);
+    expect(agents).toContain("src/content/cms/<region-id>.json");
+    expect(agents).toContain("greatcms check --json");
+  });
+
   it("tells you how to read the region in the framework it found", async () => {
     writeFileSync(join(fresh, ".eleventy.js"), "module.exports = () => {};\n");
 
@@ -204,6 +264,8 @@ describe("greatcms init", () => {
     expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain(
       "regions: _data/managed",
     );
+    expect(out.join("")).toContain("Using Eleventy (--framework)");
+    expect(out.join("")).not.toContain("Detected Astro");
   });
 
   it("refuses to clobber an existing setup, and says how to proceed", async () => {
@@ -232,5 +294,38 @@ describe("greatcms init", () => {
     const text = out.join("");
     expect(text).toContain("home.hero");
     expect(text).toContain("Collections: blog");
+  });
+
+  it("adds a reusable section to the sole page region in one command", async () => {
+    await initIn(fresh, ["init", "--yes", "--template", "business"]);
+
+    expect(
+      await initIn(fresh, [
+        "add",
+        "section",
+        "testimonial",
+        "--field",
+        "quote:richtext!",
+        "--field",
+        "name:text!",
+      ]),
+    ).toBe(0);
+
+    const schema = parseSchema(readFileSync(join(fresh, ".cms/schema.yaml"), "utf8"));
+    expect(schema.blocks.testimonial).toBeTruthy();
+    expect(schema.regions["home.sections"]).toMatchObject({
+      allow: [
+        "feature-grid",
+        "process",
+        "stats",
+        "story",
+        "products",
+        "faq-list",
+        "cta",
+        "testimonial",
+      ],
+    });
+    expect(out.join("")).toContain("Editors can now add it in home.sections");
+    expect(out.join("")).toContain('_type: "testimonial"');
   });
 });

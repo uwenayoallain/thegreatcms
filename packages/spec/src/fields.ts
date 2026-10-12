@@ -2,13 +2,43 @@
 
 import { z } from "zod";
 
+/** Show a field only while a sibling holds a value: `when: { field: style, equals: carousel }`. */
+export interface FieldCondition {
+  field: string;
+  equals?: string | number | boolean;
+  in?: string[];
+}
+
+const condition = z
+  .object({
+    field: z.string().min(1),
+    equals: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    in: z.array(z.string()).optional(),
+  })
+  .refine((c) => c.equals !== undefined || c.in !== undefined, {
+    message: "`when` needs `equals` or `in`",
+  });
+
 const common = {
   label: z.string().optional(),
   description: z.string().optional(),
   required: z.boolean().optional(),
+  when: condition.optional(),
 };
 
-const selectOption = z.union([
+/** Whether a conditional field applies, given the values beside it. */
+export function conditionMet(def: { when?: FieldCondition }, siblings: unknown): boolean {
+  const when = def.when;
+  if (!when) return true;
+  const value =
+    siblings && typeof siblings === "object"
+      ? (siblings as Record<string, unknown>)[when.field]
+      : undefined;
+  if (when.in) return when.in.includes(String(value ?? ""));
+  return value === when.equals || String(value ?? "") === String(when.equals);
+}
+
+export const selectOption = z.union([
   z.string(),
   z.object({ value: z.string(), label: z.string().optional() }),
 ]);
@@ -22,6 +52,7 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       min?: number;
       max?: number;
       pattern?: string;
@@ -33,6 +64,7 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       allow?: string[];
       default?: RichTextValue;
     }
@@ -41,18 +73,27 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       min?: number;
       max?: number;
       step?: number;
       integer?: boolean;
       default?: number;
     }
-  | { type: "boolean"; label?: string; description?: string; required?: boolean; default?: boolean }
+  | {
+      type: "boolean";
+      label?: string;
+      description?: string;
+      required?: boolean;
+      when?: FieldCondition;
+      default?: boolean;
+    }
   | {
       type: "select";
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       options: Array<string | { value: string; label?: string }>;
       multiple?: boolean;
       default?: string | string[];
@@ -62,15 +103,24 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       time?: boolean;
       default?: string;
     }
-  | { type: "link"; label?: string; description?: string; required?: boolean; default?: LinkValue }
+  | {
+      type: "link";
+      label?: string;
+      description?: string;
+      required?: boolean;
+      when?: FieldCondition;
+      default?: LinkValue;
+    }
   | {
       type: "image";
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       alt?: "required" | "decorative-allowed";
       accept?: string[];
       default?: ImageValue;
@@ -80,6 +130,7 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       accept?: string[];
       default?: FileValue;
     }
@@ -88,6 +139,7 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       of: FieldDef;
       min?: number;
       max?: number;
@@ -102,6 +154,7 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       /** Block names, defined at the top level of the schema. */
       allow: string[];
       min?: number;
@@ -113,6 +166,7 @@ export type FieldDef =
       label?: string;
       description?: string;
       required?: boolean;
+      when?: FieldCondition;
       fields: Record<string, FieldDef>;
     };
 
@@ -130,6 +184,7 @@ export const FIELD_TYPES: readonly FieldType[] = [
   "file",
   "list",
   "group",
+  "blocks",
 ] as const;
 
 /** Rich text travels as sanitized HTML so a consumer can print it with no library at all. */

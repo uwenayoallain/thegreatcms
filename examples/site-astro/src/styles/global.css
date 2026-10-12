@@ -156,6 +156,16 @@ section + section {
   margin: 0 0 0.75rem;
 }
 
+/* What the CMS manages is marked, so the page explains its own split. */
+.managed {
+  padding-left: clamp(1rem, 3vw, 1.75rem);
+  border-left: 2px dashed var(--accent);
+}
+
+.managed > .eyebrow {
+  color: var(--accent);
+}
+
 .hero p.lede {
   font-size: clamp(1.05rem, 1rem + 0.4vw, 1.3rem);
   color: var(--ink-soft);
@@ -190,6 +200,13 @@ section + section {
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+
+.card-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--accent);
 }
 
 .card h3 {

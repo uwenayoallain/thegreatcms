@@ -7,18 +7,26 @@ import type { HtmlEscapedString } from "hono/utils/html";
 /** What `html` actually returns: sync unless an interpolation is a promise. */
 type Html = HtmlEscapedString | Promise<HtmlEscapedString>;
 import { fieldName, MEDIA_ROOT } from "../form.js";
+import { removeBlockControl } from "./block-actions.js";
+import { summarize, variantField, variantLabel } from "./summary.js";
+import { icon } from "./icons.js";
 
 export type ErrorsByPath = Map<string, string>;
 
 export interface RenderOptions {
+  mediaPreviews?: Record<string, string>;
   /** Block definitions, so a nested `blocks` field can render what it holds. */
   blocks?: Record<string, BlockDef>;
+  /** Keep the nested item affected by a server form action open after the round trip. */
+  openNested?: string;
   /**
    * Rich text fields edited as source rather than through the visual editor.
    * An MDX body is JSX as much as it is prose, and a WYSIWYG round trip would
    * quietly delete the components in it.
    */
   plain?: ReadonlySet<string>;
+  /** The content's language (BCP 47), so spellcheck and text direction follow the site, not the studio. */
+  lang?: string;
 }
 
 export function renderFields(
@@ -34,6 +42,25 @@ export function renderFields(
 }
 
 function renderField(
+  def: FieldDef,
+  path: Array<string | number>,
+  value: unknown,
+  errors: ErrorsByPath,
+  render: RenderOptions = {},
+): Html {
+  const control = renderControl(def, path, value, errors, render);
+  if (!def.when) return control;
+  // Without JavaScript the field simply shows; the schema's condition is kept at validation.
+  return html`<div
+    class="when"
+    data-when-of="${idFor([...path.slice(0, -1), def.when.field])}"
+    data-when="${JSON.stringify(def.when.in ?? [String(def.when.equals)])}"
+  >
+    ${control}
+  </div>`;
+}
+
+function renderControl(
   def: FieldDef,
   path: Array<string | number>,
   value: unknown,
@@ -73,6 +100,9 @@ function renderField(
     "aria-describedby": describedBy || undefined,
     "aria-invalid": error ? "true" : undefined,
     required: def.required || undefined,
+    lang: render.lang,
+    // The browser lays each value out in its own direction, so Arabic or Hebrew content edits right to left.
+    dir: "auto",
   });
 
   switch (def.type) {
@@ -93,7 +123,7 @@ function renderField(
     case "richtext": {
       const plain = render.plain?.has(String(path.at(-1)));
       return shell(html`
-        <textarea ${shared} rows="14" ${raw(plain ? "" : "data-richtext")}>
+        <textarea ${shared} rows="14" ${raw(plain ? 'class="source"' : "data-richtext")}>
 ${asText(readRichText(value))}</textarea>
         <span class="hint"
           >${
@@ -202,14 +232,20 @@ ${asText(readRichText(value))}</textarea>
           ${
             image.src
               ? html`<p class="preview-thumb">
-                  <img src="${asText(image.src)}" alt="" width="160" />
+                  <img
+                    src="${render.mediaPreviews?.[image.src] ?? asText(image.src)}"
+                    alt=""
+                    width="${image.width ?? 160}"
+                    height="${image.height ?? 100}"
+                    loading="lazy"
+                  />
                   <span class="hint">${asText(image.src)}</span>
                 </p>`
               : ""
           }
 
-          <div class="field">
-            <label for="${id}-file">Upload an image</label>
+          <div class="field upload">
+            <label for="${id}-file">${image.src ? "Replace the image" : "Upload an image"}</label>
             <input
               type="file"
               id="${id}-file"
@@ -291,55 +327,187 @@ ${asText(readRichText(value))}</textarea>
         <fieldset class="field">
           <legend>${label}</legend>
           ${def.description ? html`<span class="hint">${def.description}</span>` : ""}
-          ${rows.map((item, index) => renderField(def.of, [...path, index], item, errors, render))}
-          <span class="hint">Leave a row empty to drop it. Save to add another.</span>
+          ${rows.map((item, index) =>
+            renderField(
+              // A row is named for its position, which reads as "0" unless it is given a label.
+              {
+                ...def.of,
+                label: def.of.label ?? (index < items.length ? `Item ${index + 1}` : "New item"),
+              },
+              [...path, index],
+              item,
+              errors,
+              render,
+            ),
+          )}
+          <span class="hint"
+            >Fill in the empty row to add an item, or clear one to remove it. Another empty row
+            appears each time the page reloads.</span
+          >
         </fieldset>
       `;
     }
 
     case "blocks": {
       const items = (Array.isArray(value) ? value : []) as Array<Record<string, unknown>>;
-      // One spare row, so a nested list grows without JavaScript, exactly like `list`.
-      const rows: Array<Record<string, unknown> | undefined> = [...items, undefined];
+      const actionPath = path.join(".");
+      const onlyType = def.allow.length === 1 ? def.allow[0] : undefined;
+      const itemLabel = onlyType
+        ? (render.blocks?.[onlyType]?.label ?? humanize(onlyType))
+        : "Item";
 
       return html`
         <fieldset class="field blocks-field">
           <legend>${label}</legend>
           ${def.description ? html`<span class="hint">${def.description}</span>` : ""}
-          ${rows.map((item, index) => {
-            const type = typeof item?._type === "string" ? item._type : "";
+          ${
+            items.length > 2
+              ? html`
+                  <nav class="outline" aria-label="${label}: every item">
+                    <p class="stamp">${items.length} ${label.toLowerCase()}</p>
+                    <ol>
+                      ${items.map((item, index) => {
+                        const type = typeof item._type === "string" ? item._type : "";
+                        const definition = type ? render.blocks?.[type] : undefined;
+                        return html`<li>
+                          <a href="#${idFor([...path, index])}"
+                            >${onlyType ? `${itemLabel} ${index + 1}` : (definition?.label ?? humanize(type || "item"))}
+                            <span>${nestedBlockSummary(item, definition)}</span></a
+                          >
+                        </li>`;
+                      })}
+                    </ol>
+                    <a class="outline-add" href="#${id}-add-block">${icon("plus")} Add one</a>
+                  </nav>
+                `
+              : ""
+          }
+          ${items.map((item, index) => {
+            const type = typeof item._type === "string" ? item._type : "";
             const definition = type ? render.blocks?.[type] : undefined;
             const typePath = [...path, index, "_type"];
             const typeId = idFor(typePath);
+            const itemPath = [...path, index];
+            const itemName = onlyType
+              ? `${itemLabel} ${index + 1}`
+              : `${definition?.label ?? humanize(type || "item")} ${index + 1}`;
+            const hasError = [...errors.keys()].some((errorPath) =>
+              errorPath.startsWith(dotted(itemPath)),
+            );
+            const actionWithin =
+              render.openNested === itemPath.join(".") ||
+              render.openNested?.startsWith(`${itemPath.join(".")}.`);
 
             return html`
-              <section class="block nested">
-                <header>
-                  <div class="field">
-                    <label for="${typeId}"> ${item ? `Block ${index + 1}` : "Add a block"} </label>
-                    <select id="${typeId}" name="${fieldName(typePath)}">
-                      <option value="">— none —</option>
+              <section
+                class="block nested block-collapsible nested-collapsible"
+                id="${idFor(itemPath)}"
+              >
+                <details ${actionWithin || hasError ? "open" : ""}>
+                  <summary>
+                    <h3>${itemName}</h3>
+                    <span>${nestedBlockSummary(item, definition)}</span>
+                  </summary>
+                  <div class="block-fields">
+                    ${
+                      onlyType
+                        ? html`<input
+                            type="hidden"
+                            name="${fieldName(typePath)}"
+                            value="${type}"
+                          />`
+                        : html`<div class="field">
+                            <label for="${typeId}">Type</label>
+                            <select id="${typeId}" name="${fieldName(typePath)}">
+                              ${def.allow.map(
+                                (allowed) => html`
+                                  <option value="${allowed}" ${allowed === type ? "selected" : ""}>
+                                    ${render.blocks?.[allowed]?.label ?? allowed}
+                                  </option>
+                                `,
+                              )}
+                            </select>
+                          </div>`
+                    }
+                    ${variantField(
+                      item,
+                      definition,
+                      fieldName([...itemPath, "_variant"]),
+                      idFor([...itemPath, "_variant"]),
+                    )}
+                    ${
+                      definition
+                        ? renderFields(definition.fields, item, errors, itemPath, render)
+                        : html`<span class="hint">
+                            This block type is no longer in the schema.
+                          </span>`
+                    }
+                  </div>
+                </details>
+                <div class="tools" aria-label="Reorder or remove ${itemName}">
+                  <button
+                    type="submit"
+                    name="action"
+                    value="nested:up:${actionPath}:${index}"
+                    aria-label="Move ${itemName} up"
+                    title="Move up"
+                    formnovalidate
+                    ${index === 0 ? "disabled" : ""}
+                  >
+                    ${icon("up")}
+                  </button>
+                  <button
+                    type="submit"
+                    name="action"
+                    value="nested:down:${actionPath}:${index}"
+                    aria-label="Move ${itemName} down"
+                    title="Move down"
+                    formnovalidate
+                    ${index === items.length - 1 ? "disabled" : ""}
+                  >
+                    ${icon("down")}
+                  </button>
+                  ${removeBlockControl(itemName, `nested:remove:${actionPath}:${index}`)}
+                </div>
+              </section>
+            `;
+          })}
+          ${
+            items.length === 0
+              ? html`<p class="nested-empty">No ${label.toLowerCase()} yet.</p>`
+              : ""
+          }
+          <div class="add-block nested-add" id="${id}-add-block">
+            ${
+              onlyType
+                ? html`<input
+                    type="hidden"
+                    name="${fieldName(path, "nestedAdd")}"
+                    value="${onlyType}"
+                  />`
+                : html`<div class="field">
+                    <label for="${id}-add">Add an item</label>
+                    <select id="${id}-add" name="${fieldName(path, "nestedAdd")}">
                       ${def.allow.map(
                         (allowed) => html`
-                          <option value="${allowed}" ${allowed === type ? "selected" : ""}>
+                          <option value="${allowed}">
                             ${render.blocks?.[allowed]?.label ?? allowed}
                           </option>
                         `,
                       )}
                     </select>
-                  </div>
-                </header>
-                ${
-                  definition
-                    ? renderFields(definition.fields, item ?? {}, errors, [...path, index], render)
-                    : html`<span class="hint">
-                        Choose a type and save; its fields appear once it exists.
-                      </span>`
-                }
-              </section>
-            `;
-          })}
-          <span class="hint">Set a block to “none” to remove it. Save to add another.</span>
+                  </div>`
+            }
+            <button
+              type="submit"
+              class="secondary"
+              name="action"
+              value="nested:add:${actionPath}"
+              formnovalidate
+            >
+              Add ${onlyType ? itemLabel.toLowerCase() : "item"}
+            </button>
+          </div>
         </fieldset>
       `;
     }
@@ -403,7 +571,7 @@ function dotted(path: Array<string | number>): string {
   }, "");
 }
 
-function idFor(path: Array<string | number>): string {
+export function idFor(path: Array<string | number>): string {
   return `f-${path.join("-")}`.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
@@ -416,6 +584,11 @@ function readRichText(value: unknown): string {
 function asText(value: unknown): string {
   if (value === undefined || value === null) return "";
   return String(value);
+}
+
+function nestedBlockSummary(item: Record<string, unknown>, definition?: BlockDef): string {
+  const variant = variantLabel(item, definition);
+  return `${summarize(item, definition, "Empty item")}${variant ? ` · ${variant}` : ""}`;
 }
 
 function humanize(name: string): string {

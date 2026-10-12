@@ -48,7 +48,7 @@ export interface BlogEntry {
   file: string;
   body: string;
   data: {
-    content?: RichText;
+    content: string;
     date: string;
     description?: string;
     title: string;

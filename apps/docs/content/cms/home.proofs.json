@@ -1,0 +1,36 @@
+{
+  "blocks": [
+    {
+      "_type": "proof",
+      "title": "A reader in another language",
+      "body": "A Python reader written from the standard alone passes the same conformance suite as the TypeScript one.",
+      "link": {
+        "href": "/docs/any-language/",
+        "label": "Any language"
+      }
+    },
+    {
+      "_type": "proof",
+      "title": "Two sites you can run",
+      "body": "A minimal Astro site beside a complete small-business site: managed pages, nested sections, products, a contact form.",
+      "link": {
+        "href": "/docs/examples/",
+        "label": "The examples"
+      }
+    },
+    {
+      "_type": "proof",
+      "title": "This page",
+      "body": "The headline, the claims and the proofs are JSON in this repository, edited in the studio, built by Astro, with no script tag in the output.",
+      "link": {
+        "href": "/docs/accessibility/",
+        "label": "What is enforced"
+      }
+    }
+  ],
+  "_meta": {
+    "updatedAt": "2026-10-12T00:00:00.000Z",
+    "updatedBy": "studio",
+    "version": 1
+  }
+}

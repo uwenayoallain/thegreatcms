@@ -14,6 +14,7 @@ const PAGES = [
   { name: "blog index", file: "blog/index.html" },
   { name: "blog post", file: "blog/publish-from-anywhere/index.html" },
   { name: "thanks", file: "thanks/index.html" },
+  { name: "not found", file: "404.html" },
 ];
 
 beforeAll(() => {

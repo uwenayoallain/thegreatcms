@@ -150,3 +150,67 @@ describe("validateRegion", () => {
     expect(result.issues[0]?.code).toBe("unknown_region");
   });
 });
+
+describe("fields with a condition", () => {
+  const hero = parseSchema(
+    `version: 1
+regions:
+  hero:
+    fields:
+      style: { type: select, options: [text, carousel], default: text }
+      heading: { type: text, required: true, when: { field: style, equals: text } }
+      slides: { type: list, of: { type: text }, min: 1, when: { field: style, in: [carousel] } }
+`,
+  ).regions.hero;
+
+  it("asks for a required field only while its condition holds", () => {
+    const def = hero.type === "blocks" ? {} : hero.fields;
+    expect(validateFields(def, { style: "text" }).ok).toBe(false);
+    expect(validateFields(def, { style: "carousel", slides: ["one"] }).ok).toBe(true);
+  });
+
+  it("keeps a hidden field's value without checking it", () => {
+    const def = hero.type === "blocks" ? {} : hero.fields;
+    expect(validateFields(def, { style: "text", heading: "Hi", slides: [] }).ok).toBe(true);
+  });
+
+  it("refuses a condition that compares against nothing", () => {
+    expect(() =>
+      parseSchema(`version: 1
+regions:
+  r:
+    fields:
+      a: { type: text, when: { field: b } }
+`),
+    ).toThrow();
+  });
+});
+
+describe("block variants", () => {
+  const withVariants = parseSchema(`version: 1
+blocks:
+  cta:
+    variants: [{ value: panel, label: Panel }, inline]
+    fields:
+      label: { type: text }
+regions:
+  body:
+    type: blocks
+    allow: [cta]
+`);
+
+  it("accepts a declared variant and refuses one the block does not have", () => {
+    const ok = validateRegion(withVariants, "body", {
+      blocks: [{ _type: "cta", _variant: "inline" }],
+    });
+    expect(ok.ok).toBe(true);
+    const bad = validateRegion(withVariants, "body", {
+      blocks: [{ _type: "cta", _variant: "huge" }],
+    });
+    expect(bad.issues.map((issue) => issue.code)).toEqual(["unknown_variant"]);
+  });
+
+  it("does not need one to be named", () => {
+    expect(validateRegion(withVariants, "body", { blocks: [{ _type: "cta" }] }).ok).toBe(true);
+  });
+});

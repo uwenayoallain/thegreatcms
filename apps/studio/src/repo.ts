@@ -1,12 +1,19 @@
 /** Where a site's files live. */
 
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
 
 const run = promisify(execFile);
+
+// The studio never executes anything from a managed repository, git hooks included.
+const SAFE_GIT = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
+
+/** The publish in flight per site folder, so two never interleave writes, staging, or commits. */
+const publishing = new Map<string, Promise<unknown>>();
 
 export interface FileChange {
   /** Repo-relative path, e.g. `content/cms/home.hero.json`. */
@@ -31,14 +38,25 @@ export interface CommitResult {
   url: string;
 }
 
-/** Someone committed while the editor was open, so publishing would overwrite them. */
+/** Where the working copy stands against its upstream, or null when there is none to compare with. */
+export interface SyncState {
+  upstream: string;
+  ahead: number;
+}
+
+export type PushResult = { ok: true; upstream: string } | { ok: false; reason: string };
+
+/** The content being published changed after the editor loaded it, so publishing would overwrite that. */
 export class ConflictError extends Error {
   constructor(
     readonly expected: string,
     readonly actual: string,
+    uncommitted = false,
   ) {
     super(
-      `The working copy moved while you were editing (expected ${short(expected)}, found ${short(actual)}).\n  fix: reload the region to pick up the newer content, then publish again.`,
+      uncommitted
+        ? "This content has unsaved changes in the working copy that someone made outside the studio.\n  fix: commit or discard them, reload, then publish again."
+        : `The working copy moved while you were editing (expected ${short(expected)}, found ${short(actual)}), and this content changed with it.\n  fix: reload to pick up the newer content, then publish again.`,
     );
     this.name = "ConflictError";
   }
@@ -81,6 +99,19 @@ export class LocalRepository implements Repository {
     }
   }
 
+  /** A file's bytes, or null when it is missing or, once links are followed, outside `within`. */
+  async getBytes(path: string, within = "."): Promise<Uint8Array | null> {
+    try {
+      const target = this.absolute(path);
+      const [folder, real] = await Promise.all([realpath(this.absolute(within)), realpath(target)]);
+      const inside = relative(folder, real);
+      if (inside.startsWith("..") || resolve(inside) === inside) return null;
+      return await readFile(real);
+    } catch {
+      return null;
+    }
+  }
+
   async listDirectory(path: string): Promise<string[]> {
     try {
       const entries = await readdir(this.absolute(path), { withFileTypes: true });
@@ -93,65 +124,175 @@ export class LocalRepository implements Repository {
   }
 
   async getHead(): Promise<string> {
-    const sha = await this.git(["rev-parse", "HEAD"]);
+    const sha = await this.tryGit(["rev-parse", "HEAD"]);
     return sha?.trim() || "working-copy";
   }
 
   async commitFiles(request: CommitRequest): Promise<CommitResult> {
+    const previous = publishing.get(this.root) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(() => this.commitNow(request));
+    publishing.set(this.root, current);
+    try {
+      return await current;
+    } finally {
+      if (publishing.get(this.root) === current) publishing.delete(this.root);
+    }
+  }
+
+  private async commitNow(request: CommitRequest): Promise<CommitResult> {
     if (request.files.length === 0) {
       throw new LocalRepositoryError("A publish needs at least one file change.");
     }
 
-    if (request.expectedHeadSha) {
-      const head = await this.getHead();
-      if (head !== "working-copy" && head !== request.expectedHeadSha) {
-        throw new ConflictError(request.expectedHeadSha, head);
-      }
-    }
+    if (request.expectedHeadSha) await this.assertUnchanged(request);
 
-    // Writes happen together and before any commit, so a failure part-way leaves the working.
+    // Every byte lands in a temporary file first, so a full disk or a bad path fails
+    // before any real file has changed; the renames that follow replace each one whole.
+    const targets = await Promise.all(request.files.map((file) => this.writable(file.path)));
+    const temps = request.files.flatMap((file, index) => {
+      if (file.delete) return [];
+      const target = targets[index] as string;
+      const content = file.base64
+        ? Buffer.from(file.base64, "base64")
+        : Buffer.from(file.content ?? "", "utf8");
+      return [{ temp: `${target}.${randomUUID()}.tmp`, target, content }];
+    });
+    const results = await Promise.allSettled(
+      temps.map(({ temp, content }) => writeFile(temp, content, { flag: "wx" })),
+    );
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) {
+      await Promise.all(temps.map(({ temp }) => rm(temp, { force: true })));
+      throw failed.reason;
+    }
+    await Promise.all(temps.map(({ temp, target }) => rename(temp, target)));
     await Promise.all(
-      request.files.map(async (file) => {
-        const target = this.absolute(file.path);
-        if (file.delete) {
-          await rm(target, { force: true });
-          return;
-        }
-        await mkdir(dirname(target), { recursive: true });
-        const content = file.base64
-          ? Buffer.from(file.base64, "base64")
-          : Buffer.from(file.content ?? "", "utf8");
-        await writeFile(target, content);
-      }),
+      request.files.flatMap((file, index) =>
+        file.delete ? [rm(targets[index] as string, { force: true })] : [],
+      ),
     );
 
-    const paths = request.files.map((file) => file.path);
-    const staged = await this.git(["add", "--", ...paths]);
-    if (staged === null) {
+    const url = `file://${this.root}`;
+    if ((await this.tryGit(["rev-parse", "--is-inside-work-tree"]))?.trim() !== "true") {
       // Not a Git repository: the files are written, and that is the whole job.
-      return { commitSha: "working-copy", url: `file://${this.root}` };
+      return { commitSha: "working-copy", url };
     }
 
+    const written = request.files.filter((file) => !file.delete).map((file) => file.path);
+    const removed = request.files.filter((file) => file.delete).map((file) => file.path);
+    if (written.length > 0) await this.git(["add", "--", ...written]);
+    if (removed.length > 0)
+      await this.git(["rm", "-q", "--cached", "--ignore-unmatch", "--", ...removed]);
+
+    const paths = request.files.map((file) => file.path);
+    const staged = (await this.git(["diff", "--cached", "--name-only", "-z", "--", ...paths]))
+      .split("\0")
+      .filter(Boolean);
     // "Nothing to commit" is a success: what is on disk already matches.
-    await this.git(["commit", "-m", request.message, "--", ...paths]);
-    return { commitSha: await this.getHead(), url: `file://${this.root}` };
+    if (staged.length === 0) return { commitSha: await this.getHead(), url };
+    await this.git(["commit", "--no-verify", "-m", request.message, "--", ...staged]);
+    return { commitSha: await this.getHead(), url };
+  }
+
+  /**
+   * Refuses a publish whose files changed since the editor loaded them. Only these files
+   * count: a commit elsewhere in the repository is not a reason to stop an editor.
+   */
+  private async assertUnchanged(request: CommitRequest): Promise<void> {
+    const expected = request.expectedHeadSha as string;
+    const head = await this.getHead();
+    if (head === "working-copy") return;
+    const paths = request.files.map((file) => file.path);
+    // A non-zero exit is a difference, or a commit this repository no longer has.
+    if (
+      head !== expected &&
+      (await this.tryGit(["diff", "--quiet", expected, head, "--", ...paths])) === null
+    ) {
+      throw new ConflictError(expected, head);
+    }
+    if ((await this.tryGit(["diff", "--quiet", "HEAD", "--", ...paths])) === null) {
+      throw new ConflictError(expected, head, true);
+    }
+  }
+
+  /** The branch's upstream and how many commits have not reached it, or null without one. */
+  async syncState(): Promise<SyncState | null> {
+    const upstream = (
+      await this.tryGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    )?.trim();
+    if (!upstream) return null;
+    const ahead = Number((await this.tryGit(["rev-list", "--count", "@{u}..HEAD"]))?.trim() ?? "0");
+    return { upstream, ahead: Number.isFinite(ahead) ? ahead : 0 };
+  }
+
+  /**
+   * Pushes the current branch to its upstream. Queued behind any publish in flight, never
+   * prompts for credentials (it would hang the request), and never runs a pre-push hook.
+   */
+  async push(): Promise<PushResult> {
+    const previous = publishing.get(this.root) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(() => this.pushNow());
+    publishing.set(this.root, current);
+    try {
+      return await current;
+    } finally {
+      if (publishing.get(this.root) === current) publishing.delete(this.root);
+    }
+  }
+
+  private async pushNow(): Promise<PushResult> {
+    const state = await this.syncState();
+    if (!state) {
+      return {
+        ok: false,
+        reason:
+          "This branch has no upstream to push to.\n  fix: run `git push -u origin <branch>` once in the site's folder.",
+      };
+    }
+    try {
+      await run("git", [...SAFE_GIT, "push", "--porcelain"], {
+        cwd: this.root,
+        timeout: 60_000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+      });
+      return { ok: true, upstream: state.upstream };
+    } catch (error) {
+      const output = `${String((error as { stdout?: unknown }).stdout ?? "")}\n${String((error as { stderr?: unknown }).stderr ?? "")}`;
+      if (/\[rejected\]|non-fast-forward|fetch first/.test(output)) {
+        return {
+          ok: false,
+          reason: `${state.upstream} has commits this copy does not.\n  fix: run \`git pull --rebase\` in the site's folder, then push again.`,
+        };
+      }
+      const detail = output
+        .split("\n")
+        .map((line) => line.trim())
+        .findLast(Boolean);
+      return { ok: false, reason: `git push failed: ${detail ?? String(error)}` };
+    }
   }
 
   /** Writes an unsaved edit where the site's dev server will read it. */
   async writeDraft(path: string, content: string): Promise<void> {
-    const target = this.absolute(draftFilePath(path));
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(this.absolute(`${DRAFT_DIR}/.gitignore`), "*\n");
-    await writeFile(target, content);
+    const target = await this.writable(draftFilePath(path));
+    await writeFile(await this.writable(`${DRAFT_DIR}/.gitignore`), "*\n");
+    const temp = `${target}.${randomUUID()}.tmp`;
+    await writeFile(temp, content, { flag: "wx" });
+    await rename(temp, target);
   }
 
   /** Drops a draft once its content is published, or when it is discarded. */
   async clearDraft(path: string): Promise<void> {
-    await rm(this.absolute(draftFilePath(path)), { force: true });
+    await rm(await this.writable(draftFilePath(path)), { force: true });
   }
 
   async hasDraft(path: string): Promise<boolean> {
     return (await this.getFile(draftFilePath(path))) !== null;
+  }
+
+  /** The unsaved edit for a content path, so the editor can pick up where it left off. */
+  async readDraft(path: string): Promise<string | null> {
+    return (await this.getFile(draftFilePath(path)))?.content ?? null;
   }
 
   /** Every content path with an unsaved edit waiting, so none can be forgotten. */
@@ -176,12 +317,28 @@ export class LocalRepository implements Repository {
   }
 
   /** Runs git, returning null when this is not a repository or the command fails. */
-  private async git(args: string[]): Promise<string | null> {
+  private async tryGit(args: string[]): Promise<string | null> {
     try {
-      const { stdout } = await run("git", args, { cwd: this.root, maxBuffer: 8 * 1024 * 1024 });
-      return stdout;
+      return await this.git(args);
     } catch {
       return null;
+    }
+  }
+
+  /** Runs git where a failure is something the editor must see. */
+  private async git(args: string[]): Promise<string> {
+    try {
+      const { stdout } = await run("git", [...SAFE_GIT, ...args], {
+        cwd: this.root,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+      return stdout;
+    } catch (error) {
+      const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
+      throw new LocalRepositoryError(
+        `git ${args[0]} failed: ${stderr || String(error)}`,
+        "Nothing was committed. Fix the repository, then publish again.",
+      );
     }
   }
 
@@ -196,5 +353,27 @@ export class LocalRepository implements Repository {
       );
     }
     return join(this.root, inside);
+  }
+
+  /**
+   * A path that is safe to write or delete: its folder exists, really lies inside the
+   * site once links are followed, and the file itself is not a link to somewhere else.
+   */
+  private async writable(path: string): Promise<string> {
+    const target = this.absolute(path);
+    await mkdir(dirname(target), { recursive: true });
+    const [root, parent] = await Promise.all([realpath(this.root), realpath(dirname(target))]);
+    const inside = relative(root, parent);
+    const linked = await lstat(target).then(
+      (stat) => stat.isSymbolicLink(),
+      () => false,
+    );
+    if (inside.startsWith("..") || resolve(inside) === inside || linked) {
+      throw new LocalRepositoryError(
+        `Refusing to write ${path}: a symbolic link points it outside ${this.root}.`,
+        "Replace the link with a real folder or file inside the site.",
+      );
+    }
+    return target;
   }
 }

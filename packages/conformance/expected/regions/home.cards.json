@@ -1,0 +1,9 @@
+{
+  "cards": [
+    {
+      "_type": "card",
+      "title": "First card",
+      "tone": "plain"
+    }
+  ]
+}

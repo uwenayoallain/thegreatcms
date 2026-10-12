@@ -7,6 +7,16 @@ allowBuilds:
   esbuild: true
   sharp: true
 
-# Rolldown (Rust) replaces Rollup for every Vite build in the repo.
+# Security fixes released too recently for pnpm's minimum release age to allow yet.
+minimumReleaseAgeExclude:
+  - fast-uri@3.1.6 || 3.1.7 || 3.1.8
+  - vitest@4.1.11
+  - "@vitest/mocker@4.1.11"
+  - js-yaml@4.3.2
+  - hono@4.13.5 || 4.13.7
+  - devalue@5.9.1 || 5.9.3
+  - undici@8.10.2
+
+# Vite 8 builds with Rolldown (Rust); one version for every Vite build in the repo.
 overrides:
-  vite: npm:rolldown-vite@^7.3.1
+  vite: ^8.0.13

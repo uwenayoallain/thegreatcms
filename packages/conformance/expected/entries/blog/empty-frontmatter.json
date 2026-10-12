@@ -1,0 +1,6 @@
+{
+  "slug": "empty-frontmatter",
+  "data": {
+    "content": "\nAn entry whose frontmatter is empty.\n"
+  }
+}

@@ -3,8 +3,10 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
+import { applySites, parseSites } from "./config.js";
 import { Store } from "./db.js";
 import { ResendNotifier } from "./submissions.js";
+import { setLocale } from "./views/locale.js";
 
 const password = process.env.STUDIO_PASSWORD;
 if (!password) {
@@ -30,14 +32,33 @@ const notifier =
     : undefined;
 
 // Only behind a proxy you control: the headers it sets are otherwise the visitor's to forge.
-const trustProxy = process.env.STUDIO_TRUST_PROXY === "1";
+const trustProxy =
+  process.env.STUDIO_TRUST_PROXY === "cloudflare"
+    ? "cloudflare"
+    : process.env.STUDIO_TRUST_PROXY === "1";
+
+// What language the studio's own screens use for dates; content keeps the language its schema says.
+setLocale(process.env.STUDIO_LOCALE ?? "en");
 
 const store = new Store(databaseFile);
-const app = createApp({ store, password, secret, notifier, trustProxy });
+// Sites a server is told about up front, so it comes up managing them under ids that never change.
+const declared = process.env.STUDIO_SITES
+  ? applySites(store, parseSites(process.env.STUDIO_SITES))
+  : [];
+const app = createApp({
+  store,
+  password,
+  secret,
+  notifier,
+  trustProxy,
+  publicUrl: process.env.STUDIO_URL?.replace(/\/$/, "") || undefined,
+  cookieDomain: process.env.STUDIO_COOKIE_DOMAIN || undefined,
+});
 
 serve({ fetch: app.fetch, port }, (info) => {
   process.stdout.write(`GreatCMS studio on http://localhost:${info.port}\n`);
   process.stdout.write(`  database: ${databaseFile}\n`);
+  for (const line of declared) process.stdout.write(`  site ${line}\n`);
   process.stdout.write(
     notifier
       ? "  submissions: stored and emailed\n"

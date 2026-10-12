@@ -4,7 +4,7 @@ import { cms } from '../../lib/cms';
 
 const posts = cms
   .collection('blog')
-  .toSorted((a, b) => String(b.data.date).localeCompare(String(a.data.date)));
+  .toSorted((a, b) => b.data.date.localeCompare(a.data.date));
 ---
 
 <Base title="Blog" description="Posts, stored as Markdown in this repository.">
@@ -19,8 +19,8 @@ const posts = cms
             <h2>
               <a href={`/blog/${post.slug}/`}>{post.data.title}</a>
             </h2>
-            <time datetime={String(post.data.date)}>
-              {new Date(String(post.data.date)).toLocaleDateString('en', {
+            <time datetime={post.data.date}>
+              {new Date(post.data.date).toLocaleDateString('en', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',

@@ -6,7 +6,7 @@ import { cms } from '../lib/cms';
 
 // Managed content: one function call, resolved at build time.
 const hero = cms.region('home.hero');
-const features = cms.blocks('home.features');
+const features = cms.region('home.features').blocks;
 
 // Where form submissions go.
 const studio = import.meta.env.PUBLIC_CMS_URL ?? '';
@@ -15,7 +15,7 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
 
 <Base title={hero.heading} description={hero.subtitle}>
   <!-- ── Managed by the CMS ───────────────────────────────────────────── -->
-  <section class="hero">
+  <section class="hero managed">
     <p class="eyebrow">Managed region: home.hero</p>
     <h1>{hero.heading}</h1>
     {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
@@ -39,17 +39,13 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
   </section>
 
   <!-- ── Managed block list ───────────────────────────────────────────── -->
-  <section aria-labelledby="why">
+  <section class="managed" aria-labelledby="why">
     <p class="eyebrow">Managed region: home.features</p>
     <h2 id="why">Why it works this way</h2>
     <ul class="grid" role="list">
       {
         features.map((block) =>
-          block._type === 'feature' ? (
-            <Feature {...(block as any)} />
-          ) : (
-            <Quote {...(block as any)} />
-          ),
+          block._type === 'feature' ? <Feature block={block} /> : <Quote block={block} />,
         )
       }
     </ul>

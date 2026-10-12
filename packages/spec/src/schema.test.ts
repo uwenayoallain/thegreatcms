@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SpecError } from "./errors.js";
-import { isBlocksRegion, parseSchema } from "./schema.js";
+import { FIELD_TYPES } from "./fields.js";
+import { isBlocksRegion, parseSchema, unknownSchemaKeys } from "./schema.js";
 
 const VALID = `
 version: 1
@@ -26,6 +28,8 @@ regions:
     max: 12
 collections:
   blog:
+    label: Articles
+    entryLabel: article
     path: content/blog
     format: markdown
     body: content
@@ -41,6 +45,7 @@ describe("parseSchema", () => {
     expect(Object.keys(schema.regions)).toEqual(["home.hero", "home.body"]);
     expect(Object.keys(schema.blocks)).toEqual(["hero", "text"]);
     expect(schema.collections.blog?.path).toBe("content/blog");
+    expect(schema.collections.blog?.entryLabel).toBe("article");
   });
 
   it("distinguishes blocks regions from single regions", () => {
@@ -154,3 +159,78 @@ function catchSpecError(fn: () => unknown): SpecError {
   }
   throw new Error("expected a SpecError");
 }
+
+describe("FIELD_TYPES", () => {
+  it("lists exactly the field types in the spec's table", () => {
+    const spec = readFileSync(new URL("../../../SPEC.md", import.meta.url), "utf8");
+    const table = /## 4\. Field types[\s\S]*?\n\n((?:\|.*\n)+)/.exec(spec)?.[1] ?? "";
+    const documented = [...table.matchAll(/^\| `([a-z]+)`/gm)].map((match) => match[1]);
+
+    expect(documented.length).toBeGreaterThan(10);
+    expect([...FIELD_TYPES].toSorted()).toEqual(documented.toSorted());
+  });
+});
+
+describe("names that collide with Object.prototype", () => {
+  const schema = parseSchema(`version: 1
+regions:
+  home.hero:
+    fields:
+      heading: { type: text }
+`);
+
+  it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+    "treats %s as an unknown region, block, and collection",
+    (name) => {
+      expect(schema.regions[name]).toBeUndefined();
+      expect(schema.blocks[name]).toBeUndefined();
+      expect(schema.collections[name]).toBeUndefined();
+      expect(name in schema.regions).toBe(false);
+    },
+  );
+
+  it("refuses a region that allows a block named after a prototype key", () => {
+    expect(() =>
+      parseSchema(`version: 1
+regions:
+  home.body:
+    type: blocks
+    allow: [constructor]
+`),
+    ).toThrow(/not defined/);
+  });
+});
+
+describe("unknownSchemaKeys", () => {
+  it("names a misspelt key a reader would silently ignore", () => {
+    const source = `version: 1
+regions:
+  home.hero:
+    fields:
+      heading: { type: text, requird: true }
+      photo: { type: image, alt_: decorative-allowed }
+`;
+
+    expect(() => parseSchema(source)).not.toThrow();
+    expect(unknownSchemaKeys(source).map((issue) => issue.path)).toEqual([
+      "regions.home.hero.fields.heading.requird",
+      "regions.home.hero.fields.photo.alt_",
+    ]);
+  });
+
+  it("says nothing about a schema that uses only defined keys", () => {
+    expect(unknownSchemaKeys(VALID)).toEqual([]);
+  });
+
+  it("leaves region defaults alone, since they are content rather than schema", () => {
+    const source = `version: 1
+regions:
+  home.hero:
+    fields:
+      heading: { type: text }
+    default:
+      heading: Hello
+`;
+    expect(unknownSchemaKeys(source)).toEqual([]);
+  });
+});

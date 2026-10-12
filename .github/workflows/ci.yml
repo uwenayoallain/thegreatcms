@@ -48,12 +48,13 @@ jobs:
       - name: Test (includes the accessibility gate)
         run: pnpm test
 
-      # Both sites in this repository are managed by GreatCMS, so the content
+      # Every site in this repository is managed by GreatCMS, so the content
       # checker runs against them the way a site would run it in its own build.
       - name: Content matches the schema
         run: |
           (cd apps/docs && node ../../packages/cli/bin/greatcms.mjs check)
           (cd examples/site-astro && node ../../packages/cli/bin/greatcms.mjs check)
+          (cd examples/business-astro && node ../../packages/cli/bin/greatcms.mjs check)
 
       # Types generated from a schema that has since changed describe a site
       # that does not exist, and nothing else would notice.

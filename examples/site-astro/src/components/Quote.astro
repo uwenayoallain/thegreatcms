@@ -1,15 +1,16 @@
 ---
+import type { QuoteBlock } from "../cms";
+
 interface Props {
-  text: string;
-  attribution?: string;
+  block: QuoteBlock;
 }
 
-const { text, attribution } = Astro.props;
+const { block } = Astro.props;
 ---
 
 <li>
   <blockquote class="pull">
-    <p>{text}</p>
-    {attribution && <footer>— {attribution}</footer>}
+    <p>{block.text}</p>
+    {block.attribution && <footer>— {block.attribution}</footer>}
   </blockquote>
 </li>

@@ -13,6 +13,10 @@
           "properties": {
             "name": {
               "type": "string"
+            },
+            "locale": {
+              "type": "string",
+              "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
             }
           },
           "additionalProperties": false
@@ -27,6 +31,32 @@
               },
               "description": {
                 "type": "string"
+              },
+              "variants": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "minItems": 1
               },
               "fields": {
                 "type": "object",
@@ -43,6 +73,32 @@
                         },
                         "required": {
                           "type": "boolean"
+                        },
+                        "when": {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "equals": {
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean"
+                              ]
+                            },
+                            "in": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ],
+                          "additionalProperties": false
                         },
                         "type": {
                           "type": "string",
@@ -82,6 +138,9 @@
                         },
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
+                        },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
                         },
                         "type": {
                           "type": "string",
@@ -124,6 +183,9 @@
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
                         },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
+                        },
                         "type": {
                           "type": "string",
                           "const": "number"
@@ -162,6 +224,9 @@
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
                         },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
+                        },
                         "type": {
                           "type": "string",
                           "const": "boolean"
@@ -187,6 +252,9 @@
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
                         },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
+                        },
                         "type": {
                           "type": "string",
                           "const": "select"
@@ -194,26 +262,7 @@
                         "options": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "value": {
-                                    "type": "string"
-                                  },
-                                  "label": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "value"
-                                ],
-                                "additionalProperties": false
-                              }
-                            ]
+                            "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/variants/items"
                           },
                           "minItems": 1
                         },
@@ -252,6 +301,9 @@
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
                         },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
+                        },
                         "type": {
                           "type": "string",
                           "const": "date"
@@ -279,6 +331,9 @@
                         },
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
+                        },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
                         },
                         "type": {
                           "type": "string",
@@ -319,6 +374,9 @@
                         },
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
+                        },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
                         },
                         "type": {
                           "type": "string",
@@ -378,6 +436,9 @@
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
                         },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
+                        },
                         "type": {
                           "type": "string",
                           "const": "file"
@@ -424,6 +485,9 @@
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
                         },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
+                        },
                         "type": {
                           "type": "string",
                           "const": "list"
@@ -457,6 +521,9 @@
                         },
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
+                        },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
                         },
                         "type": {
                           "type": "string",
@@ -502,6 +569,9 @@
                         },
                         "required": {
                           "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
+                        },
+                        "when": {
+                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
                         },
                         "type": {
                           "type": "string",
@@ -614,6 +684,9 @@
             "type": "object",
             "properties": {
               "label": {
+                "type": "string"
+              },
+              "entryLabel": {
                 "type": "string"
               },
               "description": {

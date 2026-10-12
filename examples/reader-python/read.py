@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 import yaml
@@ -26,33 +27,64 @@ DEFAULT_REGIONS_DIR = "content/cms"
 
 
 class SpecLoader(yaml.SafeLoader):
-    """YAML as the standard means it.
+    """YAML 1.2, which is what the standard reads.
 
-    A `date:` field is an ISO 8601 *string* per SPEC.md, but YAML has a native
-    timestamp type and PyYAML resolves `2026-08-14` into a `datetime.date`. A
-    reader that lets that through produces a document that does not match any
-    other implementation's — so the resolver is removed rather than patched up
-    afterwards.
+    PyYAML implements YAML 1.1, where `no`, `on` and `off` are booleans, `0777` is
+    octal, `1:30` is ninety, and `2026-08-14` is a date object. Under 1.2 the
+    first four are what they look like, and a `date` field is an ISO 8601 string.
+    A reader that kept 1.1 would turn a tag called "no" into `false`, so the
+    implicit types are replaced with the 1.2 core schema's rather than patched.
     """
 
+    def construct_mapping(self, node, deep=False):
+        keys = [self.construct_object(key, deep=deep) for key, _ in node.value]
+        duplicate = next((key for key in keys if keys.count(key) > 1), None)
+        if duplicate is not None:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate key {duplicate!r}", node.start_mark
+            )
+        return super().construct_mapping(node, deep=deep)
 
-SpecLoader.yaml_implicit_resolvers = {
-    key: [(tag, regexp) for tag, regexp in resolvers if tag != "tag:yaml.org,2002:timestamp"]
-    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
-}
+
+def _int_1_2(loader, node):
+    value = loader.construct_scalar(node)
+    if value.startswith(("0o", "0x")):
+        return int(value[2:], 8 if value[1] == "o" else 16)
+    return int(value, 10)
+
+
+SpecLoader.yaml_implicit_resolvers = {}
+for tag, pattern, first in [
+    ("tag:yaml.org,2002:null", r"^(?:~|null|Null|NULL|)$", ["~", "n", "N", ""]),
+    ("tag:yaml.org,2002:bool", r"^(?:true|True|TRUE|false|False|FALSE)$", list("tTfF")),
+    ("tag:yaml.org,2002:int", r"^(?:[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+)$", list("-+0123456789")),
+    (
+        "tag:yaml.org,2002:float",
+        r"^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?"
+        r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$",
+        list("-+.0123456789"),
+    ),
+]:
+    SpecLoader.add_implicit_resolver(tag, re.compile(pattern), first)
+SpecLoader.add_constructor("tag:yaml.org,2002:int", _int_1_2)
 
 
 def load_yaml(source: str):
     return yaml.load(source, Loader=SpecLoader)
 
 
+def load_file(path: str):
+    """A `.json` file is JSON: YAML would refuse one indented with tabs."""
+    with open(path, encoding="utf-8") as handle:
+        source = handle.read()
+    return json.loads(source) if path.endswith(".json") else load_yaml(source)
+
+
 def load_schema(site_dir: str) -> dict:
-    """Schema may be YAML or JSON — YAML parses both, so one loader covers it."""
     for name in ("schema.json", "schema.yaml", "schema.yml"):
         path = os.path.join(site_dir, ".cms", name)
         if os.path.exists(path):
-            with open(path, encoding="utf-8") as handle:
-                schema = load_yaml(handle.read())
+            schema = load_file(path)
             if schema.get("version") != 1:
                 raise SystemExit(f"{path}: unsupported spec version {schema.get('version')}")
             return schema
@@ -63,8 +95,7 @@ def load_config(site_dir: str) -> dict:
     for name in ("config.json", "config.yaml", "config.yml"):
         path = os.path.join(site_dir, ".cms", name)
         if os.path.exists(path):
-            with open(path, encoding="utf-8") as handle:
-                return load_yaml(handle.read()) or {}
+            return load_file(path) or {}
     return {}
 
 
@@ -110,7 +141,13 @@ def resolve_block(schema: dict, block):
     if block_def is None:
         return block
     fields = block_def.get("fields", {})
-    return resolve_nested(schema, fields, deep_merge(field_defaults(fields), block))
+    resolved = resolve_nested(schema, fields, deep_merge(field_defaults(fields), block))
+    # A block with variants always carries one: the first, unless the content names another.
+    variants = [v if isinstance(v, str) else v.get("value") for v in block_def.get("variants") or []]
+    if variants:
+        named = resolved.get("_variant")
+        resolved["_variant"] = named if named in variants else variants[0]
+    return resolved
 
 
 def resolve_nested(schema: dict, fields: dict, document: dict) -> dict:
@@ -145,13 +182,14 @@ EXTENSIONS = {"markdown": ".md", "mdx": ".mdx", "json": ".json"}
 
 
 def parse_frontmatter(source: str) -> tuple[dict, str]:
-    """`---` YAML, `---`, then the body. Everything before the second fence is data."""
-    if not source.startswith("---"):
+    """A line that is exactly `---`, YAML, another such line, then the body verbatim."""
+    lines = source.removeprefix("\ufeff").split("\n")
+    is_fence = lambda line: line.removesuffix("\r") == "---"  # noqa: E731
+    if not is_fence(lines[0]):
         return {}, source
-    lines = source.split("\n")
     for index in range(1, len(lines)):
-        if lines[index].strip() == "---":
-            data = load_yaml("\n".join(lines[1:index])) or {}
+        if is_fence(lines[index]):
+            data = load_yaml("\n".join(line.removesuffix("\r") for line in lines[1:index])) or {}
             return data, "\n".join(lines[index + 1 :])
     return {}, source
 

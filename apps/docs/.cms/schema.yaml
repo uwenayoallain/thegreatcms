@@ -14,6 +14,13 @@ blocks:
       body: { type: text, multiline: true, required: true }
       proof: { type: text, max: 90 }
 
+  proof:
+    label: Proof
+    fields:
+      title: { type: text, required: true, max: 60 }
+      body: { type: text, multiline: true, required: true, max: 240 }
+      link: { type: link, required: true }
+
 regions:
   home.hero:
     label: Landing hero
@@ -31,11 +38,24 @@ regions:
     allow: [claim]
     max: 8
 
+  home.proofs:
+    label: Proofs
+    type: blocks
+    allow: [proof]
+    max: 6
+
   home.closing:
     label: Closing note
     fields:
       heading: { type: text, required: true, max: 80 }
       body: { type: text, multiline: true, required: true }
+
+  site.footer:
+    label: Footer
+    fields:
+      note: { type: text, max: 80, default: Content standard v1 · MIT }
+      links: { type: list, label: Links, of: { type: link }, max: 8 }
+      claim: { type: text, max: 80, default: This site ships no JavaScript. }
 
 collections:
   docs:

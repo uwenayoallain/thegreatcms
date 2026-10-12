@@ -1,0 +1,20 @@
+---
+interface Props {
+  image?: { src: string; alt: string; width?: number; height?: number };
+  class?: string;
+  eager?: boolean;
+}
+
+const { image, class: className, eager = false } = Astro.props;
+---
+
+{image?.src && <img
+  class={className}
+  src={image.src}
+  alt={image.alt}
+  width={image.width}
+  height={image.height}
+  loading={eager ? 'eager' : 'lazy'}
+  fetchpriority={eager ? 'high' : undefined}
+  decoding="async"
+/>}

@@ -1,15 +1,23 @@
 ---
-import { marked } from "marked";
 import DocsNav from "../../components/DocsNav.astro";
+import OnThisPage from "../../components/OnThisPage.astro";
 import Base from "../../layouts/Base.astro";
 import { docsPages } from "../../lib/cms";
+import { renderMarkdown } from "../../lib/markdown";
 
 export function getStaticPaths() {
-  return docsPages().map((page) => ({ params: { slug: page.slug }, props: { page } }));
+  return docsPages().map((page) => ({ params: { slug: page.slug } }));
 }
 
-const { page } = Astro.props;
-const html = marked.parse(page.body) as string;
+// Looked up per render, not taken from props: the dev server caches getStaticPaths,
+// which would hide the studio's unsaved edit from the live preview.
+const pages = docsPages();
+const index = pages.findIndex((candidate) => candidate.slug === Astro.params.slug);
+if (index === -1) return Astro.redirect("/404");
+const page = pages[index]!;
+const previous = pages[index - 1];
+const next = pages[index + 1];
+const { html, headings } = await renderMarkdown(page.body);
 ---
 
 <Base title={`${page.title} — GreatCMS`} description={page.summary}>
@@ -20,7 +28,40 @@ const html = marked.parse(page.body) as string;
       <p class="stamp">Documentation</p>
       <h1>{page.title}</h1>
       {page.summary && <p class="summary">{page.summary}</p>}
+      <OnThisPage headings={headings} />
       <Fragment set:html={html} />
+
+      <nav class="pager" aria-label="Previous and next">
+        {
+          previous ? (
+            <a href={`/docs/${previous.slug}/`} rel="prev">
+              <span class="stamp">Previous</span>
+              {previous.title}
+            </a>
+          ) : (
+            <a href="/docs/" rel="prev">
+              <span class="stamp">Previous</span>
+              Overview
+            </a>
+          )
+        }
+        {
+          next ? (
+            <a href={`/docs/${next.slug}/`} rel="next">
+              <span class="stamp">Next</span>
+              {next.title}
+            </a>
+          ) : (
+            <a href="/spec/" rel="next">
+              <span class="stamp">Next</span>
+              The standard
+            </a>
+          )
+        }
+      </nav>
+      <p class="source-note">
+        <a href={`/docs/${page.slug}.md`}>This page as Markdown</a>
+      </p>
     </article>
   </div>
 </Base>

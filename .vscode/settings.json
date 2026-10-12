@@ -1,0 +1,16 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "[astro]": { "editor.defaultFormatter": "astro-build.astro-vscode" },
+  "oxc.fmt.experimental": true,
+  "yaml.schemas": {
+    "./packages/spec/json-schema/schema.schema.json": [".cms/schema.yaml", "**/.cms/schema.yaml"],
+    "./packages/spec/json-schema/config.schema.json": [".cms/config.yaml", "**/.cms/config.yaml"]
+  },
+  "files.exclude": { "**/.turbo": true, "**/.astro": true },
+  "search.exclude": {
+    "**/dist": true,
+    "docs/llms-full.txt": true,
+    "apps/docs/public/llms-full.txt": true
+  }
+}

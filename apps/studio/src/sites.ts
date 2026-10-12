@@ -10,6 +10,7 @@ import {
   type CmsConfig,
   type CmsSchema,
   fieldDefaults,
+  mediaFilePath,
   parseConfig,
   parseRegionFile,
   parseSchema,
@@ -22,7 +23,13 @@ import {
   type CollectionFormat,
 } from "@greatcms/spec";
 import type { Site } from "./db.js";
-import { LocalRepository, type CommitResult, type FileChange } from "./repo.js";
+import {
+  LocalRepository,
+  type CommitResult,
+  type FileChange,
+  type PushResult,
+  type SyncState,
+} from "./repo.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
@@ -91,6 +98,23 @@ export class SiteClient {
       config: configFile ? parseConfig(configFile.content, configFile.path) : DEFAULT_CONFIG,
       headSha,
     };
+  }
+
+  /** How far the working copy is ahead of its upstream. */
+  syncState(): Promise<SyncState | null> {
+    return this.repo.syncState();
+  }
+
+  push(): Promise<PushResult> {
+    return this.repo.push();
+  }
+
+  /** A committed upload's bytes, by its file name in the media folder. */
+  async mediaFile(context: SiteContext, fileName: string): Promise<Uint8Array | null> {
+    return this.repo.getBytes(
+      mediaFilePath(context.config, fileName),
+      context.config.content.media,
+    );
   }
 
   /** The stored document for a region, or null when nobody has edited it yet. */
@@ -169,7 +193,7 @@ export class SiteClient {
     const path = collectionEntryPath(context.config, collection, slug);
 
     if (collection.format === "json") {
-      return { path, content: `${JSON.stringify(document, null, 2)}\n` };
+      return { path, content: serializeRegion(document) };
     }
 
     // The body field is the Markdown body, which is what every generator expects.
@@ -216,13 +240,15 @@ export class SiteClient {
     document: RegionDocument;
     actor?: string;
     expectedHeadSha?: string;
+    /** Uploads, committed atomically with the entry that references them. */
+    media?: FileChange[];
   }): Promise<CommitResult> {
     const { context, name, slug, document, expectedHeadSha } = options;
     const file = this.entryFile(context, name, slug, document);
 
     return this.repo.commitFiles({
       message: context.config.publish.commitMessage.replace("{summary}", `${name}/${slug}`),
-      files: [file],
+      files: [...(options.media ?? []), file],
       expectedHeadSha,
     });
   }
@@ -241,7 +267,7 @@ export class SiteClient {
     });
   }
 
-  /** Writes what is currently in the editor to `.cms/draft/`, where the site's own dev. */
+  /** Writes what is currently in the editor to `.cms/draft/`, where the site's own dev server reads it. */
   async writeLiveDraft(options: {
     context: SiteContext;
     regionId?: string;
@@ -251,6 +277,25 @@ export class SiteClient {
     const { path, content } = this.contentFile(options);
     await this.repo.writeDraft(path, content);
     return true;
+  }
+
+  /**
+   * The unsaved edit for a region or entry, as a document, or null when there is
+   * none. An editor that ignored it would show one thing while the site shows
+   * another, and publish would quietly discard what was typed.
+   */
+  async readLiveDraft(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+  }): Promise<RegionDocument | null> {
+    const { context, regionId, collection } = options;
+    const { path } = this.contentFile({ ...options, document: {} });
+    const source = await this.repo.readDraft(path);
+    if (source === null) return null;
+    if (regionId) return parseRegionFile(source, path);
+    if (!collection) return null;
+    return this.parseEntry(this.collection(context, collection.name), path, source).data;
   }
 
   /**
@@ -289,7 +334,7 @@ export class SiteClient {
       const slug = stripExtension(path.slice(dir.length), collection.format);
       return {
         label: `${collection.label ?? name} — ${slug}`,
-        href: `/sites/${this.site.id}/collections/${name}/${slug}`,
+        href: `/sites/${this.site.id}/collections/${name}/${encodeURIComponent(slug)}`,
         path,
       };
     }

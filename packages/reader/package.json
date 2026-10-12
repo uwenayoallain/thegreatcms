@@ -1,10 +1,30 @@
 {
   "name": "@greatcms/reader",
   "version": "0.1.0",
-  "description": "Read GreatCMS content from disk at build time. Framework-neutral: works in Astro, Next, Eleventy, Nuxt, or plain Node.",
+  "description": "Build-time reader for GreatCMS content: synchronous filesystem reads, schema defaults, and a Vite plugin and Astro integration for live preview.",
+  "keywords": [
+    "astro",
+    "cms",
+    "content",
+    "git",
+    "static-site",
+    "vite"
+  ],
+  "homepage": "https://greatcms.dev",
+  "bugs": {
+    "url": "https://github.com/uwenayoallain/thegreatcms/issues"
+  },
   "license": "MIT",
+  "author": "UWENAYO Alain Pacifique",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uwenayoallain/thegreatcms.git",
+    "directory": "packages/reader"
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -23,6 +43,9 @@
       "default": "./dist/astro.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -33,6 +56,9 @@
   },
   "devDependencies": {
     "@greatcms/conformance": "workspace:*",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

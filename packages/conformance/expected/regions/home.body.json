@@ -19,14 +19,21 @@
     {
       "_type": "cta",
       "label": "Read the spec",
-      "link": { "href": "https://example.com/spec", "external": true },
-      "style": "secondary"
+      "link": {
+        "href": "https://example.com/spec",
+        "external": true
+      },
+      "style": "secondary",
+      "_variant": "inline"
     },
     {
       "_type": "cta",
       "label": "Browse the examples",
-      "link": { "href": "/examples" },
-      "style": "primary"
+      "link": {
+        "href": "/examples"
+      },
+      "style": "primary",
+      "_variant": "panel"
     }
   ]
 }

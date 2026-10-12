@@ -1,7 +1,17 @@
 /** Local sites, driven against a real folder and a real Git repository. */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -296,6 +306,183 @@ describe("LocalRepository", () => {
     });
 
     expect(existsSync(join(root, "content/cms/old.json"))).toBe(false);
+  });
+
+  const headSha = () =>
+    execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  const failingHook = (path: string) => {
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    writeFileSync(
+      join(root, path),
+      '#!/bin/sh\ntouch "$(git rev-parse --show-toplevel)/hook-ran"\nexit 1\n',
+    );
+    chmodSync(join(root, path), 0o755);
+  };
+
+  it("reports a commit git refused, instead of calling it published", async () => {
+    const repo = new LocalRepository(root);
+    writeFileSync(join(root, ".git/index.lock"), "");
+
+    await expect(
+      repo.commitFiles({
+        message: "locked",
+        files: [{ path: "content/cms/a.json", content: "{}" }],
+      }),
+    ).rejects.toThrow(/git add failed/);
+  });
+
+  it("does not run the site's git hooks", async () => {
+    const repo = new LocalRepository(root);
+    const before = headSha();
+    failingHook(".git/hooks/pre-commit");
+
+    await repo.commitFiles({
+      message: "hooked",
+      files: [{ path: "content/cms/a.json", content: "{}" }],
+    });
+
+    expect(headSha()).not.toBe(before);
+    expect(existsSync(join(root, "hook-ran"))).toBe(false);
+  });
+
+  it("does not run hooks from a committed hooks folder either", async () => {
+    const repo = new LocalRepository(root);
+    const before = headSha();
+    failingHook(".husky/pre-commit");
+    git(["config", "core.hooksPath", ".husky"]);
+
+    await repo.commitFiles({
+      message: "hooked",
+      files: [{ path: "content/cms/a.json", content: "{}" }],
+    });
+
+    expect(headSha()).not.toBe(before);
+    expect(existsSync(join(root, "hook-ran"))).toBe(false);
+  });
+
+  it("refuses to write through a folder that links outside the site", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "greatcms-outside-"));
+    symlinkSync(outside, join(root, "content/linked"));
+    const repo = new LocalRepository(root);
+
+    await expect(
+      repo.commitFiles({
+        message: "escape",
+        files: [{ path: "content/linked/a.json", content: "{}" }],
+      }),
+    ).rejects.toThrow(/symbolic link/);
+    expect(readdirSync(outside)).toEqual([]);
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("refuses to overwrite a file that is a link to somewhere else", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "greatcms-outside-"));
+    writeFileSync(join(outside, "secret.txt"), "keep me");
+    symlinkSync(join(outside, "secret.txt"), join(root, "content/cms/a.json"));
+    const repo = new LocalRepository(root);
+
+    await expect(
+      repo.commitFiles({ message: "x", files: [{ path: "content/cms/a.json", content: "{}" }] }),
+    ).rejects.toThrow(/symbolic link/);
+    expect(readFileSync(join(outside, "secret.txt"), "utf8")).toBe("keep me");
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("publishes one at a time, so two at once both land as commits", async () => {
+    const repo = new LocalRepository(root);
+    const before = Number(
+      execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: root, encoding: "utf8" }),
+    );
+
+    await Promise.all([
+      repo.commitFiles({ message: "a", files: [{ path: "content/cms/a.json", content: "{}" }] }),
+      repo.commitFiles({ message: "b", files: [{ path: "content/cms/b.json", content: "{}" }] }),
+      new LocalRepository(root).commitFiles({
+        message: "c",
+        files: [{ path: "content/cms/c.json", content: "{}" }],
+      }),
+    ]);
+
+    const after = Number(
+      execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: root, encoding: "utf8" }),
+    );
+    expect(after - before).toBe(3);
+  });
+
+  it("leaves no temporary files behind", async () => {
+    const repo = new LocalRepository(root);
+    await repo.commitFiles({
+      message: "x",
+      files: [
+        { path: "content/cms/a.json", content: "{}" },
+        { path: "public/media/a.png", base64: "aGVsbG8=" },
+      ],
+    });
+
+    expect(readdirSync(join(root, "content/cms")).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    expect(readdirSync(join(root, "public/media")).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("treats publishing unchanged content as success", async () => {
+    const repo = new LocalRepository(root);
+    const file = { path: "content/cms/a.json", content: "{}" };
+    await repo.commitFiles({ message: "first", files: [file] });
+    const head = headSha();
+
+    const again = await repo.commitFiles({ message: "same again", files: [file] });
+
+    expect(again.commitSha).toBe(head);
+  });
+
+  it("publishes when someone committed something else while the editor was open", async () => {
+    const repo = new LocalRepository(root);
+    const opened = headSha();
+    writeFileSync(join(root, "README.md"), "an unrelated change\n");
+    git(["add", "-A"]);
+    git(["commit", "-qm", "unrelated"]);
+
+    await repo.commitFiles({
+      message: "mine",
+      files: [{ path: "content/cms/home.hero.json", content: '{"heading":"Mine"}\n' }],
+      expectedHeadSha: opened,
+    });
+
+    expect(readFileSync(join(root, "content/cms/home.hero.json"), "utf8")).toContain("Mine");
+  });
+
+  it("refuses when that same content was committed while the editor was open", async () => {
+    const repo = new LocalRepository(root);
+    const opened = headSha();
+    writeFileSync(join(root, "content/cms/home.hero.json"), '{"heading":"Theirs"}\n');
+    git(["add", "-A"]);
+    git(["commit", "-qm", "theirs"]);
+
+    await expect(
+      repo.commitFiles({
+        message: "mine",
+        files: [{ path: "content/cms/home.hero.json", content: '{"heading":"Mine"}\n' }],
+        expectedHeadSha: opened,
+      }),
+    ).rejects.toThrow(/moved while you were editing/);
+    expect(readFileSync(join(root, "content/cms/home.hero.json"), "utf8")).toContain("Theirs");
+  });
+
+  it("refuses to publish over an edit someone made by hand and has not committed", async () => {
+    const repo = new LocalRepository(root);
+    writeFileSync(join(root, "content/cms/home.hero.json"), '{"heading":"Theirs"}\n');
+    git(["add", "-A"]);
+    git(["commit", "-qm", "theirs"]);
+    const opened = headSha();
+    writeFileSync(join(root, "content/cms/home.hero.json"), '{"heading":"Hand edit"}\n');
+
+    await expect(
+      repo.commitFiles({
+        message: "mine",
+        files: [{ path: "content/cms/home.hero.json", content: '{"heading":"Mine"}\n' }],
+        expectedHeadSha: opened,
+      }),
+    ).rejects.toThrow(/unsaved changes/);
+    expect(readFileSync(join(root, "content/cms/home.hero.json"), "utf8")).toContain("Hand edit");
   });
 
   it("refuses to publish over a commit made while the editor was open", async () => {

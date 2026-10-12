@@ -11,6 +11,14 @@ describe("what it hides", () => {
     expect(PREVIEW_SCRIPT).toContain("display: none !important");
   });
 
+  it("carries the inspector the studio talks to, guarded the same way", () => {
+    expect(PREVIEW_SCRIPT).toContain("data-greatcms-field");
+    expect(PREVIEW_SCRIPT).toContain("data-greatcms-block");
+    // Only the studio that framed the page gets an answer, and only to its own origin.
+    expect(PREVIEW_SCRIPT).toContain("event.source !== window.parent");
+    expect(PREVIEW_SCRIPT).toContain("studio.postMessage(message, origin)");
+  });
+
   it("does nothing at all unless the page is framed", () => {
     // The whole guard: on your own tab the toolbar is yours to use.
     expect(PREVIEW_SCRIPT).toContain("window.top !== window.self");

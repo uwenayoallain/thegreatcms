@@ -1,0 +1,53 @@
+---
+import Base from '../layouts/Base.astro';
+import ManagedImage from '../components/ManagedImage.astro';
+import { cms } from '../lib/cms';
+
+const contact = cms.region('site.contact');
+const identity = cms.region('site.identity');
+const studio = import.meta.env.PUBLIC_CMS_URL ?? 'https://studio.example.com';
+const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'kivu-seedworks';
+---
+
+<Base title="Contact" description="Start a field note with Kivu Seedworks.">
+  <div class="contact-layout">
+    <header class="page-hero">
+      <p class="kicker">Start with the field</p>
+      <h1>Four details make the next step useful.</h1>
+      <p>Share the location, crop, acreage, and planting week. The reply can stay short because the question is specific.</p>
+      <dl class="contact-details">
+        <div><dt>Phone</dt><dd><a href={`tel:${contact.phone.replace(/\s/g, '')}`}>{contact.phone}</a></dd></div>
+        <div><dt>Email</dt><dd><a href={`mailto:${contact.email}`}>{contact.email}</a></dd></div>
+        {contact.address && <div><dt>Store</dt><dd>{contact.address}</dd></div>}
+        {contact.hours && <div><dt>Hours</dt><dd>{contact.hours}</dd></div>}
+      </dl>
+      {identity.owner && (
+        <aside class="contact-person" aria-label="Your contact person">
+          <ManagedImage image={identity.owner.photo} class="contact-person-image" />
+          <p class="kicker">Your contact</p>
+          <p><strong>{identity.owner.name}</strong>{identity.owner.role && <span>{identity.owner.role}</span>}</p>
+          {identity.owner.bio && <p>{identity.owner.bio}</p>}
+          {identity.owner.phone && <a href={`tel:${identity.owner.phone.replace(/\s/g, '')}`}>{identity.owner.phone}</a>}
+        </aside>
+      )}
+    </header>
+
+    <form class="field-form" method="POST" action={`${studio}/f/${siteId}/field-note`}>
+      <div class="field-pair">
+        <div><label for="name">Your name</label><input id="name" name="name" autocomplete="name" required /></div>
+        <div><label for="phone">Phone number</label><input id="phone" name="phone" type="tel" autocomplete="tel" required /></div>
+      </div>
+      <div><label for="location">Field location</label><input id="location" name="location" required /></div>
+      <div class="field-pair">
+        <div><label for="crop">Crop</label><input id="crop" name="crop" required /></div>
+        <div><label for="area">Approximate acreage</label><input id="area" name="area" /></div>
+      </div>
+      <div><label for="window">Preferred planting week</label><input id="window" name="window" /></div>
+      <div><label for="message">What do you need help choosing?</label><textarea id="message" name="message" rows="5" required></textarea></div>
+      <input type="hidden" name="_redirect" value="/contact/?sent=1" />
+      <input type="hidden" name="_t" value={String(Date.now())} />
+      <div class="trap" aria-hidden="true"><label for="company">Company</label><input id="company" name="company" tabindex="-1" autocomplete="off" /></div>
+      <button class="button" type="submit">Send field note</button>
+    </form>
+  </div>
+</Base>

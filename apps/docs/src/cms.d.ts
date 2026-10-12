@@ -14,8 +14,16 @@ export interface ClaimBlock {
   title: string;
 }
 
+/** Proof — Block `proof`. */
+export interface ProofBlock {
+  _type: "proof";
+  body: string;
+  link: CmsLink;
+  title: string;
+}
+
 /** Any block this schema defines, discriminated by `_type`. */
-export type CmsBlock = ClaimBlock;
+export type CmsBlock = ClaimBlock | ProofBlock;
 
 /** Landing claims — Region `home.claims` — a reorderable block list. */
 export interface HomeClaimsRegion {
@@ -36,13 +44,25 @@ export interface HomeHeroRegion {
   subtitle?: string;
 }
 
+/** Proofs — Region `home.proofs` — a reorderable block list. */
+export interface HomeProofsRegion {
+  blocks: Array<ProofBlock>;
+}
+
+/** Footer — Region `site.footer`. */
+export interface SiteFooterRegion {
+  claim: string;
+  links?: Array<CmsLink>;
+  note: string;
+}
+
 /** Documentation — Entry in collection `docs`. */
 export interface DocsEntry {
   slug: string;
   file: string;
   body: string;
   data: {
-    content?: RichText;
+    content: string;
     order: number;
     summary?: string;
     title: string;
@@ -59,6 +79,8 @@ declare module "@greatcms/reader" {
     "home.claims": HomeClaimsRegion;
     "home.closing": HomeClosingRegion;
     "home.hero": HomeHeroRegion;
+    "home.proofs": HomeProofsRegion;
+    "site.footer": SiteFooterRegion;
   }
 
   interface GreatCMSCollections {

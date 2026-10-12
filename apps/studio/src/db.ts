@@ -3,6 +3,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
+import { UploadError, type UploadResult } from "./media.js";
 
 export interface Site {
   id: string;
@@ -11,10 +13,12 @@ export interface Site {
   path: string;
   /** Where the site's dev server is listening, so the editor can show the real components rendering. */
   devUrl: string;
+  /** Push each publish to the branch's upstream, so it deploys without anyone touching Git. */
+  pushAfterPublish: boolean;
   createdAt: string;
 }
 
-export type NewSite = Omit<Site, "createdAt">;
+export type NewSite = Omit<Site, "createdAt" | "pushAfterPublish"> & { pushAfterPublish?: boolean };
 
 const MIGRATIONS: Array<{ name: string; sql: string }> = [
   {
@@ -100,6 +104,49 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE publishes DROP COLUMN pull_request_url;
     `,
   },
+  {
+    name: "007-pending-media",
+    sql: `
+      CREATE TABLE pending_media (
+        id TEXT PRIMARY KEY,
+        site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+        scope TEXT NOT NULL,
+        data TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX pending_media_expiry ON pending_media (expires_at);
+    `,
+  },
+  {
+    // One row per file, bytes as a BLOB, so a thumbnail reads one image instead of the whole edit.
+    name: "008-pending-media-files",
+    sql: `
+      DROP TABLE pending_media;
+      CREATE TABLE pending_media (
+        id TEXT PRIMARY KEY,
+        site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+        scope TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX pending_media_expiry ON pending_media (expires_at);
+      CREATE TABLE pending_media_files (
+        media_id TEXT NOT NULL REFERENCES pending_media(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        path TEXT NOT NULL,
+        src TEXT NOT NULL,
+        width INTEGER,
+        height INTEGER,
+        content BLOB NOT NULL,
+        PRIMARY KEY (media_id, position)
+      );
+    `,
+  },
+  {
+    name: "009-push-after-publish",
+    sql: `ALTER TABLE sites ADD COLUMN push_after_publish INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];
 
 export interface Submission {
@@ -133,8 +180,11 @@ export class Store {
     );
     for (const migration of MIGRATIONS) {
       if (applied.has(migration.name)) continue;
-      this.db.exec(migration.sql);
-      this.db.prepare("INSERT INTO migrations (name) VALUES (?)").run(migration.name);
+      // All of a migration or none of it: half a schema change fails every later start.
+      this.transaction(() => {
+        this.db.exec(migration.sql);
+        this.db.prepare("INSERT INTO migrations (name) VALUES (?)").run(migration.name);
+      });
     }
   }
 
@@ -155,15 +205,132 @@ export class Store {
 
   addSite(site: NewSite): Site {
     this.db
-      .prepare("INSERT INTO sites (id, name, path, dev_url) VALUES (?, ?, ?, ?)")
-      .run(site.id, site.name, site.path, site.devUrl ?? "");
+      .prepare(
+        "INSERT INTO sites (id, name, path, dev_url, push_after_publish) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(site.id, site.name, site.path, site.devUrl ?? "", site.pushAfterPublish ? 1 : 0);
     const created = this.getSite(site.id);
     if (!created) throw new Error(`Site "${site.id}" vanished immediately after insert.`);
     return created;
   }
 
+  /** Everything but the folder can change; the folder is what the site is. */
+  updateSite(
+    id: string,
+    changes: { name: string; devUrl: string; pushAfterPublish: boolean },
+  ): void {
+    this.db
+      .prepare("UPDATE sites SET name = ?, dev_url = ?, push_after_publish = ? WHERE id = ?")
+      .run(changes.name, changes.devUrl, changes.pushAfterPublish ? 1 : 0, id);
+  }
+
   removeSite(id: string): void {
     this.db.prepare("DELETE FROM sites WHERE id = ?").run(id);
+  }
+
+  pendingMedia(siteId: string, scope: string, id: string, now = Date.now()): UploadResult[] {
+    this.requirePendingMedia(siteId, scope, id, now);
+    const rows = this.db
+      .prepare(
+        "SELECT path, src, width, height, content FROM pending_media_files WHERE media_id = ? ORDER BY position",
+      )
+      .all(id) as unknown as PendingFileRow[];
+    return rows.map(toUploadResult);
+  }
+
+  /** One pending file's bytes, for a thumbnail, without reading the rest of the edit. */
+  pendingMediaFile(
+    siteId: string,
+    scope: string,
+    id: string,
+    position: number,
+    now = Date.now(),
+  ): { path: string; content: Uint8Array } | null {
+    const row = this.db
+      .prepare(
+        `SELECT f.path, f.content FROM pending_media_files f
+         JOIN pending_media m ON m.id = f.media_id
+         WHERE m.id = ? AND m.site_id = ? AND m.scope = ? AND m.expires_at > ? AND f.position = ?`,
+      )
+      .get(id, siteId, scope, now, position) as { path: string; content: Uint8Array } | undefined;
+    return row ?? null;
+  }
+
+  savePendingMedia(
+    siteId: string,
+    scope: string,
+    files: UploadResult[],
+    previous?: string,
+    now = Date.now(),
+  ): string {
+    this.db.prepare("DELETE FROM pending_media WHERE expires_at <= ?").run(now);
+    if (previous) this.requirePendingMedia(siteId, scope, previous, now);
+    const bytes = files.reduce(
+      (sum, file) => sum + file.base64.length + file.path.length + file.src.length,
+      0,
+    );
+    const used = this.db
+      .prepare("SELECT coalesce(sum(bytes), 0) AS bytes FROM pending_media WHERE id <> ?")
+      .get(previous ?? "") as { bytes: number };
+    if (bytes > 32 * 1024 * 1024 || used.bytes + bytes > 128 * 1024 * 1024)
+      throw new UploadError(
+        "Too many images are waiting to be published.",
+        "Publish a smaller batch or try again after other pending edits are published.",
+      );
+    const id = previous ?? randomUUID();
+    const insertFile = this.db.prepare(
+      "INSERT INTO pending_media_files (media_id, position, path, src, width, height, content) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "INSERT INTO pending_media (id, site_id, scope, bytes, expires_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET bytes=excluded.bytes, expires_at=excluded.expires_at",
+        )
+        .run(id, siteId, scope, bytes, now + 24 * 60 * 60 * 1000);
+      this.db.prepare("DELETE FROM pending_media_files WHERE media_id = ?").run(id);
+      files.forEach((file, position) => {
+        insertFile.run(
+          id,
+          position,
+          file.path,
+          file.src,
+          file.width ?? null,
+          file.height ?? null,
+          Buffer.from(file.base64, "base64"),
+        );
+      });
+    });
+    return id;
+  }
+
+  clearPendingMedia(siteId: string, scope: string, id: string): void {
+    this.db
+      .prepare("DELETE FROM pending_media WHERE id = ? AND site_id = ? AND scope = ?")
+      .run(id, siteId, scope);
+  }
+
+  private requirePendingMedia(siteId: string, scope: string, id: string, now: number): void {
+    const row = this.db
+      .prepare(
+        "SELECT 1 FROM pending_media WHERE id = ? AND site_id = ? AND scope = ? AND expires_at > ?",
+      )
+      .get(id, siteId, scope, now);
+    if (!row)
+      throw new UploadError(
+        "The selected images are no longer available for this edit.",
+        "Copy any unsaved text, reload the page, and select the images again.",
+      );
+  }
+
+  private transaction(work: () => void): void {
+    this.db.exec("BEGIN");
+    try {
+      work();
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   recordPublish(entry: {
@@ -305,6 +472,7 @@ interface RawSite {
   name: string;
   path: string;
   dev_url: string;
+  push_after_publish: number;
   created_at: string;
 }
 
@@ -314,6 +482,25 @@ function toSite(row: RawSite): Site {
     name: row.name,
     path: row.path ?? "",
     devUrl: row.dev_url ?? "",
+    pushAfterPublish: row.push_after_publish === 1,
     createdAt: row.created_at,
+  };
+}
+
+interface PendingFileRow {
+  path: string;
+  src: string;
+  width: number | null;
+  height: number | null;
+  content: Uint8Array;
+}
+
+function toUploadResult(row: PendingFileRow): UploadResult {
+  return {
+    path: row.path,
+    src: row.src,
+    ...(row.width === null ? {} : { width: row.width }),
+    ...(row.height === null ? {} : { height: row.height }),
+    base64: Buffer.from(row.content).toString("base64"),
   };
 }

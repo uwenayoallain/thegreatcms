@@ -24,6 +24,10 @@ pnpm --filter @greatcms/studio exec vitest run tests/media.test.ts   # one file
 pnpm --filter @greatcms/studio exec vitest run -t "rejects svg"      # one test
 ```
 
+Every package's `vitest.config.ts` re-exports `vitest.shared.ts`: a 30 s test
+timeout and half the cores per package, because turbo runs several at once.
+Change timeouts and worker counts there, not per file.
+
 `test` depends on `build`, so after changing a package that another one imports,
 run `pnpm build` before the dependent's tests — invoking `vitest` directly skips
 that. Vitest watch mode is not wired into turbo — run
@@ -32,9 +36,11 @@ that. Vitest watch mode is not wired into turbo — run
 Running things:
 
 ```sh
-STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio dev   # :8787
+STUDIO_PASSWORD='something long' pnpm dev        # studio (:8787) + Astro example (:4321)
+STUDIO_PASSWORD='something long' pnpm studio     # the studio alone
 pnpm --filter @greatcms/docs dev
-pnpm --filter @greatcms/example-site-astro dev                        # :4321
+pnpm --filter @greatcms/example-business-astro dev
+pnpm greatcms check                              # any CLI command, from this checkout
 ```
 
 Browser tests (ProseMirror, live preview, colour contrast) need Chromium once:
@@ -100,6 +106,11 @@ The layering:
 scaffolding in `init.ts`), `add` (edits an existing schema as text, preserving
 its comments), `types` (TypeScript from the schema), `check`, and `doctor`.
 
+**`packages/deploy`** is `greatcms-deploy`, the one piece that runs a site's own
+code: it clones a commit into a work folder, runs the build command, and swaps a
+`current` symlink. It is a separate process and container from the studio on
+purpose, so the studio's "never executes a managed repository" rule holds.
+
 **`packages/conformance`** is fixtures plus a verifier; it defines what "reads
 the standard correctly" means for any implementation in any language. The
 fixtures deliberately include the awkward cases — missing content file, content
@@ -113,9 +124,11 @@ predating a schema field, block missing a defaulted field, decorative empty alt.
 - Comments are deliberately sparse: a one-line file docstring, and a single line
   where the code cannot say it itself. Do not reintroduce block essays. Prefer a
   regression test over a comment about a bug.
-- Tooling is Rust-first (oxlint, oxfmt, tsdown, rolldown-vite). Do not
+- Tooling is Rust-first (oxlint, oxfmt, tsdown, Vite 8 (Rolldown)). Do not
   reintroduce ESLint, Prettier, or plain Rollup. `pnpm lint:fix` and
   `pnpm format` fix mechanically.
-- ESM only, `.js` extensions in relative imports, Node >= 20.11, pnpm.
+- ESM only, `.js` extensions in relative imports, pnpm. Developing needs Node >= 22.18
+  (tsdown, jsdom); the studio runs on >= 22.13 (`node:sqlite`); published packages
+  still target Node 20.
 - Changing the standard means bumping `version:` in the spec and documenting a
   migration; new optional keys and field types are additive within version 1.

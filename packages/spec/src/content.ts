@@ -1,7 +1,7 @@
 /** Defaults and fallback — the mechanics of the hybrid model. */
 
 import type { FieldDef } from "./fields.js";
-import { type CmsSchema, type RegionDef, isBlocksRegion } from "./schema.js";
+import { type CmsSchema, type RegionDef, blockVariants, isBlocksRegion } from "./schema.js";
 
 export type RegionDocument = Record<string, unknown>;
 
@@ -37,16 +37,14 @@ export function fieldDefaults(fields: Record<string, FieldDef>): RegionDocument 
 
 /** What a region renders as when no content file exists yet. */
 export function regionDefaults(schema: CmsSchema, regionId: string): RegionDocument | null {
-  const region = schema.regions[regionId];
-  if (!region) return null;
-  return defaultsFor(region);
+  return resolveRegion(schema, regionId, null);
 }
 
 function defaultsFor(region: RegionDef): RegionDocument {
   if (isBlocksRegion(region)) {
     return { blocks: region.default ?? [] };
   }
-  return { ...fieldDefaults(region.fields), ...region.default };
+  return deepMerge(fieldDefaults(region.fields), region.default ?? {});
 }
 
 /** Merges stored content over schema defaults. */
@@ -58,12 +56,12 @@ export function resolveRegion(
   const region = schema.regions[regionId];
   if (!region) return null;
   const defaults = defaultsFor(region);
-  if (!stored) return defaults;
+  const document = stored ?? {};
   if (isBlocksRegion(region)) {
-    if (!Array.isArray(stored.blocks)) return defaults;
-    return { ...stored, blocks: stored.blocks.map((block) => resolveBlock(schema, block)) };
+    if (!Array.isArray(document.blocks)) return defaults;
+    return { ...document, blocks: document.blocks.map((block) => resolveBlock(schema, block)) };
   }
-  return resolveNested(schema, region.fields, deepMerge(defaults, stored));
+  return resolveNested(schema, region.fields, deepMerge(defaults, document));
 }
 
 /**
@@ -75,7 +73,14 @@ function resolveBlock(schema: CmsSchema, block: unknown): unknown {
   const type = (block as { _type?: unknown })?._type;
   const def = typeof type === "string" ? schema.blocks[type] : undefined;
   if (!def || !isPlainObject(block)) return block;
-  return resolveNested(schema, def.fields, deepMerge(fieldDefaults(def.fields), block));
+  const resolved = resolveNested(schema, def.fields, deepMerge(fieldDefaults(def.fields), block));
+  // A block with variants always has one: the first, unless the content names another.
+  const variants = blockVariants(def);
+  if (variants.length > 0) {
+    const named = resolved._variant;
+    resolved._variant = variants.some((v) => v.value === named) ? named : variants[0]!.value;
+  }
+  return resolved;
 }
 
 /** Walks a document's `blocks` fields, resolving what is inside them. */
@@ -116,22 +121,30 @@ function isPlainObject(value: unknown): value is RegionDocument {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Serializes a region document for commit: stable key order, trailing newline. */
+/**
+ * Serializes a JSON content file for commit: keys sorted at every depth, machinery last,
+ * two-space indent, trailing newline. Regions and JSON collection entries both use it.
+ */
 export function serializeRegion(document: RegionDocument, meta?: RegionMeta): string {
-  const ordered: RegionDocument = {};
-  for (const key of Object.keys(document).toSorted(machineryLast)) {
-    ordered[key] = document[key];
-  }
-  if (meta) ordered._meta = meta;
+  const ordered = sortKeys(document) as RegionDocument;
+  if (meta) ordered._meta = sortKeys(meta) as RegionMeta;
   return `${JSON.stringify(ordered, null, 2)}\n`;
 }
 
-/** Keys beginning with `_` are machinery (`_meta`, `_type`). */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (!isPlainObject(value)) return value;
+  const ordered: RegionDocument = {};
+  for (const key of Object.keys(value).toSorted(machineryLast)) ordered[key] = sortKeys(value[key]);
+  return ordered;
+}
+
+/** Keys beginning with `_` are machinery (`_meta`, `_type`). Code-point order, so every language agrees. */
 function machineryLast(a: string, b: string): number {
   const am = a.startsWith("_");
   const bm = b.startsWith("_");
   if (am !== bm) return am ? 1 : -1;
-  return a.localeCompare(b);
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 export function parseRegionFile(source: string, file: string): RegionDocument {

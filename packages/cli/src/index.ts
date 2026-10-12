@@ -25,6 +25,7 @@ import {
 import {
   AddError,
   applyPlan,
+  blocksRegionIds,
   FIELD_TYPES,
   labelFor,
   parseFieldSpec,
@@ -41,9 +42,11 @@ import {
   TEMPLATES,
   type InitAnswers,
   type TemplateId,
+  mergeAgentsNote,
 } from "./init.js";
 import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } from "./prompt.js";
 import { CliError, type FilePort, type GitPort } from "./ports.js";
+import { setupProject } from "./setup.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -144,6 +147,11 @@ export async function loadConfig(root: string): Promise<CmsConfig> {
 }
 
 export async function loadSchema(root: string): Promise<CmsSchema> {
+  const found = await schemaSourceOf(root);
+  return parseSchema(found.source, { file: found.name });
+}
+
+async function schemaSourceOf(root: string): Promise<{ name: string; source: string }> {
   const found = await firstReadable(root, [
     ".cms/schema.json",
     ".cms/schema.yaml",
@@ -155,7 +163,7 @@ export async function loadSchema(root: string): Promise<CmsSchema> {
       "Run this from the root of a site managed by GreatCMS.",
     );
   }
-  return parseSchema(found.source, { file: found.name });
+  return found;
 }
 
 /** Reads every candidate at once and keeps the first that exists, in order. */
@@ -184,14 +192,50 @@ export interface RunOptions {
   stderr: (text: string) => void;
 }
 
+/** Prompts need a person on both ends: keys coming in, and a screen to redraw. */
+function isInteractive(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
 export async function run(options: RunOptions): Promise<number> {
   const { argv, stdout, stderr } = options;
   const [command = "help", ...rest] = argv;
   const flags = parseFlags(rest);
+  const knownCommand = ["setup", "init", "add", "check", "types", "doctor"].includes(command);
+
+  // Help must be side-effect free even when it follows a mutating command.
+  if (knownCommand && (rest.includes("--help") || rest.includes("-h"))) {
+    stdout(HELP);
+    return 0;
+  }
 
   try {
+    if (knownCommand && command !== "setup" && flags.unknown.length > 0) {
+      throw new CliError(
+        `Unknown option ${flags.unknown.join(", ")}.`,
+        `Run \`greatcms ${command} --help\` to see the options it takes.`,
+      );
+    }
     switch (command) {
+      case "setup": {
+        if (rest.length > 1 || rest.some((arg) => arg.startsWith("-")))
+          throw new CliError("Usage: greatcms setup [directory]");
+        const prompt =
+          options.prompt ??
+          (isInteractive()
+            ? terminalPrompt({ input: process.stdin, output: process.stdout })
+            : defaultsOnlyPrompt(stdout));
+        return await setupProject({ root: resolve(options.cwd, rest[0] ?? "."), prompt, stdout });
+      }
       case "init":
+        if (!rest.length && (options.prompt?.interactive || isInteractive())) {
+          return await setupProject({
+            root: options.cwd,
+            prompt:
+              options.prompt ?? terminalPrompt({ input: process.stdin, output: process.stdout }),
+            stdout,
+          });
+        }
         return await initCommand({ ...options, flags });
       case "add":
         return await addCommand({ ...options, flags, rest });
@@ -211,7 +255,10 @@ export async function run(options: RunOptions): Promise<number> {
         return 1;
     }
   } catch (error) {
-    if (error instanceof PromptCancelled) return 130;
+    if (error instanceof PromptCancelled) {
+      stderr("\nCancelled. Nothing was written.\n");
+      return 130;
+    }
     if (error instanceof AddError || error instanceof CliError || error instanceof SpecError) {
       stderr(`${error.message}\n`);
       return 1;
@@ -230,7 +277,7 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
 
   const prompt =
     options.prompt ??
-    (flags.boolean("yes") || !process.stdin.isTTY
+    (flags.boolean("yes") || !isInteractive()
       ? defaultsOnlyPrompt(stdout)
       : terminalPrompt({ input: process.stdin, output: process.stdout }));
 
@@ -252,20 +299,24 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
     files: await listRoot(root),
     packageJson: await readPackageJson(root),
   });
+  const frameworkFlag = flags.string("framework");
+  const chosenFramework = frameworkFlag ? frameworkFromFlag(frameworkFlag) : null;
 
   stdout(`\nSetting up GreatCMS in ${root}\n\n`);
   prompt.note(
-    detection.confident
-      ? `Detected ${detection.framework.label} (${detection.evidence}).`
-      : `No framework detected (${detection.evidence}).`,
+    chosenFramework
+      ? `Using ${chosenFramework.label} (--framework).`
+      : detection.confident
+        ? `Detected ${detection.framework.label} (${detection.evidence}).`
+        : `No framework detected (${detection.evidence}).`,
   );
 
   const name =
     flags.string("name") ??
     (await prompt.text("Site name?", (await readPackageName(root)) ?? basename(root)));
 
-  const framework = flags.string("framework")
-    ? frameworkFromFlag(flags.string("framework") as string)
+  const framework = chosenFramework
+    ? chosenFramework
     : await prompt.select<Framework>(
         "What is this site built with?",
         Object.values(FRAMEWORKS).map((entry) => ({
@@ -287,8 +338,6 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
     flags.string("dir") ??
     (await prompt.text("Where should content files live?", framework.regionsDir));
 
-  const branch = flags.string("branch") ?? (await currentBranch(root)) ?? "main";
-
   const answers: InitAnswers = {
     name,
     framework,
@@ -297,13 +346,14 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
     mediaDir: framework.mediaDir,
     mediaUrlPrefix: framework.mediaUrlPrefix,
     collectionsDir: framework.collectionsDir,
-    branch,
     schemaUrl: DEFAULT_SCHEMA_URL,
   };
 
   const plan = planInit(answers);
   const files = nodeFiles(root);
   await Promise.all(plan.files.map((file) => files.write(file.path, file.content)));
+  // The agent that works in this repository next should not have to discover any of this.
+  await files.write("AGENTS.md", mergeAgentsNote(await files.read("AGENTS.md"), plan.agentsNote));
 
   stdout(nextSteps(answers, plan));
   return 0;
@@ -319,19 +369,23 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
   const { cwd, stdout, flags, rest } = options;
   const root = resolve(cwd);
 
-  const kind = rest[0];
-  if (kind !== "region" && kind !== "block" && kind !== "collection") {
+  const [requestedKind, name] = flags.positionals;
+  if (
+    requestedKind !== "region" &&
+    requestedKind !== "section" &&
+    requestedKind !== "block" &&
+    requestedKind !== "collection"
+  ) {
     throw new AddError(
-      kind ? `Cannot add a "${kind}".` : "Say what to add.",
-      "greatcms add region <id> | add block <name> | add collection <name>",
+      requestedKind ? `Cannot add a "${requestedKind}".` : "Say what to add.",
+      "greatcms add region <id> | add section <name> | add collection <name>",
     );
   }
-
-  const name = rest[1] && !rest[1].startsWith("--") ? rest[1] : undefined;
+  const kind = requestedKind === "section" ? "block" : requestedKind;
 
   const prompt =
     options.prompt ??
-    (flags.boolean("yes") || !process.stdin.isTTY
+    (flags.boolean("yes") || !isInteractive()
       ? defaultsOnlyPrompt(stdout)
       : terminalPrompt({ input: process.stdin, output: process.stdout }));
 
@@ -346,10 +400,47 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
       "Run `greatcms init` first, or run this from the root of the site.",
     );
   }
+  const schema = parseSchema(found.source, { file: found.name });
 
   const config = await loadConfig(root);
-  const id = name ?? (await prompt.text(`What is the ${kind} called?`, suggestedName(kind)));
+  const id =
+    name ??
+    (await prompt.text(`What is the ${requestedKind} called?`, suggestedName(requestedKind)));
   const label = flags.string("label") ?? labelFor(id);
+
+  if (flags.string("to") && kind !== "block") {
+    throw new AddError(
+      `--to does not apply to a ${requestedKind}.`,
+      "Use it with `greatcms add section <name> --to <blocks-region>`.",
+    );
+  }
+
+  let target = flags.string("to");
+  if (requestedKind === "section" && !target) {
+    const destinations = blocksRegionIds(schema);
+    if (destinations.length === 1) {
+      target = destinations[0];
+    } else if (destinations.length === 0) {
+      throw new AddError(
+        "This schema has no reorderable page region for the section.",
+        "Add one first: greatcms add region home.sections --blocks feature",
+      );
+    } else if (prompt.interactive) {
+      target = await prompt.select(
+        "Where should editors be able to add it?",
+        destinations.map((value) => ({
+          value,
+          label: schema.regions[value]?.label ?? labelFor(value),
+          hint: value,
+        })),
+      );
+    } else {
+      throw new AddError(
+        "This schema has more than one reorderable page region.",
+        `Choose one with --to: ${destinations.join(", ")}.`,
+      );
+    }
+  }
 
   // --field can appear several times; the flag parser keeps the last, so the raw
   // argument list is the honest source for a repeated flag.
@@ -378,7 +469,7 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
     kind === "region"
       ? { kind: "region", id, label, fields, ...(allow ? { allow } : {}) }
       : kind === "block"
-        ? { kind: "block", name: id, label, fields }
+        ? { kind: "block", name: id, label, fields, ...(target ? { to: target } : {}) }
         : {
             kind: "collection",
             name: id,
@@ -398,7 +489,23 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
   });
   const snippet = readSnippet(plan, detection.framework, config);
 
-  const lines = ["", `Added ${kind} ${id} to ${found.name}.`, ""];
+  const lines = ["", `Added ${requestedKind} ${id} to ${found.name}.`, ""];
+  if (plan.kind === "block" && plan.to) {
+    lines.push(`Editors can now add it in ${plan.to}.`, "");
+    if (requestedKind === "section") {
+      lines.push(
+        `Implement the \`_type: "${id}"\` case once in your site's section renderer.`,
+        "After that, editors can add and reuse it without another schema change.",
+        "",
+      );
+    }
+  } else if (plan.kind === "block") {
+    lines.push(
+      "This block is defined for nested use, but is not in a page region yet.",
+      "Add its name to a blocks region's `allow` list when it should be selectable there.",
+      "",
+    );
+  }
   if (result.contentPath) {
     lines.push(
       plan.kind === "region"
@@ -468,7 +575,12 @@ function defaultCollectionsDir(root: string, config: CmsConfig): string {
 export function repeatedFlag(argv: string[], name: string): string[] {
   const found: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] !== `--${name}`) continue;
+    const token = argv[i];
+    if (token?.startsWith(`--${name}=`)) {
+      found.push(token.slice(name.length + 3));
+      continue;
+    }
+    if (token !== `--${name}`) continue;
     const value = argv[i + 1];
     if (value && !value.startsWith("--")) found.push(value);
   }
@@ -503,14 +615,6 @@ async function readPackageName(root: string): Promise<string | undefined> {
   return pkg?.name?.replace(/^@[^/]+\//, "");
 }
 
-async function currentBranch(root: string): Promise<string | null> {
-  try {
-    return (await nodeGit(root).run(["rev-parse", "--abbrev-ref", "HEAD"])).trim() || null;
-  } catch {
-    return null;
-  }
-}
-
 function frameworkFromFlag(value: string): Framework {
   const framework = FRAMEWORKS[value as FrameworkId];
   if (!framework) {
@@ -538,10 +642,12 @@ async function checkCommand(options: RunOptions & { flags: Flags }): Promise<num
   const { cwd, stdout, stderr, flags } = options;
   const root = resolve(cwd);
 
+  const schemaSource = await schemaSourceOf(root);
   const report: CheckReport = await checkSite({
-    schema: await loadSchema(root),
+    schema: parseSchema(schemaSource.source, { file: schemaSource.name }),
     config: await loadConfig(root),
     files: nodeCheckFiles(root),
+    schemaSource,
   });
 
   if (flags.boolean("json")) {
@@ -567,6 +673,10 @@ async function typesCommand(options: RunOptions & { flags: Flags }): Promise<num
 
   const out = flags.string("out");
   if (!out) {
+    if (flags.boolean("check")) {
+      // Without a file there is nothing to compare, and a check that cannot fail is no check.
+      throw new CliError("`greatcms types --check` needs `--out <file>` to compare against.");
+    }
     stdout(source);
     return 0;
   }
@@ -601,7 +711,7 @@ async function typesCommand(options: RunOptions & { flags: Flags }): Promise<num
 }
 
 async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<number> {
-  const { cwd, stdout } = options;
+  const { cwd, stdout, flags } = options;
   const root = resolve(cwd);
   const config = await loadConfig(root);
   const schema = await loadSchema(root);
@@ -610,8 +720,6 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
   const lines: string[] = ["GreatCMS setup looks like this:", ""];
   lines.push(`  spec version   ${schema.version}`);
   lines.push(`  regions dir    ${config.content.regions}`);
-  lines.push(`  publish branch ${config.publish.branch}`);
-  lines.push();
   lines.push("", `Regions (${Object.keys(schema.regions).length}):`);
 
   const statuses = await Promise.all(
@@ -642,6 +750,31 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
   // An unsaved draft only shows in dev, so the only way to notice a forgotten
   // one is to be told.
   const drafts = await listDrafts(root);
+  if (flags.boolean("json")) {
+    stdout(
+      `${JSON.stringify(
+        {
+          specVersion: schema.version,
+          regionsDir: config.content.regions,
+          mediaDir: config.content.media,
+          regions: statuses.map(({ regionId, path, exists }) => ({
+            id: regionId,
+            path,
+            edited: exists,
+          })),
+          collections: Object.entries(schema.collections).map(([name, collection]) => ({
+            name,
+            path: collection.path,
+            format: collection.format,
+          })),
+          drafts,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return 0;
+  }
   if (drafts.length > 0) {
     lines.push(
       "",
@@ -658,20 +791,52 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
 interface Flags {
   string(name: string): string | undefined;
   boolean(name: string): boolean;
+  /** Arguments that are not flags or flag values, in order. */
+  positionals: string[];
+  /** Flags no command understands, so a typo is reported rather than ignored. */
+  unknown: string[];
 }
+
+/** Switches never take a value, so `--yes hero.banner` leaves the name where it was typed. */
+const SWITCHES = new Set(["yes", "force", "check", "json", "help"]);
+const OPTIONS = new Set([
+  "name",
+  "framework",
+  "template",
+  "dir",
+  "format",
+  "label",
+  "module",
+  "out",
+  "to",
+  "field",
+]);
 
 export function parseFlags(argv: string[]): Flags {
   const values = new Map<string, string | true>();
+  const positionals: string[] = [];
+  const unknown: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token?.startsWith("--")) continue;
-    const name = token.slice(2);
-    const next = argv[i + 1];
-    if (next && !next.startsWith("--")) {
-      values.set(name, next);
-      i += 1;
-    } else {
+    const token = argv[i] as string;
+    if (!token.startsWith("--")) {
+      if (token !== "-h") positionals.push(token);
+      continue;
+    }
+    const [name = "", inline] = token.slice(2).split(/=(.*)/s, 2);
+    if (SWITCHES.has(name)) {
       values.set(name, true);
+    } else if (OPTIONS.has(name)) {
+      const next = argv[i + 1];
+      if (inline !== undefined) {
+        values.set(name, inline);
+      } else if (next !== undefined && !next.startsWith("--")) {
+        values.set(name, next);
+        i += 1;
+      } else {
+        values.set(name, true);
+      }
+    } else {
+      unknown.push(token);
     }
   }
   return {
@@ -680,27 +845,35 @@ export function parseFlags(argv: string[]): Flags {
       return typeof value === "string" ? value : undefined;
     },
     boolean: (name) => values.has(name),
+    positionals,
+    unknown,
   };
 }
 
 const HELP = `greatcms — local tools for a Git-backed site
 
+  greatcms setup [directory]     scan a new/existing project or workspace, build
+                                 custom regions, sections and collections,
+                                 then review and apply CMS integration
+
   greatcms init [options]        set up .cms/schema.yaml and .cms/config.yaml
     --yes                        accept every default, no prompts
     --name <name>                site name
     --framework <id>             astro | next | nuxt | sveltekit | eleventy | generic
-    --template <id>              hero | landing | blog | blank
+    --template <id>              hero | landing | business | blog | blank
     --dir <path>                 where content files live
-    --branch <name>              publish branch (default: current branch)
     --force                      overwrite an existing setup
 
   greatcms add region <id>       add a managed section to an existing schema
+  greatcms add section <name>    define a reusable page section and make it
+                                 selectable in a reorderable region
   greatcms add block <name>      add a block type a blocks region can hold
   greatcms add collection <name> add a folder of entries
     --field name:type            repeatable. text richtext image link number
                                  boolean date file, select(a|b), list(text);
                                  a trailing ! means required
     --label "<text>"             what an editor sees (default: from the id)
+    --to <region>                destination for a section; optional for a block
     --blocks a,b                 make the region a reorderable list of blocks
     --format markdown|mdx|json   collections only (default: markdown)
     --dir <path>                 collections only, where entries live
@@ -716,7 +889,8 @@ const HELP = `greatcms — local tools for a Git-backed site
                                  so CI catches types that drifted
     --module <specifier>         module the augmentation targets
 
-  greatcms doctor                check this repository's CMS setup
+  greatcms doctor [--json]       check this repository's CMS setup; --json for
+                                 a machine-readable summary
 
 Everything here runs on your machine, with your toolchain. Nothing from this
 repository is ever executed by the studio.

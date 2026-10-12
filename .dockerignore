@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.astro
+**/data
+**/.cms/draft
+docs
+examples
+apps/docs
+.git

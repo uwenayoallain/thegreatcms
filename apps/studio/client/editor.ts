@@ -26,6 +26,8 @@ const nodes = schema.nodes as Record<string, NodeType>;
 
 interface Tool {
   label: string;
+  /** Lucide line icon paths (ISC), drawn inline so the toolbar needs no font or image. */
+  icon: string;
   title: string;
   command: Command;
   /** Decides the pressed state, so the toolbar describes where the cursor is. */
@@ -56,57 +58,69 @@ function blockActive(type: NodeType, attrs: Record<string, unknown> = {}) {
   };
 }
 
+const svg = (paths: string) =>
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+
 const TOOLS: Tool[] = [
   {
     label: "B",
+    icon: '<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/>',
     title: "Bold",
     command: toggleMark(marks.strong as MarkType),
     isActive: markActive(marks.strong as MarkType),
   },
   {
     label: "I",
+    icon: '<line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/>',
     title: "Italic",
     command: toggleMark(marks.em as MarkType),
     isActive: markActive(marks.em as MarkType),
   },
   {
     label: "H2",
+    icon: '<path d="M4 12h8"/><path d="M4 18V6"/><path d="M12 18V6"/><path d="M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1"/>',
     title: "Heading level 2",
     command: setBlockType(nodes.heading as NodeType, { level: 2 }),
     isActive: blockActive(nodes.heading as NodeType, { level: 2 }),
   },
   {
     label: "H3",
+    icon: '<path d="M4 12h8"/><path d="M4 18V6"/><path d="M12 18V6"/><path d="M17.5 10.5c1.7-1 3.5 0 3.5 1.5a2 2 0 0 1-2 2"/><path d="M17 17.5c2 1.5 4 .3 4-1.5a2 2 0 0 0-2-2"/>',
     title: "Heading level 3",
     command: setBlockType(nodes.heading as NodeType, { level: 3 }),
     isActive: blockActive(nodes.heading as NodeType, { level: 3 }),
   },
   {
     label: "¶",
+    icon: '<path d="M13 4v16"/><path d="M17 4v16"/><path d="M19 4H9.5a4.5 4.5 0 0 0 0 9H13"/>',
     title: "Paragraph",
     command: setBlockType(nodes.paragraph as NodeType),
     isActive: blockActive(nodes.paragraph as NodeType),
   },
   {
     label: "•",
+    icon: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
     title: "Bullet list",
     command: wrapInList(nodes.bullet_list as NodeType),
     isActive: () => false,
   },
   {
     label: "1.",
+    icon: '<path d="M11 12h10"/><path d="M11 18h10"/><path d="M11 6h10"/><path d="M4 10h2"/><path d="M4 6h1v4"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>',
     title: "Numbered list",
     command: wrapInList(nodes.ordered_list as NodeType),
     isActive: () => false,
   },
   {
     label: "❝",
+    icon: '<path d="M17 6H3"/><path d="M21 12H8"/><path d="M21 18H8"/><path d="M3 12v6"/>',
     title: "Quote",
     command: wrapIn(nodes.blockquote as NodeType),
     isActive: blockActive(nodes.blockquote as NodeType),
   },
   {
     label: "</>",
+    icon: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
     title: "Code",
     command: toggleMark(marks.code as MarkType),
     isActive: markActive(marks.code as MarkType),
@@ -123,9 +137,9 @@ function toHtml(state: EditorState): string {
 }
 
 function parseHtml(value: string) {
-  const holder = document.createElement("div");
-  holder.innerHTML = value;
-  return PmDOMParser.fromSchema(schema).parse(holder);
+  // An inert document: stored HTML loads nothing and runs nothing while it is being read.
+  const inert = new DOMParser().parseFromString(value, "text/html");
+  return PmDOMParser.fromSchema(schema).parse(inert.body);
 }
 
 function enhance(textarea: HTMLTextAreaElement): void {
@@ -186,7 +200,7 @@ function enhance(textarea: HTMLTextAreaElement): void {
   const buttons = TOOLS.map((tool) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = tool.label;
+    button.innerHTML = svg(tool.icon);
     button.title = tool.title;
     button.setAttribute("aria-label", tool.title);
     button.setAttribute("aria-pressed", "false");
@@ -201,7 +215,9 @@ function enhance(textarea: HTMLTextAreaElement): void {
 
   const linkButton = document.createElement("button");
   linkButton.type = "button";
-  linkButton.textContent = "🔗";
+  linkButton.innerHTML = svg(
+    '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  );
   linkButton.title = "Add or edit a link";
   linkButton.setAttribute("aria-label", "Add or edit a link");
   linkButton.addEventListener("click", (event) => {

@@ -1,0 +1,27 @@
+{
+  "name": "@greatcms/example-business-astro",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "types": "greatcms types --out src/cms.d.ts",
+    "typecheck": "greatcms types --out src/cms.d.ts --check && astro check",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@greatcms/reader": "workspace:*",
+    "astro": "^7.3.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@greatcms/cli": "workspace:*",
+    "@types/jsdom": "^30.0.0",
+    "axe-core": "^4.13.0",
+    "jsdom": "^30.0.1",
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

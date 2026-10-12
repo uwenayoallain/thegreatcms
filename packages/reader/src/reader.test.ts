@@ -1,7 +1,7 @@
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FIXTURES_DIR, runConformance } from "@greatcms/conformance";
+import { FIXTURES_DIR, runConformance, verifyEntries } from "@greatcms/conformance";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createReader } from "./index.js";
 
@@ -10,6 +10,17 @@ const reader = createReader({ root: FIXTURES_DIR });
 describe("CmsReader", () => {
   it("passes the conformance suite", () => {
     const result = runConformance((id) => reader.region(id));
+    expect(result.failures).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  it("reads every collection entry exactly as the conformance kit expects", () => {
+    const actual: Record<string, unknown> = {};
+    for (const name of ["blog", "guides"]) {
+      for (const { slug, data } of reader.collection(name))
+        actual[`${name}/${slug}`] = { slug, data };
+    }
+    const result = verifyEntries(actual);
     expect(result.failures).toEqual([]);
     expect(result.ok).toBe(true);
   });
@@ -38,11 +49,9 @@ describe("CmsReader", () => {
   });
 
   it("reads a Markdown collection, folding the body into its field", () => {
-    const posts = reader.collection("blog");
-    expect(posts).toHaveLength(1);
-    expect(posts[0]?.slug).toBe("publish-from-anywhere");
-    expect(posts[0]?.data.title).toBe("Publish from anywhere");
-    expect(String(posts[0]?.data.content)).toContain("Content lives in the repository");
+    const post = reader.collection("blog").find((entry) => entry.slug === "publish-from-anywhere");
+    expect(post?.data.title).toBe("Publish from anywhere");
+    expect(String(post?.data.content)).toContain("Content lives in the repository");
   });
 
   it("explains itself when a collection does not exist", () => {
@@ -121,13 +130,13 @@ describe("reading the same collection more than once", () => {
 
   it("does not go back to disk for a build, which is O(pages x entries) otherwise", () => {
     const build = createReader({ root });
-    expect(build.collection("blog")).toHaveLength(1);
+    const before = build.collection("blog").length;
 
     // A page rendered after the first read must not see a later write: this is
     // the cache doing its job, not a staleness bug.
     writeFileSync(entryPath("late-arrival"), "---\ntitle: Late\ndate: 2026-01-01\n---\n\nBody.\n");
 
-    expect(build.collection("blog")).toHaveLength(1);
+    expect(build.collection("blog")).toHaveLength(before);
   });
 
   it("hands back the same array, so callers can compare cheaply", () => {
@@ -137,16 +146,20 @@ describe("reading the same collection more than once", () => {
 
   it("reads afresh in dev, where the next read must see the edit you just made", () => {
     const dev = createReader({ root, drafts: true });
-    expect(dev.collection("blog")).toHaveLength(1);
+    const before = dev.collection("blog").length;
 
     writeFileSync(entryPath("just-written"), "---\ntitle: New\ndate: 2026-01-01\n---\n\nBody.\n");
 
-    expect(dev.collection("blog")).toHaveLength(2);
+    expect(dev.collection("blog")).toHaveLength(before + 1);
   });
 
   it("keeps collections apart from each other", () => {
     const build = createReader({ root });
-    expect(build.collection("blog").map((entry) => entry.slug)).toEqual(["publish-from-anywhere"]);
+    expect(build.collection("blog").map((entry) => entry.slug)).toEqual([
+      "empty-frontmatter",
+      "publish-from-anywhere",
+      "yaml-scalars",
+    ]);
     expect(build.collection("guides").map((entry) => entry.slug)).toEqual(["measuring-latency"]);
   });
 });

@@ -1,0 +1,12 @@
+{
+  "body": {
+    "html": "<h2>Sample terms only</h2><p>This page demonstrates a legal-style managed page. It is not legal advice and must be replaced before a real business site is published.</p><h2>Product information</h2><p>Availability, varieties, quantities, and planting guidance can change with stock and field conditions. Confirm current details directly with the supplier.</p><h2>Contact</h2><p>Use the contact page for questions about products, field visits, or these sample terms.</p>"
+  },
+  "heading": "Terms of service",
+  "kind": "legal",
+  "seoDescription": "Sample terms for the fictional Kivu Seedworks business example.",
+  "seoTitle": "Terms of service",
+  "showInNavigation": false,
+  "summary": "Sample terms showing how long-form pages remain editable without putting prose inside an Astro component.",
+  "title": "Terms of service"
+}

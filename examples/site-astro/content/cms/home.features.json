@@ -9,7 +9,14 @@
     {
       "_type": "feature",
       "title": "Nothing at runtime",
-      "body": "Pages are built from files on disk. The CMS is never in the request path, so it can never be the reason a page is slow or down."
+      "body": "Pages are built from files on disk. The CMS is never in the request path, so it can never be the reason a page is slow or down.",
+      "icon": "bolt"
+    },
+    {
+      "_type": "feature",
+      "title": "Your design stays yours",
+      "body": "The CMS stores content shapes, never markup. Every component on this page is ordinary Astro the studio cannot see or break.",
+      "icon": "lock"
     },
     {
       "_type": "quote",

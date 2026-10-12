@@ -1,0 +1,13 @@
+{
+  "category": "Soil",
+  "description": "A planting-stage soil blend for prepared beds. Quantity guidance depends on crop, plot size, and soil condition.",
+  "benefits": ["Simple planting-stage application", "Quantity guidance before dispatch"],
+  "details": ["For prepared beds", "Apply at planting, not as a late-season correction"],
+  "enquiry": {
+    "href": "/contact/?product=soil-start-blend",
+    "label": "Plan the quantity"
+  },
+  "featured": true,
+  "name": "Soil-start blend",
+  "packaging": "25 kg stitched bags"
+}

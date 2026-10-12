@@ -5,7 +5,9 @@ export { SpecError, SpecIssue, IssueBag, type SpecIssueInit } from "./errors.js"
 export {
   FIELD_TYPES,
   FieldDefSchema,
+  conditionMet,
   selectOptions,
+  type FieldCondition,
   type FieldDef,
   type FieldType,
   type FileValue,
@@ -19,7 +21,9 @@ export {
   REGION_ID_RE,
   SchemaFileSchema,
   parseSchema,
+  unknownSchemaKeys,
   isBlocksRegion,
+  blockVariants,
   fieldsOf,
   type BlockDef,
   type BlocksRegion,
@@ -30,7 +34,13 @@ export {
   type SingleRegion,
 } from "./schema.js";
 
-export { ConfigFileSchema, DEFAULT_CONFIG, parseConfig, type CmsConfig } from "./config.js";
+export {
+  ConfigFileSchema,
+  DEFAULT_CONFIG,
+  parseConfig,
+  previewPath,
+  type CmsConfig,
+} from "./config.js";
 
 export {
   collectionEntryPath,

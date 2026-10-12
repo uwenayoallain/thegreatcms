@@ -1,14 +1,34 @@
 {
   "name": "@greatcms/cli",
   "version": "0.1.0",
-  "description": "Set up a GreatCMS site, add managed sections, generate types, and check content.",
+  "description": "greatcms: scaffold, extend, type and check a GreatCMS site from the terminal.",
+  "keywords": [
+    "cli",
+    "cms",
+    "content",
+    "git",
+    "schema",
+    "typescript"
+  ],
+  "homepage": "https://greatcms.dev",
+  "bugs": {
+    "url": "https://github.com/uwenayoallain/thegreatcms/issues"
+  },
   "license": "MIT",
+  "author": "UWENAYO Alain Pacifique",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uwenayoallain/thegreatcms.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "greatcms": "./bin/greatcms.mjs"
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -19,15 +39,23 @@
       "default": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@greatcms/spec": "workspace:*"
+    "@greatcms/spec": "workspace:*",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "vitest": "^4.1.10"
+    "@greatcms/reader": "workspace:*",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

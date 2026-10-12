@@ -15,6 +15,30 @@
   - Markdown: https://greatcms.dev/spec.md
 - [GreatCMS Overview](https://greatcms.dev/): What GreatCMS is, what it deliberately does not do, and the design decisions behind it.
   - Markdown: https://greatcms.dev/index.md
+- [Getting started](https://greatcms.dev/docs/getting-started): Scaffold a site's configuration, connect it to the studio, publish.
+  - Markdown: https://greatcms.dev/docs/getting-started.md
+- [The command line](https://greatcms.dev/docs/the-command-line): Scaffold, extend, type, check, and inspect a site from the terminal.
+  - Markdown: https://greatcms.dev/docs/the-command-line.md
+- [The hybrid model](https://greatcms.dev/docs/the-hybrid-model): Why a region is opt-in, and what happens before anyone edits anything.
+  - Markdown: https://greatcms.dev/docs/the-hybrid-model.md
+- [Publishing](https://greatcms.dev/docs/publishing): One commit in your working copy, or nothing at all.
+  - Markdown: https://greatcms.dev/docs/publishing.md
+- [Running the studio](https://greatcms.dev/docs/running-the-studio): One process, one SQLite file, one password. Nothing it manages depends on it.
+  - Markdown: https://greatcms.dev/docs/running-the-studio.md
+- [Self-hosting](https://greatcms.dev/docs/self-hosting): One server, three containers; an editor publishes and the site is live in seconds.
+  - Markdown: https://greatcms.dev/docs/self-hosting.md
+- [Previewing](https://greatcms.dev/docs/previewing): Your own dev server renders it. Never the studio.
+  - Markdown: https://greatcms.dev/docs/previewing.md
+- [Forms and submissions](https://greatcms.dev/docs/forms-and-submissions): The one thing Git cannot hold, collected in one inbox.
+  - Markdown: https://greatcms.dev/docs/forms-and-submissions.md
+- [Accessibility](https://greatcms.dev/docs/accessibility): What is enforced by the format, and what is enforced by tests.
+  - Markdown: https://greatcms.dev/docs/accessibility.md
+- [Any language](https://greatcms.dev/docs/any-language): The standard is files. A reader in Python passes the same suite as the one in TypeScript.
+  - Markdown: https://greatcms.dev/docs/any-language.md
+- [For coding agents](https://greatcms.dev/docs/for-agents): Every surface an agent needs to wire a site up unattended, and the skill that teaches it.
+  - Markdown: https://greatcms.dev/docs/for-agents.md
+- [The examples](https://greatcms.dev/docs/examples): Two Astro sites and a Python reader, each built to prove one thing.
+  - Markdown: https://greatcms.dev/docs/examples.md
 
 ## Machine-readable entrypoints
 
@@ -22,6 +46,18 @@
 - [llms-full.txt](https://greatcms.dev/llms-full.txt) — every document above in one fetch
 - [schema.schema.json](https://greatcms.dev/json-schema/schema.schema.json) — JSON Schema for .cms/schema.yaml
 - [config.schema.json](https://greatcms.dev/json-schema/config.schema.json) — JSON Schema for .cms/config.yaml
+
+## Agent skill
+
+The repository ships a skill that teaches an agent to add GreatCMS to a site, extend the
+content model, read content at build time and check it before committing:
+
+```sh
+npx skills add greatcms/greatcms@greatcms
+```
+
+Inside a managed repository, `greatcms init` leaves a note in AGENTS.md, and
+`greatcms check --json` / `greatcms doctor --json` give machine-readable answers.
 
 ## Conformance
 

@@ -5,7 +5,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../src/app.js";
+import { createApp, isSafeRedirect } from "../src/app.js";
 import { DEFAULT_CONFIG } from "@greatcms/spec";
 import { prepareUpload, UploadError } from "../src/media.js";
 import { makeSite, PASSWORD, SECRET, signedIn, type Fixture } from "./site.js";
@@ -285,6 +285,64 @@ describe("the public submission endpoint", () => {
     expect(codes).not.toContain(429);
   });
 
+  it.each(["/\\evil.example", "/\t/evil.example", "/%5Cevil.example/..", "//evil.example"])(
+    "refuses a redirect browsers would send off-site: %s",
+    (target) => {
+      expect(isSafeRedirect(target)).toBe(target === "/%5Cevil.example/..");
+    },
+  );
+
+  it("still redirects to a path on the same site", () => {
+    expect(isSafeRedirect("/thanks?from=contact")).toBe(true);
+  });
+
+  it("measures a body sent without a length, instead of buffering all of it", async () => {
+    const chunk = new TextEncoder().encode(`message=${"x".repeat(32 * 1024)}`);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1;
+        if (sent > 64) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    const response = await app.request("/f/site-1/contact", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      duplex: "half",
+    } as RequestInit);
+
+    expect(response.status).toBe(413);
+    expect(sent).toBeLessThan(10);
+    expect(store.listSubmissions({})).toEqual([]);
+  });
+
+  it("keys a proxied visitor on the address the proxy saw, not the one they claimed", async () => {
+    const proxied = createApp({
+      store: site.store,
+      password: PASSWORD,
+      secret: SECRET,
+      trustProxy: true,
+    });
+
+    const codes: number[] = [];
+    for (let i = 0; i < 30; i += 1) {
+      const response = await proxied.request("/f/site-1/contact", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-forwarded-for": `10.0.0.${i}, 203.0.113.7`,
+          "cf-connecting-ip": `10.1.0.${i}`,
+        },
+        body: new URLSearchParams({ message: "hi" }),
+      });
+      codes.push(response.status);
+    }
+
+    expect(codes).toContain(429);
+  });
+
   it("still refuses to redirect a visitor off-site", async () => {
     const response = await submit(
       new URLSearchParams({ message: "hi", _redirect: "https://evil.example" }),
@@ -292,6 +350,27 @@ describe("the public submission endpoint", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
+  });
+});
+
+describe("form field names", () => {
+  it("cannot reach the prototype of every object in the process", async () => {
+    await post("/sites/site-1/regions/home.hero", {
+      headSha: site.head(),
+      "f[heading]": "Hello",
+      "f[__proto__][polluted]": "yes",
+      "f[constructor][prototype][polluted]": "yes",
+    });
+
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+describe("the inbox", () => {
+  it("answers a submission id that is not a number with not found", async () => {
+    const response = await post("/inbox/abc/delete", {});
+
+    expect(response.status).toBe(404);
   });
 });
 
@@ -356,5 +435,95 @@ describe("the dev server URL", () => {
     // It gets as far as reading the folder, which is past the URL check.
     const response = await connect("http://localhost:4321");
     expect(await response.text()).not.toContain("http:// or https://");
+  });
+});
+
+const check = (target: ReturnType<typeof createApp>, headers: Record<string, string>) =>
+  target.request("/auth/check", {
+    headers: {
+      "x-forwarded-proto": "https",
+      "x-forwarded-host": "preview.example.com",
+      "x-forwarded-uri": "/about?draft=1",
+      ...headers,
+    },
+  });
+
+describe("vouching for sibling hosts", () => {
+  // A proxy in front of the preview asks /auth/check with the original request's host and path.
+  const shared = () =>
+    createApp({
+      store: site.store,
+      password: PASSWORD,
+      secret: SECRET,
+      publicUrl: "https://studio.example.com",
+      cookieDomain: "example.com",
+    });
+
+  it("answers 204 for a browser signed in to the studio, with no body to proxy", async () => {
+    const response = await check(shared(), signedIn);
+    expect(response.status).toBe(204);
+  });
+
+  it("sends a stranger to the studio's sign-in and back to the page they wanted", async () => {
+    const response = await check(shared(), {});
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      `https://studio.example.com/sign-in?next=${encodeURIComponent("https://preview.example.com/about?draft=1")}`,
+    );
+  });
+
+  it("will not bounce through to a host outside the cookie's domain", async () => {
+    const response = await check(shared(), { "x-forwarded-host": "preview.evil.example" });
+    expect(response.status).toBe(401);
+  });
+
+  it("refuses with 401 when it does not know its own address", async () => {
+    expect((await check(site.app, {})).status).toBe(401);
+  });
+
+  it("sets the cookie for the whole domain, so the preview sees the same sign-in", async () => {
+    const response = await shared().request("https://studio.example.com/sign-in", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://studio.example.com",
+      },
+      body: new URLSearchParams({ password: PASSWORD, next: "https://preview.example.com/" }),
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("set-cookie")).toContain("; Domain=example.com");
+    expect(response.headers.get("location")).toBe("https://preview.example.com/");
+  });
+
+  it("ignores a next that would leave the domain, or that only looks like a path", async () => {
+    for (const next of [
+      "https://evil.example/",
+      "//evil.example/x",
+      "/\\evil.example/x",
+      "/\t/evil.example",
+      "javascript:alert(1)",
+    ]) {
+      const response = await shared().request("https://studio.example.com/sign-in", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://studio.example.com",
+        },
+        body: new URLSearchParams({ password: PASSWORD, next }),
+      });
+      // The fixture has one site, so a good sign-in lands there rather than on the list.
+      expect(response.headers.get("location")).toBe("/sites/site-1");
+    }
+  });
+
+  it("brings you back to the studio page you were opening", async () => {
+    const bounced = await site.app.request("/inbox?site=site-1");
+    expect(bounced.headers.get("location")).toBe(
+      `/sign-in?next=${encodeURIComponent("/inbox?site=site-1")}`,
+    );
+    const page = await site.app.request(bounced.headers.get("location") as string);
+    expect(await page.text()).toContain('name="next" value="/inbox?site=site-1"');
+    const response = await post("/sign-in", { password: PASSWORD, next: "/inbox?site=site-1" }, {});
+    expect(response.headers.get("location")).toBe("/inbox?site=site-1");
   });
 });

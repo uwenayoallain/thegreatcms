@@ -1,0 +1,87 @@
+---
+import '../styles/global.css';
+import ManagedImage from '../components/ManagedImage.astro';
+import { cms } from '../lib/cms';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const identity = cms.region('site.identity');
+const contact = cms.region('site.contact');
+const seo = cms.region('site.seo');
+const managedPages = cms.collection('pages');
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const nav = [
+  { href: '/', label: 'Home', order: 0 },
+  ...managedPages
+    .filter((page) => page.data.showInNavigation)
+    .map((page) => ({
+      href: `/${page.slug}`,
+      label: page.data.navigationLabel ?? page.data.title,
+      order: page.data.navigationOrder ?? 50,
+    })),
+  { href: '/products', label: 'Products', order: 80 },
+  { href: '/contact', label: 'Contact', order: 90 },
+].toSorted((a, b) => a.order - b.order);
+const legalPages = managedPages.filter((page) => page.data.kind === 'legal');
+const pageTitle = seo.titleTemplate.includes('%s')
+  ? seo.titleTemplate.replace('%s', title)
+  : `${title} — ${identity.name}`;
+const pageDescription = description ?? seo.defaultDescription;
+const canonical = seo.siteUrl
+  ? `${seo.siteUrl.replace(/\/+$/, '')}${Astro.url.pathname}`
+  : undefined;
+---
+
+<!doctype html>
+<html lang={seo.locale.split(/[-_]/)[0]}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={pageDescription} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:type" content="website" />
+    {canonical && <link rel="canonical" href={canonical} />}
+    {canonical && <meta property="og:url" content={canonical} />}
+    {seo.shareImage && <meta property="og:image" content={seo.shareImage.src} />}
+    <title>{pageTitle}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label={`${identity.name}, home`}>
+        {identity.logo?.src ? <ManagedImage image={identity.logo} class="brand-image" eager /> : <span class="seed-mark" aria-hidden="true"><i></i><i></i><i></i></span>}
+        <span>{identity.name}<small>{identity.tagline}</small></span>
+      </a>
+      <nav aria-label="Main navigation">
+        <ul>
+          {nav.map((item) => <li><a href={item.href} aria-current={path === item.href ? 'page' : undefined}>{item.label}</a></li>)}
+        </ul>
+      </nav>
+      <a class="header-contact" href={`tel:${contact.phone.replace(/\s/g, '')}`}>Call {contact.phone}</a>
+    </header>
+
+    <main id="main"><slot /></main>
+
+    <footer class="site-footer">
+      <div>
+        <p class="footer-name">{identity.name}</p>
+        {identity.description && <p>{identity.description}</p>}
+        {identity.founded && <p class="footer-fact">Working since {identity.founded}</p>}
+      </div>
+      <div>
+        <p class="footer-label">Visit or call</p>
+        {contact.address && <p>{contact.address}</p>}
+        <p><a href={`tel:${contact.phone.replace(/\s/g, '')}`}>{contact.phone}</a><br /><a href={`mailto:${contact.email}`}>{contact.email}</a></p>
+      </div>
+      <div class="footer-end">
+        {legalPages.length > 0 && <nav aria-label="Legal"><ul>{legalPages.map((page) => <li><a href={`/${page.slug}/`}>{page.data.navigationLabel ?? page.data.title}</a></li>)}</ul></nav>}
+        <p class="demo-note">Fictional business. Real GreatCMS content model. Zero client JavaScript.</p>
+      </div>
+    </footer>
+  </body>
+</html>

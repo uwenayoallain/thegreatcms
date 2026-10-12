@@ -1,12 +1,13 @@
 ---
-import { readFileSync } from "node:fs";
-import { marked } from "marked";
 import DocsNav from "../components/DocsNav.astro";
+import OnThisPage from "../components/OnThisPage.astro";
 import Base from "../layouts/Base.astro";
+import { renderMarkdown } from "../lib/markdown";
+import { readRepoFile } from "../lib/repo";
 
-// Rendered from the repository's SPEC.md, so the published standard and the one the code.
-const source = readFileSync(new URL("../../../../SPEC.md", import.meta.url), "utf8");
-const html = marked.parse(source.replace(/^# .*\n/, "")) as string;
+// Rendered from the repository's SPEC.md, so the published standard and the one the code implements cannot drift.
+const source = readRepoFile("SPEC.md");
+const { html, headings } = await renderMarkdown(source.replace(/^# .*\n/, ""));
 ---
 
 <Base
@@ -23,7 +24,13 @@ const html = marked.parse(source.replace(/^# .*\n/, "")) as string;
         This document is the product; everything else in the repository implements it. Reading it
         should be enough to write a consumer in any language in under half an hour.
       </p>
+      <OnThisPage headings={headings} />
       <Fragment set:html={html} />
+      <p class="source-note">
+        <a href="/spec.md">This document as Markdown</a> · <a href="/json-schema/schema.schema.json"
+          >JSON Schema for schema.yaml</a
+        > · <a href="/json-schema/config.schema.json">JSON Schema for config.yaml</a>
+      </p>
     </article>
   </div>
 </Base>

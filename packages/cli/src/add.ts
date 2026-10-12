@@ -2,6 +2,7 @@
 
 import {
   hasFrontmatter,
+  isBlocksRegion,
   isSafeSlug,
   type CollectionFormat,
   parseSchema,
@@ -10,6 +11,7 @@ import {
   type CmsSchema,
 } from "@greatcms/spec";
 import type { Framework } from "./detect.js";
+import { isMap, isSeq, parse as parseYaml, parseDocument } from "yaml";
 
 export class AddError extends Error {
   constructor(
@@ -32,6 +34,7 @@ export type FieldType =
   | "file"
   | "select"
   | "list"
+  | "group"
   | "blocks";
 
 export const FIELD_TYPES: Array<{ id: FieldType; hint: string }> = [
@@ -45,6 +48,7 @@ export const FIELD_TYPES: Array<{ id: FieldType; hint: string }> = [
   { id: "select", hint: "one of a fixed set — write it as name:select(a|b)" },
   { id: "file", hint: "any uploaded file" },
   { id: "list", hint: "repeatable — write it as name:list(text)" },
+  { id: "group", hint: "related fields — build them interactively with greatcms setup" },
   { id: "blocks", hint: "nested components — write it as name:blocks(card|grid)" },
 ];
 
@@ -52,12 +56,17 @@ export interface FieldSpec {
   name: string;
   type: FieldType;
   required: boolean;
+  label?: string;
+  multiline?: boolean;
+  default?: string | number | boolean;
   /** For select. */
   options?: string[];
   /** For list. */
   of?: FieldType;
   /** For blocks: the block names this field may hold. */
   allow?: string[];
+  /** Related fields inside a group. */
+  fields?: FieldSpec[];
 }
 
 const FIELD_NAME_RE = /^[a-z][a-zA-Z0-9_]*$/;
@@ -96,6 +105,13 @@ export function parseFieldSpec(input: string): FieldSpec {
 
   const field: FieldSpec = { name, type, required: bang === "!" };
 
+  if (type === "group") {
+    throw new AddError(
+      "Groups need nested field definitions.",
+      "Use greatcms setup to build grouped fields interactively.",
+    );
+  }
+
   if (type === "select") {
     const options = (argument ?? "")
       .split("|")
@@ -127,7 +143,10 @@ export function parseFieldSpec(input: string): FieldSpec {
 
   if (type === "list") {
     const inner = (argument ?? "text").trim() as FieldType;
-    if (!FIELD_TYPES.some((entry) => entry.id === inner) || inner === "list") {
+    if (
+      !FIELD_TYPES.some((entry) => entry.id === inner) ||
+      ["list", "group", "select", "blocks"].includes(inner)
+    ) {
       throw new AddError(
         `The list field "${name}" needs an item type it can hold.`,
         `Write it as ${name}:list(text).`,
@@ -154,6 +173,8 @@ export interface BlockPlan {
   name: string;
   label: string;
   fields: FieldSpec[];
+  /** A blocks region that should offer this block immediately. */
+  to?: string;
 }
 
 export interface CollectionPlan {
@@ -165,6 +186,8 @@ export interface CollectionPlan {
   fields: FieldSpec[];
   /** The field holding the Markdown body. */
   body?: string;
+  slug?: string;
+  entryLabel?: string;
 }
 
 export type AddPlan = RegionPlan | BlockPlan | CollectionPlan;
@@ -200,6 +223,21 @@ export function validatePlan(plan: AddPlan, schema: CmsSchema): void {
     if (schema.blocks[plan.name]) {
       throw new AddError(`This schema already has a block called "${plan.name}".`);
     }
+    if (plan.to) {
+      const target = schema.regions[plan.to];
+      if (!target) {
+        throw new AddError(
+          `This schema has no region called "${plan.to}".`,
+          `Choose a blocks region: ${blocksRegionIds(schema).join(", ") || "none are defined yet"}.`,
+        );
+      }
+      if (!isBlocksRegion(target)) {
+        throw new AddError(
+          `The region "${plan.to}" is a field form, not a reorderable section list.`,
+          "Choose a region whose schema has `type: blocks`.",
+        );
+      }
+    }
     assertNestedBlocksExist(plan.fields, schema);
     return;
   }
@@ -228,6 +266,7 @@ function assertBlockExists(type: string, schema: CmsSchema): void {
 function assertNestedBlocksExist(fields: FieldSpec[], schema: CmsSchema): void {
   for (const field of fields) {
     for (const type of field.allow ?? []) assertBlockExists(type, schema);
+    if (field.fields) assertNestedBlocksExist(field.fields, schema);
   }
 }
 
@@ -272,14 +311,15 @@ export function renderPlan(plan: AddPlan): string {
   lines.push(
     `  ${plan.name}:`,
     `    label: ${quote(plan.label)}`,
-    `    path: ${plan.path}`,
+    `    path: ${quote(plan.path)}`,
     `    format: ${plan.format}`,
   );
   if (hasFrontmatter(plan.format) && plan.body) {
     lines.push(`    body: ${plan.body}`);
   }
-  const slug = plan.fields.find((field) => field.name === "title");
-  if (slug) lines.push("    slug: title");
+  if (plan.entryLabel) lines.push(`    entryLabel: ${quote(plan.entryLabel)}`);
+  const slug = plan.slug ?? plan.fields.find((field) => field.name === "title")?.name;
+  if (slug) lines.push(`    slug: ${slug}`);
   lines.push("    fields:", ...plan.fields.map((field) => `      ${renderField(field)}`));
   return `${lines.join("\n")}\n`;
 }
@@ -287,15 +327,20 @@ export function renderPlan(plan: AddPlan): string {
 function renderField(field: FieldSpec): string {
   const parts = [`type: ${field.type}`];
   if (field.required) parts.push("required: true");
-  if (field.options) parts.push(`options: [${field.options.join(", ")}]`);
+  if (field.label) parts.push(`label: ${JSON.stringify(field.label)}`);
+  if (field.multiline) parts.push("multiline: true");
+  if (field.default !== undefined) parts.push(`default: ${JSON.stringify(field.default)}`);
+  if (field.options)
+    parts.push(`options: [${field.options.map((value) => JSON.stringify(value)).join(", ")}]`);
   if (field.of) parts.push(`of: { type: ${field.of} }`);
   if (field.allow) parts.push(`allow: [${field.allow.join(", ")}]`);
+  if (field.fields) parts.push(`fields: { ${field.fields.map(renderField).join(", ")} }`);
   return `${field.name}: { ${parts.join(", ")} }`;
 }
 
 /** Only types whose placeholder is worth writing: a default nobody wants is noise. */
 function defaultable(field: FieldSpec): boolean {
-  return field.type === "text" && field.required;
+  return field.type === "text" && field.required && field.default === undefined;
 }
 
 function placeholder(field: FieldSpec, label: string): string {
@@ -364,7 +409,18 @@ export function applyPlan(options: {
   const schema = parseSchema(source, { file });
   validatePlan(plan, schema);
 
-  const updated = insertIntoSchema(source, sectionFor(plan), renderPlan(plan));
+  let updated = file.endsWith(".json") ? source : addToYaml(source, plan, file);
+
+  if (file.endsWith(".json")) {
+    const document = JSON.parse(source);
+    const section = sectionFor(plan);
+    document[section] = { ...document[section], ...parseYaml(renderPlan(plan)) };
+    if (plan.kind === "block" && plan.to) {
+      const allow = document.regions[plan.to].allow;
+      if (!allow.includes(plan.name)) allow.push(plan.name);
+    }
+    updated = `${JSON.stringify(document, null, 2)}\n`;
+  }
 
   // Generating something our own parser rejects would be a cruel way to end a command.
   try {
@@ -387,6 +443,122 @@ export function applyPlan(options: {
   };
 }
 
+/**
+ * Adds the entry to YAML. The text edit leaves every byte of a hand-written schema
+ * alone, but it assumes two-space indentation; when its result does not parse, the
+ * same change goes through the parsed document instead, which still keeps comments.
+ * Windows line endings come back the way they went in.
+ */
+function addToYaml(source: string, plan: AddPlan, file: string): string {
+  const crlf = source.includes("\r\n");
+  const text = crlf ? source.replaceAll("\r\n", "\n") : source;
+  let updated: string;
+  try {
+    const inserted = insertIntoSchema(text, sectionFor(plan), renderPlan(plan));
+    updated =
+      plan.kind === "block" && plan.to
+        ? attachBlockToRegion(inserted, plan.to, plan.name)
+        : inserted;
+    parseSchema(updated, { file });
+  } catch {
+    updated = addThroughDocument(text, plan);
+  }
+  return crlf ? updated.replaceAll("\n", "\r\n") : updated;
+}
+
+function addThroughDocument(text: string, plan: AddPlan): string {
+  const document = parseDocument(text);
+  const section = sectionFor(plan);
+  if (!isMap(document.get(section, true))) document.set(section, document.createNode({}));
+  const map = document.get(section, true);
+  // `regions: {}` would otherwise grow into one long inline mapping.
+  if (isMap(map)) map.flow = false;
+  for (const [key, value] of Object.entries(
+    parseYaml(renderPlan(plan)) as Record<string, unknown>,
+  )) {
+    document.setIn([section, key], document.createNode(value));
+  }
+  if (plan.kind === "block" && plan.to) {
+    const allow = document.getIn(["regions", plan.to, "allow"], true);
+    if (!isSeq(allow)) {
+      throw new AddError(
+        `The region "${plan.to}" has no allow list to update.`,
+        "Nothing was written. Check that it has `type: blocks` and `allow: [...]`.",
+      );
+    }
+    if (
+      !allow.items.some((item) => String((item as { value?: unknown }).value ?? item) === plan.name)
+    )
+      allow.add(document.createNode(plan.name));
+  }
+  return document.toString();
+}
+
+/** Blocks regions are the places a top-level section can be offered to editors. */
+export function blocksRegionIds(schema: CmsSchema): string[] {
+  return Object.entries(schema.regions)
+    .filter(([, region]) => isBlocksRegion(region))
+    .map(([id]) => id);
+}
+
+/**
+ * Adds a block name to one existing allow list without re-serializing the
+ * schema. The rest of the file, including its comments, remains byte-for-byte.
+ */
+export function attachBlockToRegion(source: string, regionId: string, blockName: string): string {
+  const lines = source.split("\n");
+  const escaped = regionId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const entry = new RegExp(`^  (["']?)${escaped}\\1:\\s*(?:#.*)?$`);
+  const start = lines.findIndex((line) => entry.test(line));
+  if (start === -1) {
+    throw new AddError(
+      `Could not locate the region "${regionId}" in the schema text.`,
+      "Nothing was written. Add the block to that region's `allow` list by hand.",
+    );
+  }
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (/^  \S/.test(line) || /^\S/.test(line)) {
+      end = index;
+      break;
+    }
+  }
+
+  const allowAt = lines.findIndex(
+    (line, index) => index > start && index < end && /^    allow\s*:/.test(line),
+  );
+  if (allowAt === -1) {
+    throw new AddError(
+      `The region "${regionId}" has no allow list to update.`,
+      "Nothing was written. Check that it has `type: blocks` and `allow: [...]`.",
+    );
+  }
+
+  const allowLine = lines[allowAt] ?? "";
+  const inline = /^(\s*allow\s*:\s*\[)(.*)(\]\s*(?:#.*)?)$/.exec(allowLine);
+  if (inline) {
+    const existing = inline[2]?.trim() ?? "";
+    lines[allowAt] = `${inline[1]}${existing}${existing ? ", " : ""}${blockName}${inline[3]}`;
+    return lines.join("\n");
+  }
+
+  if (/^    allow\s*:\s*(?:#.*)?$/.test(allowLine)) {
+    let insertAt = allowAt + 1;
+    while (insertAt < end && /^(?:\s{6,}|\s*$|\s*#)/.test(lines[insertAt] ?? "")) {
+      insertAt += 1;
+    }
+    lines.splice(insertAt, 0, `      - ${blockName}`);
+    return lines.join("\n");
+  }
+
+  throw new AddError(
+    `The allow list for "${regionId}" uses a layout this command cannot safely edit.`,
+    `Nothing was written. Add ${blockName} to that allow list by hand.`,
+  );
+}
+
 /** The code that reads the new section, written out so nobody has to guess it. */
 export function readSnippet(plan: AddPlan, framework: Framework, config: CmsConfig): string | null {
   if (plan.kind !== "region") return null;
@@ -406,8 +578,10 @@ export function readSnippet(plan: AddPlan, framework: Framework, config: CmsConf
   return framework.snippet(plan.id, dir);
 }
 
-function quote(value: string): string {
-  return /^[\w][\w \-.]*$/.test(value) ? value : JSON.stringify(value);
+/** Quotes only when YAML would otherwise misread the value: `2024`, `true` and `null` are not text. */
+export function quote(value: string): string {
+  const plain = /^[\w][\w \-.]*$/.test(value) && parseYaml(value) === value;
+  return plain ? value : JSON.stringify(value);
 }
 
 /** A label a person would have typed, derived from the id they did type. */

@@ -1,11 +1,32 @@
 {
   "name": "@greatcms/spec",
   "version": "0.1.0",
-  "description": "The GreatCMS content standard: schema format, content layout, and validation. Framework and language agnostic.",
+  "description": "The GreatCMS content standard in TypeScript: schema, config, content parsing, validation and resolution, with no I/O.",
+  "keywords": [
+    "astro",
+    "cms",
+    "content",
+    "git",
+    "headless",
+    "json-schema",
+    "schema"
+  ],
+  "homepage": "https://greatcms.dev",
+  "bugs": {
+    "url": "https://github.com/uwenayoallain/thegreatcms/issues"
+  },
   "license": "MIT",
+  "author": "UWENAYO Alain Pacifique",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uwenayoallain/thegreatcms.git",
+    "directory": "packages/spec"
+  },
   "files": [
     "dist",
-    "json-schema"
+    "json-schema",
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -17,17 +38,23 @@
     },
     "./json-schema": "./json-schema/schema.schema.json"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown && node scripts/gen-json-schema.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "yaml": "^2.6.1",
-    "zod": "^3.24.1"
+    "yaml": "^2.9.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "zod-to-json-schema": "^3.25.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

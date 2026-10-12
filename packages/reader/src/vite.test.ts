@@ -153,3 +153,46 @@ describe("the dev-time content watcher", () => {
     rmSync(bare, { recursive: true, force: true });
   });
 });
+
+describe("schema and config changes", () => {
+  it("restarts the server, because the reader holds both for its lifetime", () => {
+    const { server, watched, restart, send, fire } = fakeServer();
+    greatcmsWatch({ root }).configureServer(server);
+
+    expect(watched).toContain(join(root, ".cms/schema.yaml"));
+    fire("change", join(root, ".cms/schema.yaml"));
+
+    expect(restart).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("finds collections in a JSON schema, and in YAML with a trailing comment", () => {
+    rmSync(join(root, ".cms/schema.yaml"));
+    writeFileSync(
+      join(root, ".cms/schema.json"),
+      JSON.stringify({
+        version: 1,
+        collections: { blog: { path: "src/posts", fields: { title: { type: "text" } } } },
+      }),
+    );
+    const { server, watched } = fakeServer();
+    greatcmsWatch({ root }).configureServer(server);
+
+    expect(watched).toContain(join(root, "src/posts"));
+  });
+
+  it("does not mistake a sibling folder with the same prefix for content", () => {
+    vi.useFakeTimers();
+    const { server, send, fire } = fakeServer();
+    greatcmsWatch({ root }).configureServer(server);
+
+    fire("change", join(root, "data/cms-archive/old.json"));
+    vi.advanceTimersByTime(200);
+    expect(send).not.toHaveBeenCalled();
+
+    fire("change", join(root, "data/cms/home.hero.json"));
+    vi.advanceTimersByTime(200);
+    expect(send).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+});

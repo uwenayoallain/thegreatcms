@@ -1,0 +1,35 @@
+# Runs the stack on this machine over plain HTTP, to try it before pointing a real domain at a
+# server. Browsers share cookies across localhost ports, so the studio's sign-in covers the
+# preview here too.
+#   COMPOSE_BAKE=false docker compose -f compose.yaml -f compose.local.yaml up --build
+# (the images build with the host's network, which the bake builder refuses without a flag)
+#
+#   http://localhost:8880    the site        http://localhost:8788    the studio
+#   http://localhost:8881    redirects       http://localhost:8089    the preview
+services:
+  caddy:
+    ports: !override
+      - "8880:8880"
+      - "8881:8881"
+      - "8788:8788"
+      - "8089:8089"
+    environment:
+      SCHEME: http
+      SITE_HOST: localhost:8881
+      WWW_HOST: localhost:8880
+      STUDIO_HOST: localhost:8788
+      PREVIEW_HOST: localhost:8089
+  studio:
+    environment:
+      STUDIO_URL: http://localhost:8788
+      STUDIO_COOKIE_DOMAIN: ""
+      STUDIO_SITES: >-
+        [{"id":"kivu-seedworks","name":"Kivu Seedworks","path":"/srv/sites/kivu-seedworks/examples/business-astro",
+          "devUrl":"http://localhost:8089","pushAfterPublish":${PUSH_AFTER_PUBLISH:-false}}]
+  deploy:
+    environment:
+      PUBLIC_CMS_URL: http://localhost:8788
+  preview:
+    environment:
+      PREVIEW_HOST: localhost
+      PUBLIC_CMS_URL: http://localhost:8788

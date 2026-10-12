@@ -1,6 +1,6 @@
 ---
 title: Previewing
-summary: Your CI builds it, or your laptop does. Never our server.
+summary: Your own dev server renders it. Never the studio.
 order: 40
 ---
 
@@ -39,11 +39,60 @@ site stops showing an edit that has already landed.
 Without JavaScript nothing is written as you type, and the editor still
 publishes — the frame simply shows the site as last published.
 
+## Pointing at the page
+
+The framed page knows what the form holds. Switch on **Select** above the
+preview and the page is dissected: move over it and the heading, paragraph,
+image or section under the pointer is outlined with its field's name; click,
+and that field opens and takes focus in the form. **Sections** outlines every
+block on the page at once, so a long page reads as the list of sections it is.
+It runs the other way too: land in a field in the form and the page scrolls to
+where it renders. The header and footer belong to site regions rather than to
+the page, and they are on the page all the same: click the footer while editing
+a page and the Footer editor opens at the field you clicked.
+
+No markup is needed for this. The inspector matches each field's value to what
+the page shows, which covers headings, copy, rich text and images. Where a site
+transforms a value before printing it, or shows the same words twice, two
+attributes make the match explicit:
+
+```html
+<h2 data-greatcms-field="blocks.0.title">{title}</h2>
+<section data-greatcms-block="block-0">…</section>
+```
+
+The field path is the one the form uses, dotted; a block's id is `block-` and
+its position. Both are plain attributes, so a built page keeps them and nothing
+reads them there.
+
+The inspector is part of the script the dev server injects while the page is
+framed, so a visitor never downloads it and the studio never reaches into your
+page: the two sides talk only through messages, each checking the other is
+who framed it.
+
+## Opening the page being edited
+
+By default the frame opens the front of the site. Tell the studio where each
+collection's entries live and it opens the page you are editing instead:
+
+```yaml
+# .cms/config.yaml
+preview:
+  paths:
+    pages: { home: "/", "*": "/{slug}" }
+    updates: "/updates/{slug}"
+```
+
+A plain path with `{slug}` covers most collections; a map lets one slug be the
+front page. Regions, which are part of every page, preview at `/`.
+
 ## Getting rid of an unsaved edit
 
-"Discard unsaved edits" beside the frame throws the draft away and puts your dev
-server back to what is published. It is a plain form post, so it works with
-JavaScript switched off.
+Leave the editor and come back and the draft is still in the form, with a
+notice saying so: the preview and the form always show the same thing, and
+publishing publishes what you see. "Discard unsaved edits" beside the frame
+throws the draft away and puts your dev server back to what is published. It
+is a plain form post, so it works with JavaScript switched off.
 
 Anything still unsaved is listed on the site's page in the studio, and
 `npx greatcms doctor` names it from the terminal — a draft you forgot is
@@ -53,35 +102,27 @@ it.
 If your dev server is not Vite-based, the watcher plugin cannot reload it for
 you; **Reload the site** beside the frame does it by hand.
 
-## Your CI builds it
+## Pages built from a collection
+
+Astro's dev server caches what `getStaticPaths()` returns. If it passes each
+entry to the page as a prop, the preview keeps showing that cached copy and
+never your edit. Return only the slug, and read the entry in the page itself:
+
+```astro
+---
+export function getStaticPaths() {
+  return cms.collection("pages").map((page) => ({ params: { slug: page.slug } }));
+}
+
+const page = cms.collection("pages").find((entry) => entry.slug === Astro.params.slug);
+---
+```
+
+A build reads each entry once either way, so this costs nothing in production.
+
+## The studio never builds your site
 
 The studio cannot render a Hugo site, or a Laravel one, so it does not pretend
-to. Building your site on our server would also break the rule that the studio
-never executes anything from a repository it manages.
-
-**Save draft & preview** commits to `cms/draft-<region>`. Set
-`preview.urlTemplate` in `.cms/config.yaml` and the studio iframes the resulting
-URL:
-
-```yaml
-preview:
-  urlTemplate: "https://{branch}--your-site.pages.dev"
-```
-
-Accurate, because it is your real build. Roughly thirty seconds, because it is
-your real build.
-
-## Or your laptop does
-
-```sh
-npx greatcms preview --branch cms/draft-home.hero --run "npm run dev"
-```
-
-This overlays the draft's content files onto your working copy, starts your dev
-server, and restores the working copy exactly when you stop it — including
-deleting files that did not exist before.
-
-Two guards, because it writes into a working copy: it refuses to run on top of
-uncommitted content changes, and refuses any draft branch carrying changes
-outside your content directories. A draft carries content; a draft carrying
-source changes is a mistake or an attack.
+to. Building your site inside the studio would also break the rule that it never
+executes anything from a repository it manages. Your dev server renders the
+preview, on your machine, with your toolchain; your CI builds what you publish.

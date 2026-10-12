@@ -119,6 +119,29 @@ describe("editing a region", () => {
     expect(document.querySelector<HTMLInputElement>('input[name="headSha"]')?.value).toBe(head());
   });
 
+  it("lists the site's other regions for the preview, each pointing at its own editor", async () => {
+    // Only a framed preview has a page to point at.
+    site.store.updateSite("site-1", {
+      name: "On disk",
+      devUrl: "http://localhost:5173",
+      pushAfterPublish: false,
+    });
+    const { document } = new JSDOM(await (await get("/sites/site-1/regions/about.intro")).text())
+      .window;
+    site.store.updateSite("site-1", { name: "On disk", devUrl: "", pushAfterPublish: false });
+    const listed = JSON.parse(document.getElementById("live-elsewhere")?.textContent ?? "[]");
+    const hero = listed.find((f: { path: string }) => f.path === "f[heading]");
+    expect(hero).toMatchObject({
+      value: "Publish from anywhere",
+      block: { id: "region:home.hero" },
+      href: "/sites/site-1/regions/home.hero#f-heading",
+    });
+    // Not the one being edited: that form holds it already.
+    expect(listed.some((f: { block: { id: string } }) => f.block.id === "region:about.intro")).toBe(
+      false,
+    );
+  });
+
   it("shows schema defaults for a region nobody has edited", async () => {
     const response = await get("/sites/site-1/regions/about.intro");
     const { document } = new JSDOM(await response.text()).window;
@@ -209,7 +232,16 @@ describe("editing a region", () => {
       "f[image][alt]": "Alt",
     });
     expect(response.status).toBe(409);
-    expect(await response.text()).toContain("moved while you were editing");
+    expect(await response.clone().text()).toContain("moved while you were editing");
+    expect(commits()).toHaveLength(0);
+
+    // Pressing Publish again on the same form must not overwrite what changed.
+    const again = await site.app.request("/sites/site-1/regions/home.hero", {
+      method: "POST",
+      headers: signedIn,
+      body: await retryForm(response),
+    });
+    expect(again.status).toBe(409);
     expect(commits()).toHaveLength(0);
   });
 
@@ -232,6 +264,12 @@ describe("block lists", () => {
     const { document } = new JSDOM(await response.text()).window;
 
     expect(document.querySelectorAll("section.block")).toHaveLength(4);
+    const sections = [
+      ...document.querySelectorAll<HTMLDetailsElement>(".block-collapsible > details"),
+    ];
+    expect(sections).toHaveLength(4);
+    expect(sections.every((section) => !section.open)).toBe(true);
+    expect(sections[0]?.querySelector("summary")?.textContent).toContain("Section 1");
     expect(document.querySelector<HTMLButtonElement>('button[value="up:0"]')?.disabled).toBe(true);
     expect(document.querySelector('button[value="remove:1"]')).toBeTruthy();
   });
@@ -247,6 +285,9 @@ describe("block lists", () => {
 
     const { document } = new JSDOM(await response.text()).window;
     expect(document.querySelectorAll("section.block")).toHaveLength(2);
+    const sections = document.querySelectorAll<HTMLDetailsElement>(".block-collapsible > details");
+    expect(sections[0]?.open).toBe(false);
+    expect(sections[1]?.open).toBe(true);
     expect(commits()).toHaveLength(0);
   });
 
@@ -291,6 +332,16 @@ describe("block lists", () => {
 });
 
 describe("connecting a site", () => {
+  it("requires a deliberate confirmation before disconnecting", async () => {
+    const response = await get("/sites/site-1");
+    const { document } = new JSDOM(await response.text()).window;
+    const disclosure = document.querySelector<HTMLDetailsElement>(".danger-confirm");
+
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector("summary")?.textContent).toContain("Disconnect this site");
+    expect(disclosure?.querySelector("button")?.textContent).toContain("Confirm disconnect");
+  });
+
   it("rejects a folder with no schema, before storing anything", async () => {
     const empty = mkdtempSync(join(tmpdir(), "greatcms-empty-"));
     const store = new Store(":memory:");
@@ -303,9 +354,69 @@ describe("connecting a site", () => {
     });
 
     expect(response.status).toBe(422);
-    expect(await response.text()).toContain("no .cms/schema.yaml");
+    const text = await response.text();
+    expect(text).toContain("no .cms/schema.yaml");
+    // The remedy reads as its own line, not run on after the problem.
+    expect(new JSDOM(text).window.document.querySelector(".flash .fix")?.textContent).toBeTruthy();
     expect(store.listSites()).toEqual([]);
     rmSync(empty, { recursive: true, force: true });
+  });
+
+  it("says plainly when the folder does not exist, on the field itself", async () => {
+    const response = await post("/sites", { name: "Typo", path: "/no/such/folder/anywhere" });
+    const { document } = new JSDOM(await response.text()).window;
+
+    expect(response.status).toBe(422);
+    expect(document.querySelector("#path")?.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector("#path-hint-error")?.textContent).toContain("no folder");
+  });
+});
+
+describe("forms on a site", () => {
+  it("shows the address this site's forms post to, so nobody has to guess the id", async () => {
+    const { document } = new JSDOM(await (await get("/sites/site-1")).text()).window;
+
+    expect(document.querySelector('[aria-labelledby="forms"] pre')?.textContent).toContain(
+      'action="http://localhost/f/site-1/contact"',
+    );
+  });
+});
+
+describe("site settings", () => {
+  it("changes the name and dev server without reconnecting", async () => {
+    const response = await post("/sites/site-1/settings", {
+      name: "Renamed",
+      devUrl: "http://localhost:5173",
+    });
+
+    expect(response.status).toBe(303);
+    expect(site.store.getSite("site-1")).toMatchObject({
+      name: "Renamed",
+      devUrl: "http://localhost:5173",
+      path: site.root,
+    });
+  });
+
+  it("keeps the folder, whatever the form says", async () => {
+    await post("/sites/site-1/settings", { name: "Same", path: "/somewhere/else", devUrl: "" });
+
+    expect(site.store.getSite("site-1")?.path).toBe(site.root);
+  });
+
+  it("refuses a dev server URL the browser would execute", async () => {
+    const response = await post("/sites/site-1/settings", {
+      name: "Acme",
+      devUrl: "javascript:alert(1)",
+    });
+
+    expect(response.status).toBe(422);
+    expect(site.store.getSite("site-1")?.devUrl).not.toContain("javascript");
+  });
+
+  it("is linked from the site page, where a missing dev server is noticed", async () => {
+    const page = await (await get("/sites/site-1")).text();
+
+    expect(page).toContain('href="/sites/site-1/settings"');
   });
 });
 
@@ -315,6 +426,7 @@ describe("accessibility", () => {
     ["sites", "/"],
     ["connect a site", "/sites/new"],
     ["site", "/sites/site-1"],
+    ["site settings", "/sites/site-1/settings"],
     ["edit a region", "/sites/site-1/regions/home.hero"],
     ["edit a block list", "/sites/site-1/regions/home.body"],
   ] as const;
@@ -385,7 +497,153 @@ function pngBytes(width = 800, height = 600): Uint8Array {
   return bytes;
 }
 
+async function retryForm(response: Response): Promise<FormData> {
+  const dom = new JSDOM(await response.text());
+  const form = dom.window.document.querySelector<HTMLFormElement>("#editor-form")!;
+  const body = new FormData();
+  for (const [key, value] of new dom.window.FormData(form)) {
+    if (typeof value === "string") body.append(key, value);
+  }
+  body.set("action", "publish");
+  return body;
+}
+
 describe("uploading an image", () => {
+  it("keeps selected image bytes after a validation error and publishes them on retry", async () => {
+    const invalid = await publishWithFile(
+      new File([pngBytes()], "keep.png", { type: "image/png" }),
+      { "f[heading]": "" },
+    );
+    expect(invalid.status).toBe(422);
+    expect(commits()).toHaveLength(0);
+    const document = new JSDOM(await invalid.clone().text()).window.document;
+    const preview = document.querySelector(".preview-thumb img")?.getAttribute("src");
+    expect(preview).toContain("/pending-media/");
+    const imageResponse = await get(preview!);
+    expect(imageResponse.status).toBe(200);
+    expect(imageResponse.headers.get("content-type")).toBe("image/png");
+    expect(imageResponse.headers.get("cache-control")).toBe("no-store");
+    expect(new Uint8Array(await imageResponse.arrayBuffer())).toEqual(pngBytes());
+    expect((await get(preview!, {})).status).toBe(303);
+    expect((await get(preview!.replace("region%3Ahome.hero", "region%3Ahome.body"))).status).toBe(
+      404,
+    );
+    const body = await retryForm(invalid);
+    expect(body.get("pendingMedia")).toBeTruthy();
+    const oldToken = body.get("pendingMedia");
+    body.set("f[heading]", "Corrected title");
+    const response = await site.app.request("/sites/site-1/regions/home.hero", {
+      method: "POST",
+      headers: signedIn,
+      body,
+    });
+    expect(response.status).toBe(200);
+    expect(commits()).toHaveLength(1);
+    expect(commitPaths()).toHaveLength(2);
+    expect(commitPaths().some((path) => path.startsWith("public/media/keep-"))).toBe(true);
+    expect((await retryForm(response)).get("pendingMedia")).toBeNull();
+    expect((await get(preview!)).status).toBe(404);
+    body.set("pendingMedia", oldToken!);
+    const replay = await site.app.request("/sites/site-1/regions/home.hero", {
+      method: "POST",
+      headers: signedIn,
+      body,
+    });
+    expect(replay.status).toBe(422);
+    expect(commits()).toHaveLength(1);
+
+    // The dead token is dropped, so the very next post from that form works again.
+    const recovered = await retryForm(replay);
+    expect(recovered.get("pendingMedia")).toBeNull();
+    recovered.set("f[heading]", "After the images expired");
+    recovered.set("headSha", site.head());
+    const again = await site.app.request("/sites/site-1/regions/home.hero", {
+      method: "POST",
+      headers: signedIn,
+      body: recovered,
+    });
+    expect(again.status).toBe(200);
+    expect(commits()).toHaveLength(2);
+  });
+
+  it.each(
+    ["region", "collection"].flatMap((kind) =>
+      ["add", "down", "remove-other", "remove-image"].map((action) => ({ kind, action })),
+    ),
+  )(
+    "retains uploads through $kind $action and commits only referenced images",
+    async ({ kind, action }) => {
+      site.cleanup();
+      site = makeSite({
+        schema: `version: 1
+blocks:
+  photo:
+    fields:
+      heading: { type: text, required: true }
+      image: { type: image }
+regions:
+  home.sections:
+    type: blocks
+    allow: [photo]
+collections:
+  pages:
+    path: content/pages
+    format: json
+    slug: title
+    fields:
+      title: { type: text, required: true }
+      sections: { type: blocks, allow: [photo] }
+`,
+      });
+      const path =
+        kind === "region"
+          ? "/sites/site-1/regions/home.sections"
+          : "/sites/site-1/collections/pages/new";
+      const list = kind === "region" ? "blocks" : "sections";
+      const verb = action.startsWith("remove") ? "remove" : action;
+      const index = action === "remove-other" ? 1 : 0;
+      const value =
+        kind === "region"
+          ? verb === "add"
+            ? "add"
+            : `${verb}:${index}`
+          : `nested:${verb}:sections${verb === "add" ? "" : `:${index}`}`;
+      const body = new FormData();
+      body.set("action", value);
+      body.set("headSha", head());
+      body.set("f[title]", "Our products");
+      body.set("addType", "photo");
+      body.set("nestedAdd[sections]", "photo");
+      for (const i of [0, 1]) {
+        body.set(`f[${list}][${i}][_type]`, "photo");
+        body.set(`f[${list}][${i}][heading]`, `Photo ${i}`);
+      }
+      body.set(`f[${list}][0][image][alt]`, "Product photograph");
+      body.set(
+        `m[${list}][0][image]`,
+        new File([pngBytes()], "product.png", { type: "image/png" }),
+      );
+      const edited = await site.app.request(path, { method: "POST", headers: signedIn, body });
+      expect(edited.status).toBe(200);
+      expect(commits()).toHaveLength(0);
+      const publish = await retryForm(edited);
+      expect(publish.get("pendingMedia")).toBeTruthy();
+      for (const key of publish.keys()) {
+        if (key.endsWith("[heading]") && !publish.get(key)) publish.set(key, "New section");
+      }
+      const response = await site.app.request(path, {
+        method: "POST",
+        headers: signedIn,
+        body: publish,
+      });
+      expect(response.status).toBe(200);
+      expect(commits()).toHaveLength(1);
+      expect(commitPaths()).toHaveLength(action === "remove-image" ? 1 : 2);
+      if (action !== "remove-image")
+        expect(commitPaths().some((file) => file.startsWith("public/media/product-"))).toBe(true);
+    },
+  );
+
   function publishWithFile(file: File, fields: Record<string, string> = {}) {
     const body = new FormData();
     body.set("headSha", head());
@@ -483,7 +741,88 @@ describe("uploading an image", () => {
   });
 });
 
+describe("uploading an image with a collection entry", () => {
+  it("commits the product and its image together", async () => {
+    site.cleanup();
+    site = makeSite({
+      schema: `version: 1
+collections:
+  products:
+    path: content/products
+    format: json
+    slug: name
+    fields:
+      name: { type: text, required: true }
+      description: { type: text, required: true }
+      image: { type: image, required: true }
+`,
+    });
+
+    const body = new FormData();
+    body.set("action", "publish");
+    body.set("f[name]", "Lake fish");
+    body.set("f[description]", "Fresh from the lake");
+    body.set("f[image][alt]", "A basket of fresh fish");
+    body.set("m[image]", new File([pngBytes(800, 600)], "Lake Fish.png", { type: "image/png" }));
+
+    const response = await site.app.request("/sites/site-1/collections/products/new", {
+      method: "POST",
+      headers: signedIn,
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(commitPaths()).toHaveLength(2);
+    expect(commitPaths()).toContain("content/products/lake-fish.json");
+    expect(
+      commitPaths().some((path) => /^public\/media\/lake-fish-[0-9a-f]{8}\.png$/.test(path)),
+    ).toBe(true);
+    expect(JSON.parse(site.read("content/products/lake-fish.json")).image).toMatchObject({
+      alt: "A basket of fresh fish",
+      width: 800,
+      height: 600,
+    });
+  });
+});
+
 describe("editing a collection", () => {
+  it("uses a collection's own noun and slug field throughout the add flow", async () => {
+    site.cleanup();
+    site = makeSite({
+      schema: `version: 1
+collections:
+  products:
+    label: Products
+    entryLabel: product
+    path: content/products
+    format: json
+    slug: name
+    fields:
+      name: { type: text, required: true }
+      description: { type: text }
+`,
+      files: {
+        "content/products/lake-fish.json": JSON.stringify({
+          name: "Lake fish",
+          description: "Fresh from the lake",
+        }),
+      },
+    });
+
+    const dashboard = await (await get("/sites/site-1")).text();
+    expect(dashboard).toContain("Add product");
+    expect(dashboard).toContain("/sites/site-1/collections/products/new");
+
+    const list = await (await get("/sites/site-1/collections/products")).text();
+    expect(list).toContain("Lake fish");
+    expect(list).toContain("Fresh from the lake");
+    expect(list).toContain("Add product");
+
+    const add = await (await get("/sites/site-1/collections/products/new")).text();
+    expect(add).toContain("New product");
+    expect(add).not.toContain("New Products entry");
+  });
+
   it("lists entries from the repository", async () => {
     site.write(
       "content/blog/first-post.md",
@@ -515,8 +854,63 @@ describe("editing a collection", () => {
     expect(document.querySelector<HTMLInputElement>('input[name="f[title]"]')?.value).toBe(
       "First post",
     );
+    const form = document.querySelector("#editor-form");
+    const actions = form?.querySelector(".form-actions");
+    const firstField = form?.querySelector(".field");
+    expect(actions?.nextElementSibling).toBe(firstField);
     // The Markdown body is a normal field as far as the editor is concerned.
     expect(document.querySelector("textarea")?.textContent).toContain("The body text.");
+  });
+
+  it("links to an entry whose file name needs escaping in a URL", async () => {
+    site.cleanup();
+    site = makeSite({
+      schema: fixture(".cms/schema.yaml"),
+      config: fixture(".cms/config.yaml"),
+      files: {
+        "content/blog/q&a #1?.md": "---\ntitle: Questions\ndate: 2026-10-03\n---\n\nAnswers.\n",
+      },
+      devUrl: "",
+    });
+
+    const list = new JSDOM(await (await get("/sites/site-1/collections/blog")).text()).window
+      .document;
+    const href = [...list.querySelectorAll("a")]
+      .map((a) => a.getAttribute("href") ?? "")
+      .find((link) => link.includes("q%26a"));
+    expect(href).toBe("/sites/site-1/collections/blog/q%26a%20%231%3F");
+
+    const entry = await get(href!);
+    expect(entry.status).toBe(200);
+    expect(await entry.text()).toContain("Answers.");
+  });
+
+  it("refuses a new entry whose file name is already taken", async () => {
+    const before = site.read("content/blog/publish-from-anywhere.md");
+
+    const response = await post("/sites/site-1/collections/blog/new", {
+      headSha: head(),
+      "f[title]": "Publish from anywhere",
+      "f[date]": "2026-10-02",
+      "f[content]": "A different body.",
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.text()).toContain("already taken");
+    expect(site.read("content/blog/publish-from-anywhere.md")).toBe(before);
+    expect(commits()).toHaveLength(0);
+  });
+
+  it("refuses a title that would become the create route", async () => {
+    const response = await post("/sites/site-1/collections/blog/new", {
+      headSha: head(),
+      "f[title]": "New",
+      "f[date]": "2026-10-02",
+    });
+
+    expect(response.status).toBe(409);
+    expect(site.exists("content/blog/new.md")).toBe(false);
+    expect(commits()).toHaveLength(0);
   });
 
   it("publishes a new entry as Markdown with frontmatter", async () => {
@@ -603,12 +997,35 @@ describe("editing a collection", () => {
 });
 
 describe("the live view of your site", () => {
-  it("offers a GitHub site no frame, because there is no dev server to show", async () => {
+  it("shows no frame without a dev server, and says where to add one", async () => {
     const { document } = new JSDOM(await (await get("/sites/site-1/regions/home.hero")).text())
       .window;
 
     expect(document.querySelector("iframe[data-live-site]")).toBeNull();
-    expect(document.body.textContent).toContain("folder on this machine");
+    expect(document.querySelector('.live a[href="/sites/site-1/settings"]')?.textContent).toContain(
+      "dev server",
+    );
+  });
+
+  it("labels the rows of a list, rather than numbering them from zero", async () => {
+    site.cleanup();
+    site = makeSite({
+      schema: `version: 1
+regions:
+  home.facts:
+    fields:
+      facts: { type: list, label: Facts, of: { type: text } }
+`,
+      files: { "content/cms/home.facts.json": '{ "facts": ["Fast"] }\n' },
+      devUrl: "",
+    });
+    const { document } = new JSDOM(await (await get("/sites/site-1/regions/home.facts")).text())
+      .window;
+    const labels = [...document.querySelectorAll("fieldset label")].map((l) =>
+      l.textContent?.trim(),
+    );
+
+    expect(labels).toEqual(["Item 1", "New item"]);
   });
 
   it("writes a draft without committing anything", async () => {
@@ -621,8 +1038,53 @@ describe("the live view of your site", () => {
     expect(commits()).toHaveLength(0);
   });
 
-  it("serves the live-editing bundle", async () => {
+  it("restores an unsaved edit into the editor, and says so", async () => {
+    await post("/sites/site-1/regions/home.hero/draft", { "f[heading]": "Typed but never saved" });
+    const body = await (await get("/sites/site-1/regions/home.hero")).text();
+
+    expect(body).toContain('value="Typed but never saved"');
+    expect(body).toContain("Unsaved edits restored");
+    expect(body).toContain('action="/sites/site-1/regions/home.hero/draft/discard"');
+  });
+
+  it("shows what is published once the draft is discarded", async () => {
+    await post("/sites/site-1/regions/home.hero/draft", { "f[heading]": "Typed but never saved" });
+    await post("/sites/site-1/regions/home.hero/draft/discard", {});
+    const body = await (await get("/sites/site-1/regions/home.hero")).text();
+
+    expect(body).not.toContain("Typed but never saved");
+    expect(body).not.toContain("Unsaved edits restored");
+  });
+
+  it("serves the live-editing and conditional-field bundles", async () => {
     expect((await get("/assets/live.js")).status).toBe(200);
+    expect((await get("/assets/form.js")).status).toBe(200);
+    expect((await get("/assets/shell.js")).status).toBe(200);
+  });
+
+  it("serves the stylesheet as a file the browser can keep, and before sign-in", async () => {
+    const signIn = await (await get("/sign-in", {})).text();
+    const href = /href="(\/assets\/studio\.css\?v=[0-9a-f]+)"/.exec(signIn)?.[1];
+    expect(href, "the sign-in page links a versioned stylesheet").toBeDefined();
+    expect(signIn).not.toContain("<style");
+
+    const pinned = await get(href!, {});
+    expect(pinned.status).toBe(200);
+    expect(pinned.headers.get("content-type")).toContain("text/css");
+    expect(pinned.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+
+    // Without the version the content could change under a long cache, so it does not get one.
+    expect((await get("/assets/studio.css", {})).headers.get("cache-control")).toBe(
+      "public, max-age=300",
+    );
+  });
+
+  it("compresses what it serves when the browser asks", async () => {
+    const gz = await get("/assets/editor.js", { ...signedIn, "accept-encoding": "gzip" });
+    expect(gz.headers.get("content-encoding")).toBe("gzip");
+    expect((await gz.arrayBuffer()).byteLength).toBeLessThan(
+      (await (await get("/assets/editor.js")).arrayBuffer()).byteLength / 2,
+    );
   });
 
   it("refuses to serve anything else from the asset route", async () => {

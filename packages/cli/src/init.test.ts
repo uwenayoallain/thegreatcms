@@ -68,7 +68,7 @@ describe("detecting a framework", () => {
 
 describe("what init generates", () => {
   it("produces a schema our own parser accepts, for every template", () => {
-    for (const template of ["hero", "landing", "blog", "blank"] as const) {
+    for (const template of ["hero", "landing", "business", "blog", "blank"] as const) {
       const plan = planInit(answers({ template }));
       const schema = parseSchema(file(plan, ".cms/schema.yaml"));
       expect(Object.keys(schema.regions).length, template).toBeGreaterThan(0);
@@ -101,6 +101,56 @@ describe("what init generates", () => {
     expect(schema.collections.blog).toMatchObject({ format: "markdown", body: "content" });
   });
 
+  it("gives a business site reusable sections and structured products", () => {
+    const schema = parseSchema(
+      file(planInit(answers({ name: "Lake Farm", template: "business" })), ".cms/schema.yaml"),
+    );
+
+    expect(Object.keys(schema.regions)).toEqual([
+      "site.identity",
+      "site.contact",
+      "site.seo",
+      "home.hero",
+      "home.sections",
+    ]);
+    expect(schema.regions["home.sections"]).toMatchObject({
+      type: "blocks",
+      allow: ["feature-grid", "process", "stats", "story", "products", "faq-list", "cta"],
+    });
+    expect(schema.blocks["feature-grid"]?.fields.items).toMatchObject({
+      type: "blocks",
+      allow: ["feature"],
+    });
+    expect(schema.blocks.process?.fields.steps).toMatchObject({
+      type: "blocks",
+      allow: ["step"],
+      min: 2,
+      max: 8,
+    });
+    expect(schema.collections.products).toMatchObject({
+      path: "src/content/products",
+      format: "json",
+      slug: "name",
+    });
+    expect(schema.collections.products?.fields.details).toMatchObject({
+      type: "list",
+      of: { type: "text" },
+    });
+    expect(schema.collections.pages).toMatchObject({
+      path: "src/content/pages",
+      format: "json",
+      slug: "title",
+    });
+    expect(schema.collections.pages?.fields.sections).toMatchObject({
+      type: "blocks",
+      allow: ["feature-grid", "process", "stats", "story", "products", "faq-list", "cta"],
+    });
+    expect(schema.regions["site.identity"]).toMatchObject({ default: { name: "Lake Farm" } });
+    expect(schema.regions["site.identity"]).toMatchObject({
+      fields: { owner: { type: "group" } },
+    });
+  });
+
   it("ships defaults so the site renders before anyone edits anything", () => {
     const schema = parseSchema(file(planInit(answers()), ".cms/schema.yaml"));
     expect(schema.regions["home.hero"]).toMatchObject({ default: { heading: "Welcome" } });
@@ -125,11 +175,34 @@ describe("next steps", () => {
     expect(nextSteps(eleventy, planInit(eleventy))).toContain("global data in Eleventy");
 
     const astro = answers();
-    expect(nextSteps(astro, planInit(astro))).toContain("import hero from");
+    const output = nextSteps(astro, planInit(astro));
+    expect(output).toContain("npm install --save-dev @greatcms/reader");
+    expect(output).toContain('cms.region("home.hero")');
+  });
+
+  it("never asks a new site to import a content file that does not exist yet", () => {
+    for (const framework of Object.values(FRAMEWORKS)) {
+      const output = nextSteps(
+        answers({ framework, regionsDir: framework.regionsDir }),
+        planInit(answers({ framework, regionsDir: framework.regionsDir })),
+      );
+      expect(output, framework.id).not.toContain("home.hero.json");
+    }
   });
 
   it("skips the snippet for the blank template, which has nothing to show yet", () => {
     const blank = answers({ template: "blank" });
     expect(nextSteps(blank, planInit(blank))).not.toContain("Read the managed region");
+  });
+
+  it("names every content shape the business starter creates", () => {
+    const business = answers({ template: "business" });
+    const output = nextSteps(business, planInit(business));
+
+    expect(output).toContain('cms.region("site.identity")');
+    expect(output).toContain('cms.blocks("home.sections")');
+    expect(output).toContain('cms.collection("products")');
+    expect(output).toContain('cms.collection("pages")');
+    expect(output).toContain("one dynamic route");
   });
 });

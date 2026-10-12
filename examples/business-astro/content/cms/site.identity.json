@@ -1,0 +1,14 @@
+{
+  "description": "A fictional cooperative supplying seed, soil support, and practical field advice to growers around Rwanda's western highlands.",
+  "founded": 2021,
+  "legalName": "Kivu Seedworks Cooperative",
+  "name": "Kivu Seedworks",
+  "owner": {
+    "bio": "Aline keeps product advice tied to the planting calendar and coordinates the western delivery route.",
+    "name": "Aline Mukamana",
+    "phone": "+250 780 000 000",
+    "role": "Store and field coordinator"
+  },
+  "registrationNumber": "COOP-RW-DEMO",
+  "tagline": "Better starts for stronger harvests"
+}

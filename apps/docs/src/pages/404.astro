@@ -1,0 +1,29 @@
+---
+import Base from "../layouts/Base.astro";
+import { docsPages } from "../lib/cms";
+
+const pages = docsPages();
+---
+
+<Base title="Not found — GreatCMS" description="There is no page at this address.">
+  <section class="missing">
+    <p class="stamp">404</p>
+    <h1>No file at this path</h1>
+    <p class="lede">
+      Which, for once, is an error: a missing content file resolves to schema defaults, but a
+      missing page is just missing.
+    </p>
+    <ul>
+      <li><a href="/">The front page</a></li>
+      <li><a href="/docs/">Documentation</a></li>
+      {
+        pages.slice(0, 3).map((page) => (
+          <li>
+            <a href={`/docs/${page.slug}/`}>{page.title}</a>
+          </li>
+        ))
+      }
+      <li><a href="/spec/">The standard</a></li>
+    </ul>
+  </section>
+</Base>

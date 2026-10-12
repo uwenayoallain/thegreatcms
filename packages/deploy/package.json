@@ -1,0 +1,56 @@
+{
+  "name": "@greatcms/deploy",
+  "version": "0.1.0",
+  "description": "greatcms-deploy and greatcms-preview: build a site on every commit and run its dev server only while someone is editing.",
+  "keywords": [
+    "cms",
+    "deploy",
+    "preview",
+    "self-hosted",
+    "static-site"
+  ],
+  "homepage": "https://greatcms.dev",
+  "bugs": {
+    "url": "https://github.com/uwenayoallain/thegreatcms/issues"
+  },
+  "license": "MIT",
+  "author": "UWENAYO Alain Pacifique",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uwenayoallain/thegreatcms.git",
+    "directory": "packages/deploy"
+  },
+  "bin": {
+    "greatcms-deploy": "./bin/greatcms-deploy.mjs",
+    "greatcms-preview": "./bin/greatcms-preview.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -73,13 +73,27 @@ describe("receiving a submission", () => {
   it("redirects back to the site when asked, but only to a same-site path", async () => {
     const ok = await submit({ message: "Hi", _redirect: "/thanks" });
     expect(ok.status).toBe(303);
-    expect(ok.headers.get("location")).toBe("/thanks");
+    expect(ok.headers.get("location")).toBe("https://example.com/thanks");
 
     const evil = await submit({ message: "Hi", _redirect: "https://evil.example/phish" });
     expect(evil.status).toBe(200);
 
     const protocolRelative = await submit({ message: "Hi", _redirect: "//evil.example" });
     expect(protocolRelative.status).toBe(200);
+  });
+
+  it("sends the visitor to the path on the site they submitted from, not on the studio", async () => {
+    const response = await app.request("/f/site-1/contact", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://www.example.org",
+      },
+      body: new URLSearchParams({ message: "Hi", _redirect: "/thanks/?sent=1" }),
+    });
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://www.example.org/thanks/?sent=1");
   });
 
   it("rejects submissions for an unknown site", async () => {
@@ -198,7 +212,8 @@ describe("the inbox", () => {
 
   it("shows the unread count on the sites page", async () => {
     const body = await (await app.request("/", { headers: signedIn })).text();
-    expect(body).toContain("2 unread");
+    const count = new JSDOM(body).window.document.querySelector(".count");
+    expect(count?.textContent?.replace(/\s+/g, " ").trim()).toBe("2 unread");
   });
 
   it("exports CSV", async () => {
@@ -235,5 +250,59 @@ describe("CSV export", () => {
       { createdAt: "2026-08-12", form: "contact", data: { message: 'She said "hi"' } },
     ]);
     expect(csv).toContain('"She said ""hi"""');
+  });
+});
+
+describe("a site's overall budget", () => {
+  it("stops storing submissions past the site's daily limit, whoever sends them", async () => {
+    const capped = createApp({
+      store,
+      password: "x".repeat(16),
+      secret: "s",
+      trustProxy: true,
+      siteSubmissionLimiter: new RateLimiter(3, 60_000),
+    });
+    const codes: number[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- a budget is a claim about order
+      const response = await capped.request("/f/site-1/contact", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-forwarded-for": `198.51.100.${i}`,
+        },
+        body: new URLSearchParams({ message: `Hi ${i}` }),
+      });
+      codes.push(response.status);
+    }
+
+    expect(codes.filter((code) => code === 429)).toHaveLength(2);
+    expect(store.listSubmissions()).toHaveLength(3);
+  });
+
+  it("keeps storing, but stops emailing, past the hourly notification limit", async () => {
+    const sent: string[] = [];
+    const quiet = createApp({
+      store,
+      password: "x".repeat(16),
+      secret: "s",
+      trustProxy: true,
+      notifier: { notify: async (message) => void sent.push(message.subject) },
+      notificationLimiter: new RateLimiter(2, 60_000),
+    });
+    for (let i = 0; i < 4; i += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- a budget is a claim about order
+      await quiet.request("/f/site-1/contact", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-forwarded-for": `198.51.100.${i}`,
+        },
+        body: new URLSearchParams({ message: `Hi ${i}`, _t: String(Date.now() - 10_000) }),
+      });
+    }
+
+    expect(store.listSubmissions()).toHaveLength(4);
+    expect(sent).toHaveLength(2);
   });
 });

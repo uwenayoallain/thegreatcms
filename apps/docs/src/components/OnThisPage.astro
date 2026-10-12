@@ -1,0 +1,27 @@
+---
+import type { Heading } from "../lib/markdown";
+
+interface Props {
+  headings: Heading[];
+  depth?: number;
+}
+
+// Only worth a list when there is something to jump past.
+const { headings, depth = 2 } = Astro.props;
+const items = headings.filter((heading) => heading.depth === depth);
+---
+
+{
+  items.length >= 3 && (
+    <nav class="on-this-page" aria-labelledby="on-this-page">
+      <p class="stamp" id="on-this-page">On this page</p>
+      <ol>
+        {items.map((heading) => (
+          <li>
+            <a href={`#${heading.id}`}>{heading.text}</a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}

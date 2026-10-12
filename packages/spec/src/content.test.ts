@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, parseConfig } from "./config.js";
 import { parseRegionFile, regionDefaults, resolveRegion, serializeRegion } from "./content.js";
@@ -30,6 +31,46 @@ regions:
 `);
 
 describe("the hybrid fallback", () => {
+  const nested = parseSchema(`
+version: 1
+blocks:
+  card:
+    fields:
+      title: { type: text }
+      tone: { type: select, options: [plain, accent], default: plain }
+regions:
+  home.seo:
+    fields:
+      seo:
+        type: group
+        fields:
+          title: { type: text, default: Untitled }
+          description: { type: text, default: Described }
+    default:
+      seo: { title: Home }
+  home.cards:
+    fields:
+      cards: { type: blocks, allow: [card], default: [{ _type: card, title: One }] }
+`);
+
+  it("merges a region default into a group field without losing its other defaults", () => {
+    expect(resolveRegion(nested, "home.seo", null)).toEqual({
+      seo: { title: "Home", description: "Described" },
+    });
+  });
+
+  it("fills block defaults inside a blocks field when no content file exists", () => {
+    expect(resolveRegion(nested, "home.cards", null)).toEqual({
+      cards: [{ _type: "card", title: "One", tone: "plain" }],
+    });
+  });
+
+  it("resolves a missing file and an empty file to the same document", () => {
+    expect(resolveRegion(nested, "home.cards", null)).toEqual(
+      resolveRegion(nested, "home.cards", {}),
+    );
+  });
+
   it("renders schema defaults when no content file exists", () => {
     expect(regionDefaults(schema, "home.hero")).toEqual({
       heading: "Welcome",
@@ -76,6 +117,40 @@ describe("serializeRegion", () => {
     expect(out).toBe(
       '{\n  "alpha": 2,\n  "zebra": 1,\n  "_meta": {\n    "updatedAt": "2026-08-12T00:00:00Z"\n  }\n}\n',
     );
+  });
+
+  it("sorts nested objects and blocks the same way, so any two tools agree byte for byte", () => {
+    const out = serializeRegion({
+      slides: [
+        {
+          _type: "slide",
+          heading: "Hi",
+          buttons: [{ style: "solid", _type: "button", link: { label: "Go", href: "/" } }],
+        },
+      ],
+    });
+    expect(JSON.parse(out)).toEqual({
+      slides: [
+        {
+          _type: "slide",
+          heading: "Hi",
+          buttons: [{ _type: "button", link: { href: "/", label: "Go" }, style: "solid" }],
+        },
+      ],
+    });
+    expect(out.indexOf('"buttons"')).toBeLessThan(out.indexOf('"heading"'));
+    expect(out.indexOf('"href"')).toBeLessThan(out.indexOf('"label"'));
+    expect(out.indexOf('"style"')).toBeLessThan(out.indexOf('"_type": "button"'));
+    expect(out.indexOf('"heading"')).toBeLessThan(out.indexOf('"_type": "slide"'));
+  });
+
+  it("orders keys by code point, not by the locale of the machine writing them", () => {
+    expect(Object.keys(JSON.parse(serializeRegion({ b: 1, B: 2, a: 3, Á: 4 })))).toEqual([
+      "B",
+      "a",
+      "b",
+      "Á",
+    ]);
   });
 
   it("round-trips through parseRegionFile", () => {
@@ -151,9 +226,67 @@ preview:
     expect(config.content.regions).toBe("content/cms");
   });
 
+  it("parses the config SPEC.md documents as the defaults", () => {
+    const spec = readFileSync(new URL("../../../SPEC.md", import.meta.url), "utf8");
+    const block = /## 7\.[\s\S]*?```yaml\n([\s\S]*?)```/.exec(spec)?.[1];
+    expect(block).toBeTruthy();
+
+    const config = parseConfig(block as string);
+    expect(config.publish.dispatchEvent ?? undefined).toBeUndefined();
+    expect(config.content.regions).toBe("content/cms");
+  });
+
   it("still applies defaults when whole sections are omitted", () => {
     const config = parseConfig("version: 1\n");
     expect(config.content.media).toBe("public/media");
     expect(config.publish.draftBranchPrefix).toBe("cms/draft");
+  });
+});
+
+describe("frontmatter fences", () => {
+  it.each([
+    ["empty frontmatter", "---\n---\nBody\n", {}, "Body\n"],
+    ["Windows line endings", "---\r\ntitle: Hi\r\n---\r\nBody\r\n", { title: "Hi" }, "Body\r\n"],
+    ["a byte-order mark", "\uFEFF---\ntitle: Hi\n---\nBody\n", { title: "Hi" }, "Body\n"],
+    ["no closing fence", "---\ntitle: Hi\n", {}, "---\ntitle: Hi\n"],
+    [
+      "a first line that only starts with ---",
+      "---junk\ntitle: Hi\n---\nBody\n",
+      {},
+      "---junk\ntitle: Hi\n---\nBody\n",
+    ],
+  ])("handles %s", (_name, source, data, body) => {
+    expect(parseFrontmatter(source)).toEqual({ data, body });
+  });
+
+  it("does not end the frontmatter at a line that merely contains ---", () => {
+    expect(parseFrontmatter("---\ntitle: a --- b\n---\nBody\n").data).toEqual({
+      title: "a --- b",
+    });
+  });
+});
+
+describe("block variants resolve", () => {
+  const variants = parseSchema(`version: 1
+blocks:
+  cta:
+    variants: [panel, inline]
+    fields:
+      label: { type: text, default: Go }
+regions:
+  body:
+    type: blocks
+    allow: [cta]
+`);
+
+  it("to the first variant unless the content names another it declares", () => {
+    const blocks = resolveRegion(variants, "body", {
+      blocks: [
+        { _type: "cta" },
+        { _type: "cta", _variant: "inline" },
+        { _type: "cta", _variant: "nope" },
+      ],
+    })?.blocks as Array<Record<string, unknown>>;
+    expect(blocks.map((block) => block._variant)).toEqual(["panel", "inline", "panel"]);
   });
 });

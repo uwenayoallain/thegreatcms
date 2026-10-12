@@ -1,0 +1,33 @@
+---
+import SectionRenderer from '../components/SectionRenderer.astro';
+import ManagedImage from '../components/ManagedImage.astro';
+import Base from '../layouts/Base.astro';
+import { cms } from '../lib/cms';
+
+const hero = cms.region('home.hero');
+const sections = cms.region('home.sections').blocks;
+const products = cms.collection('products');
+---
+
+<Base title="Field-ready seed and soil support" description={hero.description}>
+  <section class="hero">
+    <div class="hero-copy">
+      {hero.eyebrow && <p class="kicker">{hero.eyebrow}</p>}
+      <h1>{hero.heading}</h1>
+      <p class="hero-lede">{hero.description}</p>
+      <div class="button-row">
+        <a class="button" href={hero.primary.href}>{hero.primary.label ?? 'Browse products'}</a>
+        {hero.secondary?.href && <a class="button outline" href={hero.secondary.href}>{hero.secondary.label ?? 'Contact us'}</a>}
+      </div>
+    </div>
+    {hero.image?.src ? <ManagedImage image={hero.image} class="hero-image" eager /> : <div class="hero-map" aria-hidden="true">
+      <div class="map-card">
+        <span>FIELD NOTE / 04</span>
+        <strong>Western highlands</strong>
+        <dl><div><dt>soil</dt><dd>volcanic</dd></div><div><dt>window</dt><dd>next rain</dd></div></dl>
+      </div>
+    </div>}
+  </section>
+
+  {sections.map((section, index) => <SectionRenderer section={section} products={products} index={index} />)}
+</Base>

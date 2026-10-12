@@ -1,6 +1,6 @@
 /** Generates the agent-readable documentation surface: llms.txt, llms-full.txt, and docs.json. */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,12 +44,43 @@ function markdownUrlFor(page) {
   return page.markdownUrl ?? `${page.url}.md`;
 }
 
-const pages = await Promise.all(
-  PAGES.map(async (page) => {
-    const content = await readFile(join(root, page.source), "utf8");
-    return Object.assign({ content }, page);
-  }),
-);
+/** The docs collection on the website, in the order the site shows it. */
+async function docsPages() {
+  const dir = "apps/docs/content/docs";
+  const names = (await readdir(join(root, dir))).filter((name) => name.endsWith(".md")).toSorted();
+  const pages = await Promise.all(
+    names.map(async (name) => {
+      const raw = await readFile(join(root, dir, name), "utf8");
+      const match = /^---\n([\s\S]*?)\n---\n/.exec(raw);
+      const front = Object.fromEntries(
+        (match?.[1] ?? "").split("\n").map((line) => {
+          const index = line.indexOf(":");
+          return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
+        }),
+      );
+      const slug = name.replace(/\.md$/, "");
+      return {
+        title: front.title ?? slug,
+        description: front.summary ?? "",
+        order: Number(front.order ?? 50),
+        source: `${dir}/${name}`,
+        url: `/docs/${slug}`,
+        content: `# ${front.title ?? slug}\n\n${front.summary ? `> ${front.summary}\n\n` : ""}${raw.slice(match?.[0].length ?? 0).trim()}\n`,
+      };
+    }),
+  );
+  return pages.toSorted((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+}
+
+const pages = [
+  ...(await Promise.all(
+    PAGES.map(async (page) => {
+      const content = await readFile(join(root, page.source), "utf8");
+      return Object.assign({ content }, page);
+    }),
+  )),
+  ...(await docsPages()),
+];
 
 const llms = [
   "# GreatCMS",
@@ -69,6 +100,18 @@ const llms = [
   `- [llms-full.txt](${SITE}/llms-full.txt) — every document above in one fetch`,
   `- [schema.schema.json](${SITE}/json-schema/schema.schema.json) — JSON Schema for .cms/schema.yaml`,
   `- [config.schema.json](${SITE}/json-schema/config.schema.json) — JSON Schema for .cms/config.yaml`,
+  "",
+  "## Agent skill",
+  "",
+  "The repository ships a skill that teaches an agent to add GreatCMS to a site, extend the",
+  "content model, read content at build time and check it before committing:",
+  "",
+  "```sh",
+  "npx skills add greatcms/greatcms@greatcms",
+  "```",
+  "",
+  "Inside a managed repository, `greatcms init` leaves a note in AGENTS.md, and",
+  "`greatcms check --json` / `greatcms doctor --json` give machine-readable answers.",
   "",
   "## Conformance",
   "",
@@ -110,6 +153,11 @@ const manifest = {
     schemaJsonSchema: "/json-schema/schema.schema.json",
     configJsonSchema: "/json-schema/config.schema.json",
   },
+  // An installable skill for agents working inside a site: commands, file shapes, pitfalls.
+  agentSkill: {
+    source: "https://github.com/greatcms/greatcms/tree/main/skills/greatcms",
+    install: "npx skills add greatcms/greatcms@greatcms",
+  },
   integration: {
     // The shortest possible description of what wiring up a site involves.
     steps: [
@@ -129,6 +177,8 @@ const manifest = {
     markdownUrl: markdownUrlFor(page),
   })),
 };
+
+for (const page of pages) delete page.order;
 
 const artifacts = [
   ["llms.txt", llms],

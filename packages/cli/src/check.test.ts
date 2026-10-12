@@ -162,6 +162,38 @@ describe("media", () => {
     expect(report.issues[0]?.path).toBe("shot");
   });
 
+  it("finds an image inside a block inside a blocks field", async () => {
+    const schema = `version: 1
+blocks:
+  slide:
+    fields:
+      image: { type: image, required: true }
+  carousel:
+    fields:
+      slides: { type: blocks, allow: [slide] }
+regions:
+  home.hero:
+    fields:
+      carousel: { type: blocks, allow: [carousel] }
+`;
+    const report = await check(
+      {
+        "content/cms/home.hero.json": JSON.stringify({
+          carousel: [
+            {
+              _type: "carousel",
+              slides: [{ _type: "slide", image: { src: "/media/gone.png", alt: "Missing" } }],
+            },
+          ],
+        }),
+      },
+      schema,
+    );
+
+    expect(codes(report.issues)).toEqual(["missing_media"]);
+    expect(report.issues[0]?.path).toBe("carousel[0].slides[0].image");
+  });
+
   it("leaves an external URL alone", async () => {
     const report = await check({
       "content/cms/home.hero.json": JSON.stringify({
@@ -192,5 +224,83 @@ describe("the report", () => {
 
     expect(text).toContain("rendering schema defaults");
     expect(text).not.toContain("problem");
+  });
+});
+
+/** A pages entry holding the given sections. */
+const page = (sections: unknown[]) => ({
+  "content/pages/home.json": JSON.stringify({ title: "Home", sections }),
+});
+
+describe("collection entries", () => {
+  const POSTS = `version: 1
+collections:
+  posts:
+    path: content/posts
+    format: markdown
+    fields:
+      title: { type: text, required: true, default: Untitled }
+      date: { type: date }
+`;
+
+  const PAGES = `version: 1
+blocks:
+  feature:
+    fields:
+      heading: { type: text, required: true }
+      image: { type: image }
+collections:
+  pages:
+    path: content/pages
+    format: json
+    fields:
+      title: { type: text, required: true }
+      sections: { type: blocks, allow: [feature] }
+`;
+
+  it("validates an entry as stored, without filling in schema defaults", async () => {
+    const report = await check(
+      { "content/posts/a.md": "---\ndate: 2026-10-02\n---\n\nBody.\n" },
+      POSTS,
+    );
+
+    expect(codes(report.issues)).toContain("required");
+  });
+
+  it("checks alt text on images inside sections of an entry", async () => {
+    const report = await check(
+      page([
+        { _type: "feature", heading: "Hi", image: { src: "https://example.com/a.png", alt: "" } },
+      ]),
+      PAGES,
+    );
+
+    expect(codes(report.issues)).toContain("empty_alt");
+  });
+
+  it("checks required fields inside sections of an entry", async () => {
+    const report = await check(page([{ _type: "feature" }]), PAGES);
+
+    expect(
+      report.issues.some((issue) => issue.code === "required" && /sections/.test(issue.path ?? "")),
+    ).toBe(true);
+  });
+});
+
+describe("the schema itself", () => {
+  it("reports a misspelt key that every reader would silently ignore", async () => {
+    const source = SCHEMA.replace(
+      "heading: { type: text, required: true }",
+      "heading: { type: text, requird: true }",
+    );
+    const report = await checkSite({
+      schema: parseSchema(source, { file: ".cms/schema.yaml" }),
+      config: parseConfig("version: 1\n", ".cms/config.yaml"),
+      files: site({}),
+      schemaSource: { name: ".cms/schema.yaml", source },
+    });
+
+    expect(codes(report.issues)).toContain("unknown_schema_key");
+    expect(report.issues[0]?.path).toBe("regions.home.hero.fields.heading.requird");
   });
 });

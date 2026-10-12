@@ -1,4 +1,4 @@
-/** Emits JSON Schema for `.cms/schema.yaml` and `.cms/config.yaml` from the Zod definitions, so editors give. */
+/** Emits JSON Schema for `.cms/schema.yaml` and `.cms/config.yaml` from the Zod definitions, so editors give autocomplete and inline errors. */
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";

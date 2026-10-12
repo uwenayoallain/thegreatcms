@@ -7,6 +7,5 @@ content:
 mediaUrlPrefix: /media
 
 publish:
-  branch: main
-  draftBranchPrefix: cms/draft
+  # The studio commits on whatever branch is checked out; pushing it is your deploy.
   commitMessage: "content: update {summary}"

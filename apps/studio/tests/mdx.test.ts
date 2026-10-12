@@ -1,6 +1,7 @@
 /** MDX collections: prose with components in it, which a WYSIWYG editor would eat. */
 
 import { entryExtension, hasFrontmatter, parseSchema } from "@greatcms/spec";
+import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { get, makeSite, post, type Fixture } from "./site.js";
 
@@ -37,6 +38,17 @@ regions:
   home.body:
     type: blocks
     allow: [grid]
+`;
+
+const NESTED_COLLECTION_SCHEMA = `${NESTED_SCHEMA}
+collections:
+  pages:
+    path: content/pages
+    format: json
+    slug: title
+    fields:
+      title: { type: text, required: true }
+      sections: { type: blocks, allow: [grid] }
 `;
 
 /** The kind of body MDX exists for: prose wrapped around a real component. */
@@ -146,15 +158,59 @@ describe("a block that contains blocks", () => {
 
   const stored = () => JSON.parse(site.read("content/cms/home.body.json"));
 
-  it("renders a type picker for each nested slot, plus a spare one", async () => {
+  it("renders an explicit add control for a nested block list", async () => {
     // A nested picker exists only once its parent does, so add the grid first.
     const body = await (
       await post(site, "/sites/site-1/regions/home.body", { action: "add", addType: "grid" })
     ).text();
 
     expect(body).toContain("Card grid");
-    expect(body).toContain('name="f[blocks][0][cards][0][_type]"');
-    expect(body).toContain("Save to add another");
+    expect(body).toContain('name="nestedAdd[blocks][0][cards]"');
+    expect(body).toContain('value="nested:add:blocks.0.cards"');
+    const { document } = new JSDOM(body).window;
+    const nested = document.querySelector(".blocks-field");
+    expect(nested?.querySelector('select[name="nestedAdd[blocks][0][cards]"]')).toBeNull();
+    expect(
+      nested?.querySelector<HTMLButtonElement>('button[value="nested:add:blocks.0.cards"]')
+        ?.textContent,
+    ).toContain("Add card");
+  });
+
+  it("adds a nested block without publishing or requiring invalid empty fields", async () => {
+    const response = await post(site, "/sites/site-1/regions/home.body", {
+      "f[blocks][0][_type]": "grid",
+      "f[blocks][0][heading]": "What you get",
+      "nestedAdd[blocks][0][cards]": "card",
+      action: "nested:add:blocks.0.cards",
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('name="f[blocks][0][cards][0][title]"');
+    expect(body).toContain('value="nested:remove:blocks.0.cards:0"');
+    const { document } = new JSDOM(body).window;
+    expect(document.querySelector<HTMLDetailsElement>(".block-collapsible details")?.open).toBe(
+      true,
+    );
+    expect(document.querySelector<HTMLDetailsElement>(".nested-collapsible details")?.open).toBe(
+      true,
+    );
+    expect(site.exists("content/cms/home.body.json")).toBe(false);
+  });
+
+  it("reorders nested blocks on the server", async () => {
+    const response = await post(site, "/sites/site-1/regions/home.body", {
+      "f[blocks][0][_type]": "grid",
+      "f[blocks][0][heading]": "What you get",
+      "f[blocks][0][cards][0][_type]": "card",
+      "f[blocks][0][cards][0][title]": "First",
+      "f[blocks][0][cards][1][_type]": "card",
+      "f[blocks][0][cards][1][title]": "Second",
+      action: "nested:up:blocks.0.cards:1",
+    });
+    const body = await response.text();
+    expect(body.indexOf('value="Second"')).toBeLessThan(body.indexOf('value="First"'));
+    expect(site.exists("content/cms/home.body.json")).toBe(false);
   });
 
   it("publishes the nesting the editor filled in", async () => {
@@ -181,19 +237,20 @@ describe("a block that contains blocks", () => {
     ]);
   });
 
-  it("drops a nested slot set back to none, which is how you remove one", async () => {
-    await post(site, "/sites/site-1/regions/home.body", {
+  it("removes a nested block without publishing", async () => {
+    const response = await post(site, "/sites/site-1/regions/home.body", {
       "f[blocks][0][_type]": "grid",
       "f[blocks][0][cards][0][_type]": "card",
       "f[blocks][0][cards][0][title]": "Kept",
-      "f[blocks][0][cards][1][_type]": "",
+      "f[blocks][0][cards][1][_type]": "card",
       "f[blocks][0][cards][1][title]": "Discarded",
-      action: "publish",
+      action: "nested:remove:blocks.0.cards:1",
     });
 
-    const file = site.read("content/cms/home.body.json");
-    expect(file).toContain("Kept");
-    expect(file).not.toContain("Discarded");
+    const body = await response.text();
+    expect(body).toContain("Kept");
+    expect(body).not.toContain('value="Discarded"');
+    expect(site.exists("content/cms/home.body.json")).toBe(false);
   });
 
   it("refuses to publish a nested block missing a required field", async () => {
@@ -208,4 +265,54 @@ describe("a block that contains blocks", () => {
     expect(site.exists("content/cms/home.body.json")).toBe(false);
     expect(await response.text()).toContain("not valid yet");
   });
+});
+
+describe("nested blocks in a collection entry", () => {
+  beforeEach(() => {
+    site = makeSite({ schema: NESTED_COLLECTION_SCHEMA });
+  });
+
+  it("adds a section without publishing the entry", async () => {
+    const response = await post(site, "/sites/site-1/collections/pages/new", {
+      "f[title]": "About",
+      "nestedAdd[sections]": "grid",
+      action: "nested:add:sections",
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('name="f[sections][0][heading]"');
+    expect(site.exists("content/pages/about.json")).toBe(false);
+  });
+
+  it.each(["add", "up", "remove"])(
+    "keeps the containing section open after a nested %s",
+    async (verb) => {
+      const response = await post(site, "/sites/site-1/collections/pages/new", {
+        "f[title]": "About",
+        "f[sections][0][_type]": "grid",
+        "f[sections][0][heading]": "Our work",
+        "f[sections][0][cards][0][_type]": "card",
+        "f[sections][0][cards][0][title]": "First",
+        "f[sections][0][cards][1][_type]": "card",
+        "f[sections][0][cards][1][title]": "Second",
+        "nestedAdd[sections][0][cards]": "card",
+        action:
+          verb === "add" ? "nested:add:sections.0.cards" : `nested:${verb}:sections.0.cards:1`,
+      });
+      const { document } = new JSDOM(await response.text()).window;
+      const parent = document.querySelector<HTMLDetailsElement>(".nested-collapsible > details");
+
+      expect(response.status).toBe(200);
+      expect(parent?.open).toBe(true);
+      if (verb !== "remove") {
+        const index = verb === "add" ? 2 : 0;
+        const field = document.querySelector(
+          `input[name="f[sections][0][cards][${index}][title]"]`,
+        );
+        expect(field?.closest("details")?.open).toBe(true);
+      }
+      expect(site.exists("content/pages/about.json")).toBe(false);
+    },
+  );
 });

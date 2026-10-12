@@ -1,14 +1,22 @@
 ---
+import type { FeatureBlock } from "../cms";
+
 interface Props {
-  title: string;
-  body: string;
-  icon?: 'git' | 'bolt' | 'lock';
+  block: FeatureBlock;
 }
 
-const { title, body } = Astro.props;
+const { block } = Astro.props;
+
+// The schema offers three icons as a `select`; the site decides what each one looks like.
+const ICONS: Record<FeatureBlock["icon"], string> = {
+  git: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 3-3 4-6 4H8.5"/>',
+  bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+};
 ---
 
 <li class="card">
-  <h3>{title}</h3>
-  <p>{body}</p>
+  <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICONS[block.icon]} />
+  <h3>{block.title}</h3>
+  <p>{block.body}</p>
 </li>

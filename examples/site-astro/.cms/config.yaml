@@ -9,11 +9,5 @@ content:
 mediaUrlPrefix: /media
 
 publish:
-  branch: main
-  draftBranchPrefix: cms/draft
+  # The studio commits on whatever branch is checked out; pushing it is your deploy.
   commitMessage: "content: update {summary}"
-
-preview:
-  # {branch} is substituted, so a draft save gives you a link to your own CI's
-  # preview build — the real site, not an approximation of it.
-  urlTemplate: "https://{branch}--greatcms-example.pages.dev"

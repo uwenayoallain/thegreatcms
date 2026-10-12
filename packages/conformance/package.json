@@ -1,8 +1,24 @@
 {
   "name": "@greatcms/conformance",
   "version": "0.1.0",
-  "description": "Fixtures and a verifier that prove a tool reads the GreatCMS standard correctly, in any language.",
+  "description": "Fixtures and a verifier that define what reading the GreatCMS standard correctly means, in any language.",
+  "keywords": [
+    "cms",
+    "conformance",
+    "fixtures",
+    "testing"
+  ],
+  "homepage": "https://greatcms.dev",
+  "bugs": {
+    "url": "https://github.com/uwenayoallain/thegreatcms/issues"
+  },
   "license": "MIT",
+  "author": "UWENAYO Alain Pacifique",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uwenayoallain/thegreatcms.git",
+    "directory": "packages/conformance"
+  },
   "bin": {
     "greatcms-conformance": "./bin/greatcms-conformance.mjs"
   },
@@ -10,7 +26,9 @@
     "dist",
     "fixtures",
     "expected",
-    "bin"
+    "bin",
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -22,6 +40,9 @@
     },
     "./fixtures/*": "./fixtures/*"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -31,6 +52,9 @@
     "@greatcms/spec": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,0 +1,140 @@
+{
+  "blocks": [
+    {
+      "_type": "feature-grid",
+      "heading": "The useful work around the product",
+      "introduction": "Good inputs matter. Knowing when, where, and how to use them matters just as much.",
+      "items": [
+        {
+          "_type": "feature",
+          "description": "Recommendations begin with the field, the season, and what grew there last.",
+          "icon": "soil",
+          "title": "Start with the soil"
+        },
+        {
+          "_type": "feature",
+          "description": "Orders are grouped by route so farms get a clear delivery day before planting.",
+          "icon": "route",
+          "title": "Delivery you can plan around"
+        },
+        {
+          "_type": "feature",
+          "description": "Simple crop notes stay available after the bag leaves the store.",
+          "icon": "notes",
+          "title": "Advice that stays practical"
+        }
+      ]
+    },
+    {
+      "_type": "process",
+      "eyebrow": "One useful route",
+      "heading": "From field question to planting day",
+      "introduction": "Each step leaves the next person with something concrete: a field note, a matched product, or a delivery date.",
+      "steps": [
+        {
+          "_type": "step",
+          "description": "Share the crop, location, acreage, and planting week.",
+          "icon": "notes",
+          "title": "Write the field note"
+        },
+        {
+          "_type": "step",
+          "description": "The store narrows the range to what suits the soil and season.",
+          "icon": "soil",
+          "title": "Match the inputs"
+        },
+        {
+          "_type": "step",
+          "description": "Stock and quantities are confirmed before anyone promises a route.",
+          "icon": "check",
+          "title": "Confirm what is ready"
+        },
+        {
+          "_type": "step",
+          "description": "Your delivery day arrives with the same short crop notes.",
+          "icon": "route",
+          "title": "Deliver with context"
+        }
+      ]
+    },
+    {
+      "_type": "stats",
+      "heading": "A short route from store to soil",
+      "items": [
+        {
+          "_type": "stat",
+          "detail": "for stocked products",
+          "label": "dispatch window",
+          "value": "48 hr"
+        },
+        {
+          "_type": "stat",
+          "detail": "seed, soil, and crop care",
+          "label": "clear product groups",
+          "value": "03"
+        },
+        {
+          "_type": "stat",
+          "detail": "before every recommendation",
+          "label": "field questions",
+          "value": "04"
+        }
+      ]
+    },
+    {
+      "_type": "story",
+      "body": {
+        "html": "<p>A catalogue can tell you what is in a bag. It cannot tell you whether it fits this hillside, this rain window, or this budget.</p><p>That is why every order starts with a small field note: location, crop, planting window, and acreage. The answer stays short enough to use.</p>"
+      },
+      "eyebrow": "Field note 04",
+      "heading": "Built around the season, not the catalogue",
+      "imageSide": "end",
+      "link": {
+        "href": "/contact/",
+        "label": "Talk through your field"
+      }
+    },
+    {
+      "_type": "products",
+      "heading": "What is ready for the next planting window",
+      "introduction": "A compact range, grouped by the job it needs to do.",
+      "link": {
+        "href": "/products/",
+        "label": "See every product"
+      }
+    },
+    {
+      "_type": "faq-list",
+      "heading": "Before you place an order",
+      "items": [
+        {
+          "_type": "faq",
+          "answer": {
+            "html": "<p>Share your sector, crop, acreage, and preferred planting week. We reply with the closest available route.</p>"
+          },
+          "question": "How do deliveries work?"
+        },
+        {
+          "_type": "faq",
+          "answer": {
+            "html": "<p>Yes. A field note can cover product selection and quantities before you confirm an order.</p>"
+          },
+          "question": "Can I ask for guidance before buying?"
+        }
+      ]
+    },
+    {
+      "_type": "cta",
+      "body": "Tell us what you are planting, where the field is, and when the soil needs to be ready.",
+      "heading": "Bring the field. We will narrow the choices.",
+      "primary": {
+        "href": "/contact/",
+        "label": "Start a field note"
+      },
+      "secondary": {
+        "href": "tel:+250780000000",
+        "label": "Call the store"
+      }
+    }
+  ]
+}

@@ -6,6 +6,9 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "dev": "turbo run dev --filter=@greatcms/studio --filter=@greatcms/example-site-astro",
+    "studio": "pnpm --filter @greatcms/studio dev",
+    "greatcms": "node packages/cli/bin/greatcms.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt .",
@@ -19,12 +22,12 @@
     "oxfmt": "^0.63.0",
     "oxlint": "^1.78.0",
     "tsdown": "^0.22.14",
-    "turbo": "^2.3.3",
-    "typescript": "^5.7.2",
-    "vitest": "^4.1.10"
+    "turbo": "^2.10.9",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.18"
   },
   "packageManager": "pnpm@11.21.0"
 }

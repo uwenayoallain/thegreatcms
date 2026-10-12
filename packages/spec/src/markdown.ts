@@ -1,4 +1,4 @@
-/** Collection entries are Markdown with YAML frontmatter, because that is what Hugo, Jekyll, Eleventy. */
+/** Collection entries are Markdown with YAML frontmatter, because that is what Hugo, Jekyll, Eleventy and Astro already read. */
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
@@ -7,13 +7,30 @@ export interface Frontmatter {
   body: string;
 }
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
+/**
+ * The first line is exactly `---`, and the frontmatter ends at the next line that is
+ * exactly `---` (a trailing CR allowed on either). Everything after that line is the
+ * body, verbatim. Without both fences the whole file is body.
+ */
+function splitFrontmatter(source: string): { yaml: string; body: string } | null {
+  const text = source.startsWith("\uFEFF") ? source.slice(1) : source;
+  const lines = text.split("\n");
+  if (!isFence(lines[0])) return null;
+  const close = lines.findIndex((line, index) => index > 0 && isFence(line));
+  if (close === -1) return null;
+  const yaml = lines.slice(1, close).map((line) => line.replace(/\r$/, ""));
+  return { yaml: yaml.join("\n"), body: lines.slice(close + 1).join("\n") };
+}
+
+function isFence(line: string | undefined): boolean {
+  return line?.replace(/\r$/, "") === "---";
+}
 
 export function parseFrontmatter(source: string, file = "entry.md"): Frontmatter {
-  const match = FRONTMATTER_RE.exec(source);
-  if (!match) return { data: {}, body: source };
+  const parts = splitFrontmatter(source);
+  if (!parts) return { data: {}, body: source };
 
-  const [, yaml = "", body = ""] = match;
+  const { yaml, body } = parts;
   let data: unknown;
   try {
     data = parseYaml(yaml) ?? {};

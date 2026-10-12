@@ -7,7 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import type { Browser, BrowserContext, Page } from "playwright";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+// Chromium round trips take seconds, and `pnpm check` runs this beside every other package's tests.
+vi.setConfig({ testTimeout: 45_000, hookTimeout: 45_000 });
 import { createApp } from "../src/app.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
@@ -42,7 +45,20 @@ async function launch(): Promise<Browser | null> {
 const browser = await launch();
 
 const SCHEMA = `version: 1
+blocks:
+  feature:
+    label: Feature
+    fields:
+      heading: { type: text, required: true }
+      image: { type: image }
 regions:
+  home.sections:
+    label: Home sections
+    type: blocks
+    allow: [feature]
+    default:
+      - { _type: feature, heading: First feature }
+      - { _type: feature, heading: Second feature }
   home.hero:
     label: Home hero
     fields:
@@ -50,6 +66,16 @@ regions:
       body: { type: richtext, label: Body }
     default:
       heading: Welcome
+collections:
+  pages:
+    label: Pages
+    entryLabel: page
+    path: content/pages
+    format: json
+    slug: title
+    fields:
+      title: { type: text, required: true }
+      sections: { type: blocks, allow: [feature] }
 `;
 
 let context: BrowserContext;
@@ -206,6 +232,125 @@ describe.skipIf(!browser)("the visual editor", () => {
 
     expect(JSON.parse(heroFile()).body.html).toContain("Written without JavaScript.");
   });
+
+  it("adds a section to a blank new entry without JavaScript or required fields", async () => {
+    const page = await open("/sites/site-1/collections/pages/new", { js: false });
+    const add = page.getByRole("button", { name: "Add feature" });
+
+    expect(await add.getAttribute("formnovalidate")).not.toBeNull();
+    await add.click();
+    await page.waitForLoadState("networkidle");
+
+    expect(await page.locator('input[name="f[sections][0][heading]"]').count()).toBe(1);
+    expect(existsSync(join(root, "content/pages"))).toBe(false);
+  });
+
+  it.each(["region", "collection"])(
+    "confirms %s section removal without JavaScript and preserves edits when cancelled",
+    async (kind) => {
+      const path =
+        kind === "region"
+          ? "/sites/site-1/regions/home.sections"
+          : "/sites/site-1/collections/pages/new";
+      const page = await open(path, { js: false });
+      await page.setViewportSize({ width: 390, height: 844 });
+      if (kind === "collection") {
+        await page.getByRole("button", { name: "Add feature" }).click();
+        await page.waitForLoadState("networkidle");
+        await page.getByRole("button", { name: "Add feature" }).click();
+        await page.waitForLoadState("networkidle");
+      }
+      const blocks = page.locator(".block-collapsible");
+      expect(await blocks.count()).toBe(2);
+      const first = blocks.first();
+      const fields = first.locator(":scope > details");
+      if ((await fields.getAttribute("open")) === null)
+        await fields.locator(":scope > summary").click();
+      await first.locator('input[name$="[heading]"]').fill("Keep my unsaved section text");
+      const confirmation = first.locator(".block-remove-confirm");
+      expect(await confirmation.count()).toBe(1);
+      const confirm = confirmation.getByRole("button", { name: /Confirm remove/ });
+      expect(await confirm.isVisible()).toBe(false);
+      await confirmation.locator("summary").focus();
+      await page.keyboard.press("Enter");
+      expect(await confirm.isVisible()).toBe(true);
+      expect(await blocks.count()).toBe(2);
+      await page.keyboard.press("Enter");
+      expect(await confirm.isVisible()).toBe(false);
+      expect(await first.locator('input[name$="[heading]"]').inputValue()).toBe(
+        "Keep my unsaved section text",
+      );
+      await confirmation.locator("summary").click();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (process.env.GREATCMS_TEST_SCREENSHOTS) {
+        await page.screenshot({
+          path: join(process.env.GREATCMS_TEST_SCREENSHOTS, `remove-${kind}-mobile.png`),
+          fullPage: true,
+        });
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      const panel = confirmation.locator(".block-remove-panel");
+      const desktopBounds = await panel.boundingBox();
+      expect(desktopBounds!.x).toBeGreaterThanOrEqual(0);
+      expect(desktopBounds!.x + desktopBounds!.width).toBeLessThanOrEqual(1280);
+      if (process.env.GREATCMS_TEST_SCREENSHOTS) {
+        await page.screenshot({
+          path: join(process.env.GREATCMS_TEST_SCREENSHOTS, `remove-${kind}-desktop.png`),
+          fullPage: true,
+        });
+      }
+      await page.setViewportSize({ width: 320, height: 720 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await confirm.click();
+      await page.waitForLoadState("networkidle");
+      expect(await blocks.count()).toBe(1);
+      expect(await blocks.first().locator('input[name$="[heading]"]').inputValue()).not.toBe(
+        "Keep my unsaved section text",
+      );
+      expect(existsSync(join(root, "content/pages"))).toBe(false);
+      expect(existsSync(join(root, "content/cms/home.sections.json"))).toBe(false);
+    },
+  );
+
+  it("keeps a selected image through adding another section and publishes without reselecting it", async () => {
+    const page = await open("/sites/site-1/collections/pages/new", { js: false });
+    await page.locator('input[name="f[title]"]').fill("Image retention");
+    await page.getByRole("button", { name: "Add feature" }).click();
+    await page.waitForLoadState("networkidle");
+    await page.locator('input[name="f[sections][0][heading]"]').fill("With a picture");
+    await page.locator('input[name="f[sections][0][image][alt]"]').fill("A one-pixel test image");
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=",
+      "base64",
+    );
+    await page
+      .locator('input[name="m[sections][0][image]"]')
+      .setInputFiles({ name: "retained.png", mimeType: "image/png", buffer: png });
+    await page.getByRole("button", { name: "Add feature" }).click();
+    await page.waitForLoadState("networkidle");
+    expect(await page.locator('input[name="pendingMedia"]').inputValue()).toBeTruthy();
+    const first = page.locator(".nested-collapsible").first();
+    await first.locator(":scope > details > summary").click();
+    const preview = first.locator(".preview-thumb img");
+    await preview.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => preview.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+      .toBe(1);
+    expect(await first.locator('input[type="file"]').inputValue()).toBe("");
+    await page.locator('input[name="f[sections][1][heading]"]').fill("Another feature");
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.waitForLoadState("networkidle");
+    const entry = JSON.parse(
+      readFileSync(join(root, "content/pages/image-retention.json"), "utf8"),
+    );
+    expect(entry.sections[0].image.alt).toBe("A one-pixel test image");
+    expect(readFileSync(join(root, "public", entry.sections[0].image.src))).toEqual(png);
+    expect(await page.locator('input[name="pendingMedia"]').count()).toBe(0);
+  });
 });
 
 describe.skipIf(!browser)("live editing", () => {
@@ -225,7 +370,7 @@ describe.skipIf(!browser)("live editing", () => {
 
     // The published file is untouched: this is a draft, not a publish.
     expect(heroFile()).toBe(published);
-  }, 20_000);
+  });
 
   it("says so in the status line, next to the site itself", async () => {
     const page = await editor();
@@ -236,7 +381,7 @@ describe.skipIf(!browser)("live editing", () => {
       .toContain("showing this edit");
 
     expect(await page.locator("iframe[data-live-site]").count()).toBe(1);
-  }, 20_000);
+  });
 
   it("throws the edit away again, and offers a manual reload", async () => {
     const page = await editor();
@@ -247,11 +392,12 @@ describe.skipIf(!browser)("live editing", () => {
     // The reload button is hidden until JavaScript can drive it.
     await expect.poll(() => page.locator("[data-live-reload]").isVisible()).toBe(true);
 
-    await page.getByRole("button", { name: "Discard unsaved edits" }).click();
+    await page.locator("summary", { hasText: "Discard unsaved edits" }).click();
+    await page.getByRole("button", { name: "Confirm discard" }).click();
     await page.waitForLoadState("networkidle");
 
     expect(existsSync(draftFile())).toBe(false);
-  }, 20_000);
+  });
 
   it("keeps the discard button working with JavaScript switched off", async () => {
     await (await editor()).locator("#f-heading").fill("Written, then dropped");
@@ -260,11 +406,39 @@ describe.skipIf(!browser)("live editing", () => {
     const page = await editor({ js: false });
     expect(await page.locator("[data-live-reload]").isVisible()).toBe(false);
 
-    await page.getByRole("button", { name: "Discard unsaved edits" }).click();
+    await page.locator("summary", { hasText: "Discard unsaved edits" }).click();
+    await page.getByRole("button", { name: "Confirm discard" }).click();
     await page.waitForLoadState("networkidle");
 
     expect(existsSync(draftFile())).toBe(false);
-  }, 20_000);
+  });
+});
+
+describe.skipIf(!browser)("pointing at the page", () => {
+  it("opens the field the framed page points at, and only one the form holds", async () => {
+    const page = await editor();
+    await page.waitForSelector("iframe[data-live-site]");
+    const framed = page.frames().find((frame) => frame.parentFrame() !== null);
+    if (!framed) throw new Error("the preview frame did not load");
+
+    await framed.evaluate(() => {
+      window.parent.postMessage({ greatcms: "pick", path: "f[heading]" }, "*");
+    });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.id), { timeout: 5000 })
+      .toBe("f-heading");
+
+    const before = await page.evaluate(() => document.activeElement?.id);
+    await framed.evaluate(() => {
+      window.parent.postMessage({ greatcms: "pick", path: "f[nothing]" }, "*");
+    });
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe(before);
+  });
+
+  it("offers the select and section toggles only once JavaScript can drive them", async () => {
+    expect(await (await editor()).locator("#live-select").isVisible()).toBe(true);
+    expect(await (await editor({ js: false })).locator("#live-select").isVisible()).toBe(false);
+  });
 });
 
 describe.skipIf(!browser)("accessibility with real layout", () => {
@@ -272,8 +446,11 @@ describe.skipIf(!browser)("accessibility with real layout", () => {
     ["the site list", "/"],
     ["a site", "/sites/site-1"],
     ["the editor", "/sites/site-1/regions/home.hero"],
+    ["section removal confirmation", "/sites/site-1/regions/home.sections"],
   ])("%s has no axe violations, colour contrast included", async (_name, path) => {
     const page = await open(path);
+    if (path.endsWith("home.sections"))
+      await page.locator(".block-remove-confirm > summary").first().click();
     await page.evaluate(AXE_SOURCE);
 
     const violations = await page.evaluate(async () => {
@@ -295,5 +472,29 @@ describe.skipIf(!browser)("accessibility with real layout", () => {
     });
 
     expect(violations).toEqual([]);
+  });
+
+  it("keeps the workspace and every navigation action inside a narrow screen", async () => {
+    const page = await context.newPage();
+    opened.push({ page, own: null });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(origin + "/sites/site-1", { waitUntil: "networkidle" });
+
+    const layout = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+    }));
+    expect(layout.content).toBeLessThanOrEqual(layout.viewport);
+
+    const navigation = page.getByRole("navigation", { name: "Sections" });
+    const boxes = await Promise.all([
+      navigation.getByRole("link", { name: "Sites" }).boundingBox(),
+      navigation.getByRole("link", { name: "Inbox" }).boundingBox(),
+      page.getByRole("button", { name: "Sign out" }).boundingBox(),
+    ]);
+    for (const box of boxes) {
+      expect(box?.x).toBeGreaterThanOrEqual(0);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+    }
   });
 });

@@ -10,6 +10,10 @@
     "schemaJsonSchema": "/json-schema/schema.schema.json",
     "configJsonSchema": "/json-schema/config.schema.json"
   },
+  "agentSkill": {
+    "source": "https://github.com/greatcms/greatcms/tree/main/skills/greatcms",
+    "install": "npx skills add greatcms/greatcms@greatcms"
+  },
   "integration": {
     "steps": [
       "Add .cms/schema.yaml describing the regions you want managed.",
@@ -34,6 +38,90 @@
       "source": "README.md",
       "url": "/",
       "markdownUrl": "/index.md"
+    },
+    {
+      "title": "Getting started",
+      "description": "Scaffold a site's configuration, connect it to the studio, publish.",
+      "source": "apps/docs/content/docs/getting-started.md",
+      "url": "/docs/getting-started",
+      "markdownUrl": "/docs/getting-started.md"
+    },
+    {
+      "title": "The command line",
+      "description": "Scaffold, extend, type, check, and inspect a site from the terminal.",
+      "source": "apps/docs/content/docs/the-command-line.md",
+      "url": "/docs/the-command-line",
+      "markdownUrl": "/docs/the-command-line.md"
+    },
+    {
+      "title": "The hybrid model",
+      "description": "Why a region is opt-in, and what happens before anyone edits anything.",
+      "source": "apps/docs/content/docs/the-hybrid-model.md",
+      "url": "/docs/the-hybrid-model",
+      "markdownUrl": "/docs/the-hybrid-model.md"
+    },
+    {
+      "title": "Publishing",
+      "description": "One commit in your working copy, or nothing at all.",
+      "source": "apps/docs/content/docs/publishing.md",
+      "url": "/docs/publishing",
+      "markdownUrl": "/docs/publishing.md"
+    },
+    {
+      "title": "Running the studio",
+      "description": "One process, one SQLite file, one password. Nothing it manages depends on it.",
+      "source": "apps/docs/content/docs/running-the-studio.md",
+      "url": "/docs/running-the-studio",
+      "markdownUrl": "/docs/running-the-studio.md"
+    },
+    {
+      "title": "Self-hosting",
+      "description": "One server, three containers; an editor publishes and the site is live in seconds.",
+      "source": "apps/docs/content/docs/self-hosting.md",
+      "url": "/docs/self-hosting",
+      "markdownUrl": "/docs/self-hosting.md"
+    },
+    {
+      "title": "Previewing",
+      "description": "Your own dev server renders it. Never the studio.",
+      "source": "apps/docs/content/docs/previewing.md",
+      "url": "/docs/previewing",
+      "markdownUrl": "/docs/previewing.md"
+    },
+    {
+      "title": "Forms and submissions",
+      "description": "The one thing Git cannot hold, collected in one inbox.",
+      "source": "apps/docs/content/docs/forms-and-submissions.md",
+      "url": "/docs/forms-and-submissions",
+      "markdownUrl": "/docs/forms-and-submissions.md"
+    },
+    {
+      "title": "Accessibility",
+      "description": "What is enforced by the format, and what is enforced by tests.",
+      "source": "apps/docs/content/docs/accessibility.md",
+      "url": "/docs/accessibility",
+      "markdownUrl": "/docs/accessibility.md"
+    },
+    {
+      "title": "Any language",
+      "description": "The standard is files. A reader in Python passes the same suite as the one in TypeScript.",
+      "source": "apps/docs/content/docs/any-language.md",
+      "url": "/docs/any-language",
+      "markdownUrl": "/docs/any-language.md"
+    },
+    {
+      "title": "For coding agents",
+      "description": "Every surface an agent needs to wire a site up unattended, and the skill that teaches it.",
+      "source": "apps/docs/content/docs/for-agents.md",
+      "url": "/docs/for-agents",
+      "markdownUrl": "/docs/for-agents.md"
+    },
+    {
+      "title": "The examples",
+      "description": "Two Astro sites and a Python reader, each built to prove one thing.",
+      "source": "apps/docs/content/docs/examples.md",
+      "url": "/docs/examples",
+      "markdownUrl": "/docs/examples.md"
     }
   ]
 }

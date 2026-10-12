@@ -2,8 +2,8 @@
 
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { IssueBag } from "./errors.js";
-import { type FieldDef, FieldDefSchema } from "./fields.js";
+import { IssueBag, SpecIssue } from "./errors.js";
+import { type FieldDef, FieldDefSchema, selectOption } from "./fields.js";
 
 export const SPEC_VERSION = 1;
 
@@ -16,6 +16,8 @@ const regionId = z.string().regex(REGION_ID_RE);
 const BlockDefSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
+  /** Named looks of one block; an instance picks one as `_variant`, the first when it says nothing. */
+  variants: z.array(selectOption).min(1).optional(),
   fields: z.record(FieldDefSchema),
 });
 
@@ -39,6 +41,8 @@ const BlocksRegionSchema = z.object({
 
 const CollectionSchema = z.object({
   label: z.string().optional(),
+  /** Singular noun used for actions such as "Add product". */
+  entryLabel: z.string().optional(),
   description: z.string().optional(),
   path: z.string().min(1),
   format: z.enum(["markdown", "mdx", "json"]).default("markdown"),
@@ -51,7 +55,16 @@ const CollectionSchema = z.object({
 
 export const SchemaFileSchema = z.object({
   version: z.number().int().positive(),
-  site: z.object({ name: z.string().optional() }).optional(),
+  site: z
+    .object({
+      name: z.string().optional(),
+      /** BCP 47 tag for the content's language, e.g. `rw` or `fr-RW`; editors get spellcheck and direction for it. */
+      locale: z
+        .string()
+        .regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/)
+        .optional(),
+    })
+    .optional(),
   blocks: z.record(BlockDefSchema).optional(),
   regions: z.record(z.union([BlocksRegionSchema, SingleRegionSchema])).optional(),
   collections: z.record(CollectionSchema).optional(),
@@ -65,10 +78,19 @@ export type CollectionDef = z.infer<typeof CollectionSchema>;
 
 export interface CmsSchema {
   version: number;
-  site?: { name?: string };
+  site?: { name?: string; locale?: string };
   blocks: Record<string, BlockDef>;
   regions: Record<string, RegionDef>;
   collections: Record<string, CollectionDef>;
+}
+
+/** A block's variants as value/label pairs, or none. */
+export function blockVariants(def: BlockDef | undefined): Array<{ value: string; label: string }> {
+  return (def?.variants ?? []).map((option) =>
+    typeof option === "string"
+      ? { value: option, label: option }
+      : { value: option.value, label: option.label ?? option.value },
+  );
 }
 
 export function isBlocksRegion(region: RegionDef): region is BlocksRegion {
@@ -141,9 +163,10 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     });
   }
 
-  const blocks = data.blocks ?? {};
-  const regions = (data.regions ?? {}) as Record<string, RegionDef>;
-  const collections = data.collections ?? {};
+  // Lookups by name must never land on Object.prototype: a region called `constructor` is unknown.
+  const blocks = withoutPrototype(data.blocks ?? {});
+  const regions = withoutPrototype((data.regions ?? {}) as Record<string, RegionDef>);
+  const collections = withoutPrototype(data.collections ?? {});
 
   for (const name of Object.keys(blocks)) {
     if (!NAME_RE.test(name)) {
@@ -233,6 +256,56 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
   bag.throwIfAny("Schema is not valid");
 
   return { version: data.version, site: data.site, blocks, regions, collections };
+}
+
+/**
+ * Keys the schema format does not define, such as a misspelt `requird: true`. Readers
+ * ignore them, so a site written for a newer version still builds with an older
+ * reader; authoring tools report them, because there a typo silently changes meaning.
+ */
+export function unknownSchemaKeys(source: string, opts: ParseSchemaOptions = {}): SpecIssue[] {
+  let raw: unknown;
+  try {
+    raw = parseYaml(source);
+  } catch {
+    return [];
+  }
+  const parsed = SchemaFileSchema.safeParse(raw);
+  if (!parsed.success) return [];
+  const issues: SpecIssue[] = [];
+  const walk = (given: unknown, kept: unknown, path: string) => {
+    if (Array.isArray(given) && Array.isArray(kept)) {
+      given.forEach((item, index) => walk(item, kept[index], `${path}[${index}]`));
+      return;
+    }
+    if (!isRecord(given) || !isRecord(kept)) return;
+    for (const [key, value] of Object.entries(given)) {
+      const at = path ? `${path}.${key}` : key;
+      if (Object.hasOwn(kept, key)) {
+        walk(value, kept[key], at);
+      } else {
+        issues.push(
+          new SpecIssue({
+            code: "unknown_schema_key",
+            file: opts.file ?? ".cms/schema.yaml",
+            path: at,
+            message: `\`${key}\` is not a key the schema format defines, so it does nothing.`,
+            fix: "Check it for a typo, or remove it.",
+          }),
+        );
+      }
+    }
+  };
+  walk(raw, parsed.data, "");
+  return issues;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function withoutPrototype<T>(record: Record<string, T>): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, record);
 }
 
 function fixHintFor(issue: z.ZodIssue): string | undefined {

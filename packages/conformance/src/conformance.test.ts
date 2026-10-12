@@ -24,6 +24,8 @@ describe("the fixture site", () => {
     expect(ids).toContain("about.intro"); // never edited, defaults only
     expect(ids).toContain("home.body"); // block list
     expect(ids).toContain("home.decor"); // decorative image, empty alt
+    expect(ids).toContain("home.seo"); // region default over a group
+    expect(ids).toContain("home.cards"); // defaulted blocks, no content file
   });
 });
 
@@ -89,9 +91,11 @@ describe("the verifier", () => {
   });
 });
 
+const blogEntry = (slug: string) => readFixtureEntries("blog").find((e) => e.slug === slug);
+
 describe("collections", () => {
   it("reads a Markdown entry as frontmatter plus its body field", () => {
-    const [entry] = readFixtureEntries("blog");
+    const entry = blogEntry("publish-from-anywhere");
 
     expect(entry?.slug).toBe("publish-from-anywhere");
     expect(entry?.data.title).toBe("Publish from anywhere");
@@ -117,7 +121,7 @@ describe("collections", () => {
   });
 
   it("does not layer schema defaults over an entry that exists", () => {
-    const [entry] = readFixtureEntries("blog");
+    const entry = blogEntry("publish-from-anywhere");
 
     // `draft` is in the file; nothing invents fields the file does not have.
     expect(Object.keys(entry?.data ?? {}).toSorted()).toEqual([
@@ -129,13 +133,23 @@ describe("collections", () => {
     ]);
   });
 
+  it("reads frontmatter as YAML 1.2, so `no` and `on` stay words", () => {
+    expect(blogEntry("yaml-scalars")?.data.tags).toEqual(["no", "on", "off", "y", "1:30"]);
+  });
+
+  it("reads an entry whose frontmatter is empty", () => {
+    expect(blogEntry("empty-frontmatter")?.data).toEqual({
+      content: "\nAn entry whose frontmatter is empty.\n",
+    });
+  });
+
   it("matches the expected entries, which is what a third-party reader is held to", () => {
     const actual: Record<string, unknown> = {};
     for (const name of ["blog", "guides"]) {
       for (const entry of readFixtureEntries(name)) actual[`${name}/${entry.slug}`] = entry;
     }
 
-    expect(verifyEntries(actual)).toMatchObject({ ok: true, checked: 2 });
+    expect(verifyEntries(actual)).toMatchObject({ ok: true, checked: 4 });
   });
 
   it("fails a reader that reformats an MDX body", () => {
