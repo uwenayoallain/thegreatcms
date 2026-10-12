@@ -17,3 +17,4 @@ apps/docs/dist/
 apps/studio/public/*.js
 .claude/settings.local.json
 .claude/launch.json
+*.tgz
