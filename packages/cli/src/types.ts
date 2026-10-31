@@ -1,4 +1,4 @@
-/** `greatcms types` — TypeScript for the schema you already wrote. */
+/** `greatcms types`: TypeScript for the schema you already wrote. */
 
 import { blockVariants, isBlocksRegion, type CmsSchema, type FieldDef } from "@greatcms/spec";
 import { CliError } from "./ports.js";
@@ -74,7 +74,7 @@ export function renderTypes(schema: CmsSchema, options: TypesOptions = {}): stri
     if (isBlocksRegion(region)) {
       const allowed = region.allow.filter((name) => schema.blocks[name]);
       out.push(
-        docComment(region.label, `Region \`${id}\` — a reorderable block list.`),
+        docComment(region.label, `Region \`${id}\`: a reorderable block list.`),
         `export interface ${regionTypeName(id)} {`,
         ...arrayUnionLines("  blocks: ", allowed.map(blockTypeName)),
         "}",
@@ -152,7 +152,7 @@ function fieldLines(fields: Record<string, FieldDef>, schema: CmsSchema, indent 
     const def = fields[name];
     if (!def) continue;
     // A field with a default always resolves to a value, so it is not optional
-    // even when the content file omits it — that is what resolution guarantees.
+    // even when the content file omits it: that is what resolution guarantees.
     const optional = def.required || hasDefault(def) ? "" : "?";
     if (def.description) lines.push(`${indent}/** ${commentText(def.description)} */`);
     const prefix = `${indent}${propertyName(name)}${optional}: `;
@@ -185,6 +185,7 @@ function arrayUnionLines(prefix: string, names: string[]): string[] {
 }
 
 function hasDefault(def: FieldDef): boolean {
+  if (def.type === "reference") return def.multiple === true; // resolves to []
   return "default" in def && def.default !== undefined;
 }
 
@@ -205,6 +206,8 @@ function typeOf(def: FieldDef, schema: CmsSchema, indent: string): string {
       return "CmsImage";
     case "file":
       return "CmsFile";
+    case "reference":
+      return def.multiple ? "string[]" : "string";
     case "select": {
       const union = def.options
         .map((option) => JSON.stringify(typeof option === "string" ? option : option.value))
@@ -281,7 +284,7 @@ function propertyName(name: string): string {
 }
 
 function docComment(label: string | undefined, fallback: string): string {
-  return `/** ${commentText(label ? `${label} — ${fallback}` : fallback)} */`;
+  return `/** ${commentText(label ? `${label}: ${fallback}` : fallback)} */`;
 }
 
 /** A label containing `*\/` would close the comment and turn the rest into code. */

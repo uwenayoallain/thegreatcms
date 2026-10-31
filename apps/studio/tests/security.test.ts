@@ -3,9 +3,12 @@
 /* oxlint-disable no-await-in-loop -- a rate limit is a claim about order: these requests go one at a time */
 
 import { readdirSync } from "node:fs";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+import { serve } from "@hono/node-server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createApp, isSafeRedirect } from "../src/app.js";
+import { createApp } from "../src/app.js";
+import { isSafeRedirect } from "../src/http.js";
 import { DEFAULT_CONFIG } from "@greatcms/spec";
 import { prepareUpload, UploadError } from "../src/media.js";
 import { makeSite, PASSWORD, SECRET, signedIn, type Fixture } from "./site.js";
@@ -375,6 +378,31 @@ describe("the inbox", () => {
 });
 
 describe("headers on every page", () => {
+  // app.request skips the Node adapter, where middleware order once dropped every one of these.
+  it("survive the real server, compressed or not", async () => {
+    const server = serve({ fetch: site.app.fetch, port: 0 });
+    await new Promise((resolve) => server.once("listening", resolve));
+    const { port } = server.address() as AddressInfo;
+    try {
+      for (const encoding of ["identity", "gzip"]) {
+        const response = await fetch(`http://127.0.0.1:${port}/sign-in`, {
+          headers: { "accept-encoding": encoding },
+        });
+        expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+        expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+        expect(response.headers.get("cache-control")).toBe("no-store");
+      }
+    } finally {
+      server.close();
+    }
+  });
+
+  it("asks browsers to keep to HTTPS, only once they arrived over it", async () => {
+    expect((await app.request("/sign-in")).headers.get("strict-transport-security")).toBeNull();
+    const secure = await app.request("https://studio.example.com/sign-in");
+    expect(secure.headers.get("strict-transport-security")).toBe("max-age=31536000");
+  });
+
   it("refuses to be framed, so nobody can overlay their UI on Publish", async () => {
     const response = await app.request("/sign-in");
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");

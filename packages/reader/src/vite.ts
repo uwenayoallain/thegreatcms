@@ -12,7 +12,7 @@ import {
 } from "@greatcms/spec";
 
 export interface WatchOptions {
-  /** Site root — the directory containing `.cms/`. Defaults to the Vite root. */
+  /** Site root: the directory containing `.cms/`. Defaults to the Vite root. */
   root?: string;
   /** Extra directories to watch, relative to the root. */
   include?: string[];
@@ -87,8 +87,10 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
     // Dev only: a build reads the files once, from disk, and is already correct.
     apply: "serve",
 
-    transformIndexHtml: (html: string) =>
-      options.hideDevOverlays === false ? html : injectPreviewChrome(html),
+    // Only when wanted: SvelteKit warns about any plugin that has the hook, and adds the script itself.
+    ...(options.hideDevOverlays === false
+      ? {}
+      : { transformIndexHtml: (html: string) => injectPreviewChrome(html) }),
 
     configureServer(server: DevServer) {
       const root = resolve(options.root ?? process.cwd());
@@ -118,7 +120,7 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
       let pending: NodeJS.Timeout | undefined;
       const onChange = (path: string) => {
         if (definitions.includes(path)) {
-          server.config?.logger?.info("[greatcms] schema or config changed — restarting");
+          server.config?.logger?.info("[greatcms] schema or config changed: restarting");
           void server.restart();
           return;
         }
@@ -130,7 +132,7 @@ export function greatcmsWatch(options: WatchOptions = {}): VitePluginLike {
         // A publish writes several files at once; one reload covers them all.
         clearTimeout(pending);
         pending = setTimeout(() => {
-          server.config?.logger?.info("[greatcms] content changed — reloading");
+          server.config?.logger?.info("[greatcms] content changed: reloading");
           // A reload is enough because the reader re-reads content on every call in development.
           const socket = server.hot ?? server.ws;
           if (socket) socket.send({ type: "full-reload", path: "*" });

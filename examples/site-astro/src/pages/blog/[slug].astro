@@ -17,7 +17,9 @@ const date = new Date(entry.data.date);
 
 <Base title={entry.data.title} description={entry.data.description}>
   <article class="prose">
+    <a class="back" href="/blog/">← All posts</a>
     <h1>{entry.data.title}</h1>
+    {entry.data.description && <p class="lede">{entry.data.description}</p>}
     <time datetime={date.toISOString().slice(0, 10)}>
       {date.toLocaleDateString('en', { year: 'numeric', month: 'long', day: 'numeric' })}
     </time>

@@ -136,3 +136,42 @@ describe("one publish", () => {
     expect(live()).toBe("pinned");
   });
 });
+
+describe("rolling back", () => {
+  it("puts an earlier release back live and holds it until something new is published", async () => {
+    const d = deployer({ keep: 5 });
+    const first = commit("one");
+    await d.once();
+    commit("second, regretted");
+    await d.once();
+    expect(live()).toBe("second, regretted");
+
+    expect(await d.rollback(first)).toBe(true);
+    expect(live()).toBe("one");
+    // The next check sees the same tip and leaves the rollback alone.
+    expect(await d.once()).toMatchObject({ outcome: "unchanged", sha: first });
+    expect(live()).toBe("one");
+    expect(readStatus(root)?.pinned?.sha).toBe(first);
+
+    commit("third, fixed");
+    expect(await d.once()).toMatchObject({ outcome: "deployed" });
+    expect(live()).toBe("third, fixed");
+    expect(readStatus(root)?.pinned).toBeUndefined();
+  });
+
+  it("takes a rollback asked for by a file in the root, and refuses one it has no release for", async () => {
+    const d = deployer({ keep: 5 });
+    const first = commit("one");
+    await d.once();
+    commit("second");
+    await d.once();
+
+    writeFileSync(join(root, "rollback"), `${first}\n`);
+    await d.takeRequest();
+    expect(live()).toBe("one");
+    expect(existsSync(join(root, "rollback"))).toBe(false);
+
+    expect(await d.rollback("0".repeat(40))).toBe(false);
+    expect(d.releases()).toHaveLength(2);
+  });
+});

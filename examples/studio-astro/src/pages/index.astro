@@ -1,0 +1,58 @@
+---
+import Section from '../components/Section.astro';
+import Base from '../layouts/Base.astro';
+import { cms } from '../lib/cms';
+
+const hero = cms.region('home.hero');
+const sections = cms.region('home.sections').blocks;
+const lines = hero.lines ?? [];
+const rotating = hero.rotating ?? [];
+let word = 0;
+// Each rotating word holds for a beat, then the next rises into its place.
+const cycle = Math.max(rotating.length, 1) * 2.4;
+---
+
+<Base description={hero.lede}>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero__mesh" aria-hidden="true"><span></span><span></span><span></span></div>
+    <span class="hero__grain" aria-hidden="true"></span>
+    <div class="hero__inner">
+      {hero.eyebrow && <p class="eyebrow hero__eyebrow">{hero.eyebrow}</p>}
+      <h1 id="hero-title" class="hero__title">
+        {
+          lines.map((line) => (
+            <span class="hero__line">
+              {line.split(' ').map((part) => (
+                <>
+                  <span class="hero__word" style={`--w: ${word++}`}>{part}</span>{' '}
+                </>
+              ))}
+            </span>
+          ))
+        }
+        {
+          rotating.length > 0 && (
+            <span class="hero__line hero__line--rotate">
+              <span class="visually-hidden">{rotating[0]}</span>
+              <span class="rotator" aria-hidden="true" style={`--words: ${rotating.length}; --cycle: ${cycle}s; --w: ${word}`}>
+                {rotating.map((item, i) => (
+                  <span class="rotator__item" style={`--k: ${i}`}>{item}</span>
+                ))}
+              </span>
+            </span>
+          )
+        }
+      </h1>
+      <div class="hero__foot">
+        {hero.lede && <p class="hero__lede">{hero.lede}</p>}
+        <div class="hero__actions">
+          <a class="button button--solid" href={hero.primary.href} data-magnetic>{hero.primary.label ?? 'See the work'}</a>
+          {hero.secondary?.href && <a class="button" href={hero.secondary.href} data-magnetic>{hero.secondary.label ?? 'Contact'}</a>}
+        </div>
+      </div>
+    </div>
+    <p class="hero__scroll" aria-hidden="true"><span></span>Scroll</p>
+  </section>
+
+  {sections.map((section, index) => <Section section={section} index={index} />)}
+</Base>

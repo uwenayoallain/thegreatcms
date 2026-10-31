@@ -20,3 +20,5 @@ minimumReleaseAgeExclude:
 # Vite 8 builds with Rolldown (Rust); one version for every Vite build in the repo.
 overrides:
   vite: ^8.0.13
+  # An older css-tree under svgo still pins the release with the event-loop advisory.
+  source-map-js: ^1.2.2

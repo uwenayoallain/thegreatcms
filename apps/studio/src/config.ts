@@ -8,7 +8,11 @@ export interface DeclaredSite {
   path: string;
   name: string;
   devUrl: string;
+  /** Where this server reaches the dev server, when browsers reach it somewhere else. */
+  probeUrl: string;
   pushAfterPublish: boolean;
+  /** The builder's DEPLOY_ROOT as this studio sees it, e.g. /srv/www. */
+  deployRoot: string;
 }
 
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -29,6 +33,8 @@ export function parseSites(source: string): DeclaredSite[] {
     const id = String(entry?.id ?? "");
     const path = String(entry?.path ?? "");
     const devUrl = String(entry?.devUrl ?? "");
+    const probeUrl = String(entry?.probeUrl ?? "");
+    const deployRoot = String(entry?.deployRoot ?? "");
     if (!ID.test(id)) {
       throw new Error(
         `STUDIO_SITES: id "${id}" must be lowercase letters, digits and dashes; it becomes the form address.`,
@@ -37,15 +43,23 @@ export function parseSites(source: string): DeclaredSite[] {
     if (seen.has(id)) throw new Error(`STUDIO_SITES: "${id}" is listed twice.`);
     seen.add(id);
     if (!isAbsolute(path)) throw new Error(`STUDIO_SITES: "${id}" needs an absolute path.`);
+    if (deployRoot && !isAbsolute(deployRoot)) {
+      throw new Error(`STUDIO_SITES: "${id}" needs an absolute deployRoot.`);
+    }
     if (devUrl && !/^https?:\/\/[^\s]+$/.test(devUrl)) {
       throw new Error(`STUDIO_SITES: "${id}" has a devUrl that is not an http(s) address.`);
+    }
+    if (probeUrl && !/^https?:\/\/[^\s]+$/.test(probeUrl)) {
+      throw new Error(`STUDIO_SITES: "${id}" has a probeUrl that is not an http(s) address.`);
     }
     return {
       id,
       path,
       name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : id,
       devUrl,
+      probeUrl,
       pushAfterPublish: entry.pushAfterPublish === true,
+      deployRoot,
     };
   });
 }

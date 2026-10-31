@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "question": "Does it replace my calendar?",
+      "answer": "No. Sundial reads and writes the Google, Microsoft or iCloud calendar you already have, so everyone else keeps seeing your events where they always did."
+    },
+    {
+      "question": "What happens to a focus block when a meeting lands on it?",
+      "answer": "It moves to the next free hour of the same kind, the same day if it can. You get a note saying where it went."
+    },
+    {
+      "question": "Can I leave?",
+      "answer": "Any time. Your events were never ours: they stay in your own calendar, and your settings export as one file."
+    }
+  ]
+}

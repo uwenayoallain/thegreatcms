@@ -21,7 +21,7 @@ export interface GreatcmsOptions extends WatchOptions {}
  * inside the studio.
  *
  * Astro renders its own HTML and never calls Vite's `transformIndexHtml`, so
- * the Vite plugin alone cannot reach the page — `injectScript` is the supported
+ * the Vite plugin alone cannot reach the page: `injectScript` is the supported
  * way in, and it is only called for `dev`, so a built page carries none of it.
  *
  *     import greatcms from "@greatcms/reader/astro";

@@ -1,0 +1,14 @@
+{
+  "heading": "Tell us what you're making.",
+  "body": {
+    "html": "<p>We take on a handful of projects a year. The best first message is short: what the product does, who it is for, and the moment in it that does not feel right yet.</p>"
+  },
+  "prompts": [
+    "What are you building, and for whom?",
+    "What feels wrong about it today?",
+    "When does it need to be live?",
+    "Who on your side will we work with?"
+  ],
+  "kinds": ["Product design", "Motion system", "Brand", "Front-end build"],
+  "thanks": "Thank you, it's with us. We read every message and reply within two working days, usually with questions."
+}

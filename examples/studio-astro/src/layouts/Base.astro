@@ -1,0 +1,106 @@
+---
+import '@fontsource-variable/bricolage-grotesque';
+import '@fontsource/instrument-serif/400-italic.css';
+import '../styles/site.css';
+// The hero's two faces, fetched with the page rather than discovered in the stylesheet.
+import display from '@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url';
+import serif from '@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2?url';
+import { cms } from '../lib/cms';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const identity = cms.region('site.identity');
+const { title, description = identity.tagline } = Astro.props;
+const fullTitle = title ? `${title}: ${identity.name}` : `${identity.name}: ${identity.tagline}`;
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/work/', label: 'Work' },
+  { href: '/#services', label: 'Services' },
+  { href: '/contact/', label: 'Contact' },
+];
+const year = new Date().getFullYear();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#0b0b0e" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={display} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />
+    <script>
+      import '../scripts/motion.ts';
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="progress" aria-hidden="true"></div>
+    <div class="cursor" aria-hidden="true"><span class="cursor__label"></span></div>
+
+    <header class="site-header">
+      <a class="wordmark" href="/" data-magnetic>
+        <span class="wordmark__mark" aria-hidden="true"></span>
+        <span>{identity.name}</span>
+      </a>
+      <nav aria-label="Main">
+        <ul>
+          {
+            nav.map((item) => (
+              <li>
+                <a href={item.href} aria-current={path === item.href ? 'page' : undefined} data-magnetic>
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+      {
+        identity.availability && (
+          <p class="badge">
+            <span class="badge__dot" aria-hidden="true" />
+            {identity.availability}
+          </p>
+        )
+      }
+    </header>
+
+    <main id="main"><slot /></main>
+
+    <footer class="site-footer">
+      <div class="site-footer__top">
+        <p class="site-footer__ask">Have something in mind?</p>
+        <a class="site-footer__mail" href={`mailto:${identity.email}`} data-cursor="Write">{identity.email}</a>
+      </div>
+      <div class="site-footer__meta">
+        {identity.city && <p>{identity.city}</p>}
+        {
+          (identity.social ?? []).length > 0 && (
+            <ul aria-label="Elsewhere">
+              {(identity.social ?? []).map((link) => (
+                <li>
+                  <a href={link.href} rel={link.external ? 'noopener' : undefined}>{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        <p>© {year} {identity.name}</p>
+      </div>
+      <p class="giant" aria-hidden="true">
+        {[...identity.name].map((letter, i) => <span style={`--i: ${i}`}>{letter}</span>)}
+      </p>
+    </footer>
+  </body>
+</html>

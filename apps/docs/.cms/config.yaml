@@ -9,3 +9,8 @@ mediaUrlPrefix: /media
 publish:
   # The studio commits on whatever branch is checked out; pushing it is your deploy.
   commitMessage: "content: update {summary}"
+
+# Where the studio's preview opens an entry, and what `greatcms check` matches internal links against.
+preview:
+  paths:
+    docs: "/docs/{slug}/"

@@ -1,0 +1,26 @@
+import { greatcmsWatch } from "@greatcms/reader/vite";
+import adapter from "@sveltejs/adapter-static";
+import { sveltekit } from "@sveltejs/kit/vite";
+import { defineConfig } from "vite";
+
+// Behind the self-hosted preview proxy the dev server answers to a public name; Vite only serves hosts it knows.
+const previewHost = process.env.PREVIEW_HOST;
+
+export default defineConfig({
+  plugins: [
+    // Every page is prerendered to HTML; `csr = false` in the root layout keeps them script-free.
+    sveltekit({
+      adapter: adapter({ pages: "dist", assets: "dist" }),
+      prerender: { handleHttpError: "fail" },
+    }),
+    // Reloads the page when content changes, the studio's unsaved drafts included. Dev only.
+    // SvelteKit never runs Vite's HTML hook; `hooks.server.js` adds the preview script instead.
+    greatcmsWatch({ root: new URL(".", import.meta.url).pathname, hideDevOverlays: false }),
+  ],
+  server: { allowedHosts: previewHost ? [previewHost] : undefined },
+  // Loaded by Node rather than transformed by Vite, so rebuilding the reader in the workspace
+  // cannot catch a running dev server between files and leave every page an error.
+  ssr: { external: ["@greatcms/reader"] },
+  // Real targets for Lightning CSS, which otherwise folds declarations some browsers then drop.
+  build: { cssTarget: ["chrome111", "edge111", "firefox114", "safari16.4"] },
+});

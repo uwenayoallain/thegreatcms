@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseConfig, previewPath } from "./config.js";
+import type { SpecError } from "./errors.js";
 
 describe("preview paths", () => {
   const config = parseConfig(`version: 1
@@ -28,5 +29,31 @@ preview:
   it("falls back to the front page for regions and unlisted collections", () => {
     expect(previewPath(config)).toBe("/");
     expect(previewPath(config, { collection: "people", slug: "ann" })).toBe("/");
+  });
+});
+
+describe("parseConfig", () => {
+  it("fills in every default", () => {
+    expect(parseConfig("version: 1\n")).toEqual({
+      version: 1,
+      content: { regions: "content/cms", media: "public/media" },
+      mediaUrlPrefix: "/media",
+      publish: {
+        branch: "main",
+        draftBranchPrefix: "cms/draft",
+        commitMessage: "content: update {summary}",
+      },
+    });
+  });
+
+  it("refuses a path that leaves the repository, and says where", () => {
+    try {
+      parseConfig("version: 1\ncontent:\n  media: ../shared\n");
+      throw new Error("should have thrown");
+    } catch (err) {
+      const issue = (err as SpecError).issues[0];
+      expect(issue).toMatchObject({ code: "invalid_config", path: "content.media" });
+      expect(issue?.fix).toContain("repo-relative");
+    }
   });
 });

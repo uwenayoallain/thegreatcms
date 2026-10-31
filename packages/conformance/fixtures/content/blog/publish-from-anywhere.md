@@ -4,6 +4,7 @@ date: 2026-08-12
 tags:
   - release
   - git
+related: [yaml-scalars]
 draft: false
 ---
 

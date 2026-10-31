@@ -1,0 +1,26 @@
+{
+  "title": "Fernhouse",
+  "client": "Fernhouse",
+  "year": 2025,
+  "disciplines": ["Brand & identity", "Motion systems"],
+  "summary": "A furniture brand whose site moves like opening a well-made drawer: weighted, quiet, exact.",
+  "palette": "moss",
+  "motif": "rings",
+  "featured": true,
+  "order": 4,
+  "body": {
+    "html": "<p>Fernhouse makes furniture that lasts forty years. Its old site felt like a coupon flyer.</p><h2>Weight</h2><p>Every transition on the new site has mass: things decelerate as if they were heavy, and nothing bounces. Product photography loads in the order your eye reads it.</p>"
+  },
+  "results": [
+    {
+      "_type": "stat",
+      "value": "+63%",
+      "label": "Time on product pages"
+    },
+    {
+      "_type": "stat",
+      "value": "0",
+      "label": "Pop-ups"
+    }
+  ]
+}

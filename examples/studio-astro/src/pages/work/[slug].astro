@@ -1,0 +1,76 @@
+---
+import Art from '../../components/Art.astro';
+import Base from '../../layouts/Base.astro';
+import { cms, figure, projects } from '../../lib/cms';
+
+export function getStaticPaths() {
+  return cms.collection('work').map((entry) => ({ params: { slug: entry.slug } }));
+}
+
+// Looked up here, not passed as a prop, so the studio's live preview shows unsaved edits.
+const all = projects();
+const at = all.findIndex((entry) => entry.slug === Astro.params.slug);
+const project = all[at];
+if (!project) return Astro.redirect('/404/');
+const { data, slug } = project;
+const next = all[(at + 1) % all.length]!;
+---
+
+<Base title={data.title} description={data.summary}>
+  <article class="case">
+    <header class="case__head">
+      <p class="eyebrow">{data.client}{data.year ? ` · ${data.year}` : ''}</p>
+      <h1 class="case__title" style={`view-transition-name: title-${slug}`}>{data.title}</h1>
+      <p class="case__summary">{data.summary}</p>
+      {(data.disciplines ?? []).length > 0 && (
+        <ul class="case__tags" aria-label="Disciplines">
+          {(data.disciplines ?? []).map((item) => <li>{item}</li>)}
+        </ul>
+      )}
+    </header>
+
+    <div class="case__cover">
+      {
+        data.cover?.src ? (
+          <img src={data.cover.src} alt={data.cover.alt} width={data.cover.width} height={data.cover.height} style={`view-transition-name: art-${slug}`} />
+        ) : (
+          <Art palette={data.palette} motif={data.motif} transition={`art-${slug}`} class="art--large" />
+        )
+      }
+    </div>
+
+    <div class="case__body">
+      {data.body?.html && <div class="prose" set:html={data.body.html} />}
+      {(data.results ?? []).length > 0 && (
+        <dl class="case__results">
+          {(data.results ?? []).map((result) => {
+            const parts = figure(result.value);
+            return (
+              <div>
+                <dt>{result.label}</dt>
+                <dd>
+                  {parts ? (
+                    <span class="count" style={`--to: ${parts.number}`} data-count={parts.number} data-pad={parts.digits}>
+                      {parts.before}
+                      <span class="count__value">{String(parts.number).padStart(parts.digits, '0')}</span>
+                      <span class="count__digits" aria-hidden="true" />
+                      {parts.after}
+                    </span>
+                  ) : (
+                    result.value
+                  )}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      )}
+    </div>
+
+    <a class="next" href={`/work/${next.slug}/`} data-cursor="Next">
+      <span class="eyebrow">Next project</span>
+      <span class="next__title">{next.data.title}</span>
+      <Art palette={next.data.palette} motif={next.data.motif} class="next__art" />
+    </a>
+  </article>
+</Base>

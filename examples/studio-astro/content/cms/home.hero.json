@@ -1,0 +1,14 @@
+{
+  "eyebrow": "Independent design & motion studio",
+  "lines": ["We make", "interfaces", "feel"],
+  "rotating": ["inevitable.", "alive.", "obvious.", "quiet."],
+  "lede": "Paraline is a small team designing products, brands and the motion between them, for founders who would rather ship one thing that feels right than ten that merely work.",
+  "primary": {
+    "href": "/work/",
+    "label": "See the work"
+  },
+  "secondary": {
+    "href": "/contact/",
+    "label": "Start a project"
+  }
+}

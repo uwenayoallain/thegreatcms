@@ -1,0 +1,45 @@
+# The previews: each site's dev server under its own name, shown only to someone signed in to
+# the studio. cloudflared brings every preview name here over plain HTTP; TLS ends at Cloudflare.
+
+{
+	auto_https off
+	admin off
+}
+
+# The studio answers 204 for a signed-in browser and sends anyone else to sign in.
+(gate) {
+	forward_auth studio:8787 {
+		uri /auth/check
+		header_up X-Forwarded-Proto https
+	}
+}
+
+http://paraline-preview.{$PREVIEW_DOMAIN} {
+	import gate
+	reverse_proxy previews:4322
+}
+
+http://example-preview.{$PREVIEW_DOMAIN} {
+	import gate
+	reverse_proxy previews:4323
+}
+
+http://bakery-preview.{$PREVIEW_DOMAIN} {
+	import gate
+	reverse_proxy previews:4324
+}
+
+http://journal-preview.{$PREVIEW_DOMAIN} {
+	import gate
+	reverse_proxy previews:4325
+}
+
+http://sundial-preview.{$PREVIEW_DOMAIN} {
+	import gate
+	reverse_proxy previews:4326
+}
+
+http://docs-preview.{$PREVIEW_DOMAIN} {
+	import gate
+	reverse_proxy previews:4327
+}

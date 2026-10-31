@@ -6,7 +6,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "dev": "turbo run dev --filter=@greatcms/studio --filter=@greatcms/example-site-astro",
+    "dev": "node scripts/dev.mjs",
     "studio": "pnpm --filter @greatcms/studio dev",
     "greatcms": "node packages/cli/bin/greatcms.mjs",
     "lint": "oxlint",

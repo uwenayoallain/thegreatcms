@@ -13,6 +13,9 @@ const nav = [
   { href: '/blog', label: 'Blog' },
 ];
 const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+// A post is inside Blog: the link says so, without claiming to be the page itself.
+const current = (href: string) =>
+  path === href ? 'page' : href !== '/' && path.startsWith(`${href}/`) ? 'true' : undefined;
 ---
 
 <!doctype html>
@@ -21,6 +24,7 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     {description && <meta name="description" content={description} />}
   </head>
   <body>
@@ -35,7 +39,7 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
           {
             nav.map((item) => (
               <li>
-                <a href={item.href} aria-current={path === item.href ? 'page' : undefined}>
+                <a href={item.href} aria-current={current(item.href)}>
                   {item.label}
                 </a>
               </li>
@@ -50,9 +54,8 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
     </main>
 
     <footer class="site-footer">
-      <p>
-        Built from files in Git. This page shipped no JavaScript.
-      </p>
+      <p>Built from files in Git. This page shipped no JavaScript.</p>
+      <p>© {new Date().getFullYear()} Example</p>
     </footer>
   </body>
 </html>

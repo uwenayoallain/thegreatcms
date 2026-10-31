@@ -6,7 +6,7 @@
 
 import type { RichText, CmsLink, CmsImage, CmsFile } from "@greatcms/reader";
 
-/** Feature — Block `feature`. */
+/** Feature: Block `feature`. */
 export interface FeatureBlock {
   _type: "feature";
   body: string;
@@ -14,7 +14,7 @@ export interface FeatureBlock {
   title: string;
 }
 
-/** Pull quote — Block `quote`. */
+/** Pull quote: Block `quote`. */
 export interface QuoteBlock {
   _type: "quote";
   attribution?: string;
@@ -24,25 +24,25 @@ export interface QuoteBlock {
 /** Any block this schema defines, discriminated by `_type`. */
 export type CmsBlock = FeatureBlock | QuoteBlock;
 
-/** About intro — Region `about.intro`. */
+/** About intro: Region `about.intro`. */
 export interface AboutIntroRegion {
   body: string;
   heading: string;
 }
 
-/** Home features — Region `home.features` — a reorderable block list. */
+/** Home features: Region `home.features`: a reorderable block list. */
 export interface HomeFeaturesRegion {
   blocks: Array<FeatureBlock | QuoteBlock>;
 }
 
-/** Home hero — Region `home.hero`. */
+/** Home hero: Region `home.hero`. */
 export interface HomeHeroRegion {
   cta?: CmsLink;
   heading: string;
   subtitle?: string;
 }
 
-/** Blog — Entry in collection `blog`. */
+/** Blog: Entry in collection `blog`. */
 export interface BlogEntry {
   slug: string;
   file: string;

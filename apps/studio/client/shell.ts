@@ -81,7 +81,33 @@ function scalePreview(): void {
   fit();
 }
 
+/** `/` jumps to search, and Ctrl or Cmd with Enter publishes what is in the form. */
+function shortcuts(): void {
+  document.addEventListener("keydown", (event) => {
+    const target = event.target as HTMLElement | null;
+    const typing = target?.closest("input, textarea, select, [contenteditable]");
+    if (event.key === "/" && !typing && !event.metaKey && !event.ctrlKey) {
+      const search = document.querySelector<HTMLInputElement>("#nav-q");
+      if (search) {
+        event.preventDefault();
+        search.focus();
+      }
+      return;
+    }
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      const publish = document.querySelector<HTMLButtonElement>(
+        'form[data-editor-form] button[name="action"][value="publish"]',
+      );
+      if (publish) {
+        event.preventDefault();
+        publish.click();
+      }
+    }
+  });
+}
+
 function start(): void {
+  shortcuts();
   scalePreview();
   const sidebar = document.querySelector<HTMLElement>("[data-resize-sidebar]");
   if (sidebar) {

@@ -5,7 +5,7 @@ order: 20
 ---
 
 Most of a page is code. A headline, a pricing table, and a rotating set of
-feature cards are not — those change on a marketing schedule rather than a
+feature cards are not: those change on a marketing schedule rather than a
 release schedule, and they are the reason people install a CMS at all.
 
 GreatCMS manages only what you list. Everything else is ordinary code the studio
@@ -19,7 +19,7 @@ doubles as the file name, so `home.hero` is stored at
 
 A **blocks region** holds an ordered list an editor can add to and reorder, from
 a set of block types you allow. A **collection** is a folder of entries sharing
-a shape — a blog, case studies, a changelog — stored as Markdown with
+a shape, a blog, case studies, a changelog, stored as Markdown with
 frontmatter, which is what every static site generator already expects.
 
 ## Defaults are not a fallback, they are the starting state

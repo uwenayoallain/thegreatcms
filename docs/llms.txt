@@ -5,8 +5,8 @@
 > Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.
 > 
 > It is not a framework plugin. The integration surface is a schema file and some JSON, so Astro,
-> Hugo, Eleventy, Next, Jekyll, Laravel, or a hand-rolled Go generator all consume it identically.
-> If you are an agent wiring a site up to it, read the standard below and write files — there is no
+> Next.js, Nuxt, SvelteKit, Astro, Hugo, Laravel, or a hand-rolled Go generator all consume it identically.
+> If you are an agent wiring a site up to it, read the standard below and write files: there is no
 > SDK to install and no runtime to call.
 
 ## Docs
@@ -37,15 +37,15 @@
   - Markdown: https://greatcms.dev/docs/any-language.md
 - [For coding agents](https://greatcms.dev/docs/for-agents): Every surface an agent needs to wire a site up unattended, and the skill that teaches it.
   - Markdown: https://greatcms.dev/docs/for-agents.md
-- [The examples](https://greatcms.dev/docs/examples): Two Astro sites and a Python reader, each built to prove one thing.
+- [The examples](https://greatcms.dev/docs/examples): Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
   - Markdown: https://greatcms.dev/docs/examples.md
 
 ## Machine-readable entrypoints
 
 - [docs.json](https://greatcms.dev/docs.json)
-- [llms-full.txt](https://greatcms.dev/llms-full.txt) — every document above in one fetch
-- [schema.schema.json](https://greatcms.dev/json-schema/schema.schema.json) — JSON Schema for .cms/schema.yaml
-- [config.schema.json](https://greatcms.dev/json-schema/config.schema.json) — JSON Schema for .cms/config.yaml
+- [llms-full.txt](https://greatcms.dev/llms-full.txt): every document above in one fetch
+- [schema.schema.json](https://greatcms.dev/json-schema/schema.schema.json): JSON Schema for .cms/schema.yaml
+- [config.schema.json](https://greatcms.dev/json-schema/config.schema.json): JSON Schema for .cms/config.yaml
 
 ## Agent skill
 
@@ -57,6 +57,7 @@ npx skills add greatcms/greatcms@greatcms
 ```
 
 Inside a managed repository, `greatcms init` leaves a note in AGENTS.md, and
+`greatcms describe` prints the content model as one outline to write content against, and
 `greatcms check --json` / `greatcms doctor --json` give machine-readable answers.
 
 ## Conformance

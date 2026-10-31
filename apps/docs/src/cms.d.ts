@@ -6,7 +6,7 @@
 
 import type { RichText, CmsLink, CmsImage, CmsFile } from "@greatcms/reader";
 
-/** Claim — Block `claim`. */
+/** Claim: Block `claim`. */
 export interface ClaimBlock {
   _type: "claim";
   body: string;
@@ -14,7 +14,7 @@ export interface ClaimBlock {
   title: string;
 }
 
-/** Proof — Block `proof`. */
+/** Proof: Block `proof`. */
 export interface ProofBlock {
   _type: "proof";
   body: string;
@@ -25,18 +25,18 @@ export interface ProofBlock {
 /** Any block this schema defines, discriminated by `_type`. */
 export type CmsBlock = ClaimBlock | ProofBlock;
 
-/** Landing claims — Region `home.claims` — a reorderable block list. */
+/** Landing claims: Region `home.claims`: a reorderable block list. */
 export interface HomeClaimsRegion {
   blocks: Array<ClaimBlock>;
 }
 
-/** Closing note — Region `home.closing`. */
+/** Closing note: Region `home.closing`. */
 export interface HomeClosingRegion {
   body: string;
   heading: string;
 }
 
-/** Landing hero — Region `home.hero`. */
+/** Landing hero: Region `home.hero`. */
 export interface HomeHeroRegion {
   cta?: CmsLink;
   eyebrow?: string;
@@ -44,19 +44,19 @@ export interface HomeHeroRegion {
   subtitle?: string;
 }
 
-/** Proofs — Region `home.proofs` — a reorderable block list. */
+/** Proofs: Region `home.proofs`: a reorderable block list. */
 export interface HomeProofsRegion {
   blocks: Array<ProofBlock>;
 }
 
-/** Footer — Region `site.footer`. */
+/** Footer: Region `site.footer`. */
 export interface SiteFooterRegion {
   claim: string;
   links?: Array<CmsLink>;
   note: string;
 }
 
-/** Documentation — Entry in collection `docs`. */
+/** Documentation: Entry in collection `docs`. */
 export interface DocsEntry {
   slug: string;
   file: string;

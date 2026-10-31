@@ -1,4 +1,4 @@
-/** `greatcms add` — put a new managed section into a schema that already exists. */
+/** `greatcms add`: put a new managed section into a schema that already exists. */
 
 import {
   hasFrontmatter,
@@ -45,11 +45,11 @@ export const FIELD_TYPES: Array<{ id: FieldType; hint: string }> = [
   { id: "number", hint: "a number" },
   { id: "boolean", hint: "a checkbox" },
   { id: "date", hint: "an ISO date" },
-  { id: "select", hint: "one of a fixed set — write it as name:select(a|b)" },
+  { id: "select", hint: "one of a fixed set: write it as name:select(a|b)" },
   { id: "file", hint: "any uploaded file" },
-  { id: "list", hint: "repeatable — write it as name:list(text)" },
-  { id: "group", hint: "related fields — build them interactively with greatcms setup" },
-  { id: "blocks", hint: "nested components — write it as name:blocks(card|grid)" },
+  { id: "list", hint: "repeatable: write it as name:list(text)" },
+  { id: "group", hint: "related fields: build them interactively with greatcms setup" },
+  { id: "blocks", hint: "nested components: write it as name:blocks(card|grid)" },
 ];
 
 export interface FieldSpec {
@@ -72,7 +72,7 @@ export interface FieldSpec {
 const FIELD_NAME_RE = /^[a-z][a-zA-Z0-9_]*$/;
 
 /**
- * `heading:text!` — one field, in one argument. The shape earns its keep: it
+ * `heading:text!`: one field, in one argument. The shape earns its keep: it
  * is the difference between `greatcms add region home.hero --field heading:text!`
  * and a paragraph of YAML you have to indent correctly by hand.
  */

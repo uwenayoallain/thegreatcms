@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/schema.schema.json
+#
+# A writer's journal. Essays are Markdown files with frontmatter, the format
+# every static site generator already reads; SvelteKit reads them through
+# @greatcms/reader in src/lib/cms.ts.
+
+version: 1
+
+site:
+  name: The Long Light
+  locale: en
+
+regions:
+  site.identity:
+    label: Journal
+    fields:
+      title: { type: text, required: true, max: 40 }
+      author: { type: text, required: true, max: 60 }
+      tagline: { type: text, max: 120 }
+    default:
+      title: The Long Light
+      author: Ines Mukamana
+
+  home.intro:
+    label: Home introduction
+    fields:
+      heading: { type: text, required: true, max: 90 }
+      body: { type: richtext }
+
+  about.page:
+    label: About page
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      body: { type: richtext, required: true }
+      elsewhere: { type: list, max: 6, of: { type: link } }
+
+  newsletter:
+    label: Newsletter
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      text: { type: text, multiline: true, max: 200 }
+      button: { type: text, max: 24 }
+    default:
+      heading: One letter a month
+      text: New essays, and the books that were open on the desk while writing them.
+      button: Subscribe
+
+collections:
+  essays:
+    label: Essays
+    entryLabel: essay
+    path: content/essays
+    format: markdown
+    body: content
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 90 }
+      dek:
+        {
+          type: text,
+          max: 180,
+          description: "The line under the title, and the summary on the home page.",
+        }
+      date: { type: date, required: true }
+      tags:
+        type: select
+        multiple: true
+        options: [place, work, language, family, slowness]
+      featured: { type: boolean, description: Lead the home page with this essay. }
+      content: { type: richtext }

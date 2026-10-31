@@ -22,14 +22,14 @@ if (command === "fixtures") {
 if (command !== "verify") {
   process.stdout.write(
     [
-      "greatcms-conformance — prove a tool reads the GreatCMS standard",
+      "greatcms-conformance: prove a tool reads the GreatCMS standard",
       "",
       "  fixtures              print the path to the fixture site",
       "  verify <dir>          compare a reader's output against the expected documents",
       "  verify --self         verify the reference reader in @greatcms/conformance",
       "",
-      "<dir> holds one JSON file per region, named <region-id>.json, and — if the",
-      "reader implements collections — <dir>/entries/<collection>/<slug>.json,",
+      "<dir> holds one JSON file per region, named <region-id>.json, and: if the",
+      "reader implements collections: <dir>/entries/<collection>/<slug>.json,",
       'each `{ "slug": …, "data": … }`. Collections are reported separately, so a',
       "regions-only reader still gets a useful answer.",
       "",
@@ -113,7 +113,7 @@ function readJson(path) {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch (err) {
-    process.stderr.write(`${path}: not valid JSON — ${err.message}\n`);
+    process.stderr.write(`${path}: not valid JSON: ${err.message}\n`);
     process.exit(2);
   }
 }

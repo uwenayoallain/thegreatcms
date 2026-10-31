@@ -41,7 +41,7 @@ describe.each(PAGES)("$name", ({ file }) => {
     });
 
     const summary = results.violations.map(
-      (v) => `${v.id} (${v.impact}): ${v.help} — ${v.nodes.length} node(s)`,
+      (v) => `${v.id} (${v.impact}): ${v.help}: ${v.nodes.length} node(s)`,
     );
     expect(summary).toEqual([]);
   });

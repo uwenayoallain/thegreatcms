@@ -1,5 +1,6 @@
 /** Rich text arrives as HTML from a form; only what the editor itself can produce is kept. */
 
+import { isSafeUrl } from "@greatcms/spec";
 import { Parser } from "htmlparser2";
 
 /** Elements the ProseMirror schema serializes to, and the attributes each may keep. */
@@ -42,24 +43,13 @@ const DISCARD = new Set([
   "math",
 ]);
 
-const SAFE_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
-
 const escapeText = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const escapeAttribute = (text: string) => escapeText(text).replace(/"/g, "&quot;");
 
-/** A relative URL, or one whose scheme cannot run code. */
-function safeUrl(value: string): boolean {
-  // Browsers ignore whitespace and control characters inside a scheme: `java\tscript:` still runs.
-  // oxlint-disable-next-line no-control-regex -- matching control characters is the point
-  const compact = value.replace(/[\u0000- \u007f]/g, "");
-  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(compact)?.[1];
-  return scheme === undefined || SAFE_SCHEMES.has(scheme.toLowerCase());
-}
-
 function keepAttribute(tag: string, name: string, value: string): boolean {
   if (!ALLOWED[tag]?.includes(name)) return false;
-  if (name === "href" || name === "src") return safeUrl(value);
+  if (name === "href" || name === "src") return isSafeUrl(value);
   if (name === "start") return /^\d{1,6}$/.test(value);
   return true;
 }

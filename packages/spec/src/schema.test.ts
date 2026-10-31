@@ -234,3 +234,65 @@ regions:
     expect(unknownSchemaKeys(source)).toEqual([]);
   });
 });
+
+const fieldsWith = (definition: string) =>
+  `version: 1\nregions:\n  home.hero:\n    fields:\n      heading: ${definition}\n`;
+
+describe("structural errors", () => {
+  it("names an unknown field type and lists the real ones", () => {
+    const err = catchSpecError(() => parseSchema(fieldsWith("{ type: paragraph }")));
+    expect(err.issues).toHaveLength(1);
+    expect(err.issues[0]).toMatchObject({
+      code: "invalid_schema",
+      path: "regions.home.hero.fields.heading.type",
+      message: '"paragraph" is not a field type.',
+    });
+    expect(err.issues[0]?.fix).toContain("richtext");
+  });
+
+  it("says which key has the wrong kind of value, and what it found", () => {
+    const err = catchSpecError(() => parseSchema(fieldsWith("{ type: text, max: -2, label: 3 }")));
+    expect(err.issues.map((issue) => [issue.path, issue.message])).toEqual([
+      ["regions.home.hero.fields.heading.label", "Expected text, found the number 3."],
+      ["regions.home.hero.fields.heading.max", "Must be greater than 0, found -2."],
+    ]);
+  });
+
+  it("reports a `when` with nothing to compare against", () => {
+    const err = catchSpecError(() => parseSchema(fieldsWith("{ type: text, when: { field: x } }")));
+    expect(err.issues[0]).toMatchObject({ path: "regions.home.hero.fields.heading.when" });
+    expect(err.issues[0]?.fix).toContain("equals");
+  });
+
+  it("refuses a text pattern that is not a regular expression", () => {
+    const err = catchSpecError(() => parseSchema(fieldsWith('{ type: text, pattern: "(" }')));
+    expect(err.issues[0]?.path).toBe("regions.home.hero.fields.heading.pattern");
+  });
+
+  it("uses list indexes in paths", () => {
+    const err = catchSpecError(() =>
+      parseSchema(fieldsWith("{ type: select, options: [a, { label: B }] }")),
+    );
+    expect(err.issues[0]?.path).toBe("regions.home.hero.fields.heading.options[1].value");
+  });
+
+  it("asks for the keys a region and a collection need", () => {
+    const err = catchSpecError(() =>
+      parseSchema(
+        "version: 1\nregions:\n  a.b: { label: A }\ncollections:\n  blog: { fields: {} }\n",
+      ),
+    );
+    expect(err.issues.map((issue) => issue.path)).toEqual([
+      "regions.a.b.fields",
+      "collections.blog.path",
+    ]);
+    expect(err.issues.every((issue) => issue.fix)).toBe(true);
+  });
+
+  it("applies the defaults the format declares", () => {
+    const schema = parseSchema(
+      "version: 1\ncollections:\n  blog:\n    path: content/blog\n    fields:\n      t: { type: text }\n",
+    );
+    expect(schema.collections.blog?.format).toBe("markdown");
+  });
+});

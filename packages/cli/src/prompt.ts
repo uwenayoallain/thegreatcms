@@ -1,6 +1,7 @@
-/** Minimal interactive prompts — arrow keys, enter, Ctrl-C — with no dependencies. */
+/** Minimal interactive prompts, arrow keys, enter, Ctrl-C, with no dependencies. */
 
 import type { Interface as ReadlineInterface } from "node:readline";
+import { plainUi, ui } from "./ui.js";
 
 export interface Choice<T> {
   value: T;
@@ -39,11 +40,6 @@ export function defaultsOnlyPrompt(write: (text: string) => void = () => {}): Pr
   };
 }
 
-const DIM = "\x1b[2m";
-const BOLD = "\x1b[1m";
-const CYAN = "\x1b[36m";
-const RESET = "\x1b[0m";
-
 export interface TerminalPromptOptions {
   input: NodeJS.ReadStream;
   output: NodeJS.WriteStream;
@@ -53,8 +49,9 @@ export interface TerminalPromptOptions {
 
 export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
   const { input, output } = options;
-  const colour = options.colour ?? Boolean(output.isTTY);
-  const paint = (code: string, text: string) => (colour ? `${code}${text}${RESET}` : text);
+  // The run's look when this is a terminal, so prompts match the rest of the output.
+  const u = (options.colour ?? Boolean(output.isTTY)) ? ui() : plainUi;
+  const ask = (question: string) => `${u.accent("?")} ${u.bold(question)}`;
 
   return {
     interactive: true,
@@ -70,16 +67,16 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
           if (rendered > 0 && output.isTTY) output.write(`\x1b[${rendered}A\x1b[0J`);
           const lines = choices.map((choice, i) => {
             const selected = i === index;
-            const marker = selected ? paint(CYAN, "❯") : " ";
-            const label = selected ? paint(BOLD, choice.label) : choice.label;
-            const hint = choice.hint ? ` ${paint(DIM, `— ${choice.hint}`)}` : "";
-            return `${marker} ${label}${hint}`;
+            const marker = selected ? u.accent("❯") : " ";
+            const label = selected ? u.bold(choice.label) : choice.label;
+            const hint = choice.hint ? `  ${u.muted(choice.hint)}` : "";
+            return `  ${marker} ${label}${hint}`;
           });
           output.write(`${lines.join("\n")}\n`);
           rendered = lines.length;
         };
 
-        output.write(`${paint(BOLD, question)}\n`);
+        output.write(`${ask(question)}\n`);
         draw();
 
         const onKey = (chunk: Buffer) => {
@@ -97,7 +94,7 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
               reject(new Error(`No choices offered for "${question}".`));
               return;
             }
-            output.write(`${paint(DIM, `  ${choice.label}`)}\n\n`);
+            output.write(`  ${u.accent("❯")} ${u.muted(choice.label)}\n\n`);
             resolve(choice.value);
             return;
           }
@@ -137,9 +134,7 @@ export function terminalPrompt(options: TerminalPromptOptions): PromptPort {
         const answer = await new Promise<string>((resolve, reject) => {
           rl.once("SIGINT", () => reject(new PromptCancelled()));
           rl.once("close", () => reject(new PromptCancelled()));
-          rl.question(`${paint(BOLD, question)} ${paint(DIM, `(${initial})`)} `, (value) =>
-            resolve(value),
-          );
+          rl.question(`${ask(question)} ${u.muted(`(${initial})`)} `, (value) => resolve(value));
         });
         return answer.trim() || initial;
       } finally {

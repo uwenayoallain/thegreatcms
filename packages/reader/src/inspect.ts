@@ -10,6 +10,8 @@ if (window.top !== window.self) {
   (() => {
     const DOC = document;
     const ATTR = "data-greatcms-field";
+    // A dev server that does not watch content says so here, and the studio reloads the page after each draft.
+    const WATCHED = !DOC.documentElement.hasAttribute("data-greatcms-unwatched");
     const BLOCK_ATTR = "data-greatcms-block";
     let studio = null;
     let origin = "*";
@@ -274,6 +276,8 @@ if (window.top !== window.self) {
         drawSections();
       } else if (data.greatcms === "focus" && typeof data.path === "string") {
         focus(data.path);
+      } else if (data.greatcms === "reload" && !WATCHED) {
+        location.reload();
       }
     });
 
@@ -299,7 +303,7 @@ if (window.top !== window.self) {
       settle = window.setTimeout(() => { index(); report(); }, 150);
     }).observe(DOC.documentElement, { childList: true, subtree: true, characterData: true });
 
-    const hello = () => window.parent.postMessage({ greatcms: "ready" }, "*");
+    const hello = () => window.parent.postMessage({ greatcms: "ready", reloads: WATCHED }, "*");
     if (DOC.readyState === "loading") DOC.addEventListener("DOMContentLoaded", hello, { once: true });
     else hello();
   })();

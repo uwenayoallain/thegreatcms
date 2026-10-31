@@ -1,0 +1,45 @@
+import { renameSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { greatcmsWatch } from "@greatcms/reader/vite";
+
+export default defineNuxtConfig({
+  compatibilityDate: "2026-10-01",
+  devtools: { enabled: false },
+  telemetry: false,
+  css: ["~/assets/site.css"],
+  // Where the waitlist form posts: the studio's inbox, set at build time.
+  runtimeConfig: {
+    public: {
+      cmsUrl: process.env.PUBLIC_CMS_URL ?? "",
+      cmsSite: process.env.PUBLIC_CMS_SITE_ID ?? "sundial",
+    },
+  },
+  app: {
+    head: {
+      htmlAttrs: { lang: "en" },
+      link: [{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
+    },
+  },
+  // Content edits reach `nuxt dev` as a reload; drafts from the studio included.
+  vite: {
+    plugins: [greatcmsWatch()],
+    // Behind the self-hosted preview proxy the dev server answers to a public name; Vite only serves hosts it knows.
+    server: { allowedHosts: process.env.PREVIEW_HOST ? [process.env.PREVIEW_HOST] : undefined },
+  },
+  nitro: {
+    // Written where the rest of the repository's builds go, and what greatcms-deploy serves.
+    output: { publicDir: "dist" },
+    prerender: { crawlLinks: true, failOnError: true, routes: ["/404"] },
+    hooks: {
+      close: () => {
+        // Nuxt's built-in 404.html is the unrendered SPA shell; replace it with the prerendered 404 page.
+        renameSync(resolve("dist/404/index.html"), resolve("dist/404.html"));
+        rmSync(resolve("dist/404"), { recursive: true, force: true });
+        rmSync(resolve("dist/200.html"), { force: true });
+      },
+    },
+  },
+  // Every page is complete HTML, so a generated page needs no JavaScript at all. Development keeps
+  // its client, which is what reloads the page when content changes.
+  $production: { routeRules: { "/**": { noScripts: true } } },
+});

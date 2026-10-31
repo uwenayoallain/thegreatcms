@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "greatcms: scaffold, extend, type and check a GreatCMS site from the terminal.",
   "keywords": [
     "cli",

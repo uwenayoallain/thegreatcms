@@ -1,0 +1,8 @@
+{
+  "name": "Country sourdough",
+  "category": "bread",
+  "price": 3500,
+  "description": "Two-day ferment, dark crust, open crumb. Our everyday loaf.",
+  "dietary": ["vegan"],
+  "featured": true
+}

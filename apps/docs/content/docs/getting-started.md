@@ -10,9 +10,9 @@ order: 10
 npx greatcms init
 ```
 
-It detects what you build with — Astro, Next, Nuxt, SvelteKit, or Eleventy — and
-puts content where that generator already looks for it. Eleventy gets
-`_data/cms`, Astro gets `src/content/cms`, Next gets `content/cms`. It prints the
+It detects what you build with (Astro, Next.js, Nuxt or SvelteKit) and puts
+content where that framework already looks for it: Astro gets
+`src/content/cms`, the others `content/cms`. It prints the
 small reader integration for that framework, so schema defaults render before a
 content file has ever been written.
 
@@ -35,8 +35,7 @@ section looks.
 Render the pages collection through one dynamic route in your framework. An
 editor can then add an About, Services, or legal page as a normal collection
 entry; `showInNavigation` and `navigationOrder` make the menu update from the
-same data. See `examples/business-astro/src/pages/[slug].astro` for the complete
-Astro version.
+same data. `greatcms init --template business` writes this collection for you.
 
 ## Add another kind of section
 
@@ -54,8 +53,10 @@ or adding another route.
 
 ## Read a region
 
-A region resolves to plain data. In Astro, read it through the schema-aware
-reader so a brand-new region renders its defaults before its JSON file exists:
+A region resolves to plain data. Read it through the schema-aware reader, so a
+brand-new region renders its defaults before its JSON file exists. It is the
+same call in every framework; only where it runs differs. In Astro, in a page's
+frontmatter:
 
 ```js
 import { createReader } from "@greatcms/reader";
@@ -63,18 +64,28 @@ const cms = createReader();
 const hero = cms.region("home.hero");
 ```
 
-In Eleventy, with no import at all, because `_data` is global data:
+In Next.js, in a Server Component, so the file is read on the server and never
+fetched by the browser:
 
-```njk
-<h1>{{ cms["home.hero"].heading }}</h1>
+```tsx
+import { createReader } from "@greatcms/reader";
+
+export default function Home() {
+  const hero = createReader().region("home.hero");
+  return <h1>{hero.heading}</h1>;
+}
 ```
+
+In SvelteKit the same call goes in a `+page.server.js` load function, and in
+Nuxt in a server route the page fetches. [The examples](/docs/examples/) run
+all four.
 
 The same reader infers types when you run `greatcms types`.
 
 ## Connect it
 
 Run the studio and add the site. Point it at **a folder on this machine** and it
-reads and writes that working copy directly — no token, no network. Give it your
+reads and writes that working copy directly: no token, no network. Give it your
 dev server's URL and the editor shows your real components beside the form.
 
 The studio reads your schema and builds the editor from it. It never runs any
@@ -89,7 +100,7 @@ npx greatcms doctor
 Prints every region, the file it resolves to, and which are still rendering
 schema defaults.
 
-To check the content itself — in a build, or before you push:
+To check the content itself: in a build, or before you push:
 
 ```sh
 npx greatcms check
@@ -100,5 +111,5 @@ exits non-zero if anything would not render: a required field left empty, a
 field the schema no longer has, a file no region renders, an image pointing at
 something nobody committed. `--json` reports the same to a machine.
 
-A region with no content file is not a failure — it renders schema defaults,
+A region with no content file is not a failure: it renders schema defaults,
 which is the point.

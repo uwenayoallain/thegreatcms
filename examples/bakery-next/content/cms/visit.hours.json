@@ -1,0 +1,8 @@
+{
+  "hours": [
+    { "days": "Monday – Friday", "open": "7:00 – 19:00" },
+    { "days": "Saturday", "open": "7:30 – 17:00" },
+    { "days": "Sunday", "open": "8:00 – 13:00" }
+  ],
+  "note": "Bread usually sells out by early afternoon. Pre-order to be sure of a loaf."
+}

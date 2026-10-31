@@ -57,14 +57,14 @@ regions:
     default:
       heading: Welcome
 
-  # Edited before `badge` existed — proves new schema fields still render.
+  # Edited before `badge` existed: proves new schema fields still render.
   home.notice:
     fields:
       message: { type: text, required: true }
       badge: { type: text, default: New }
       dismissible: { type: boolean, default: true }
 
-  # Never edited — proves a site builds before the CMS has touched it.
+  # Never edited: proves a site builds before the CMS has touched it.
   about.intro:
     fields:
       heading: { type: text, default: About us }
@@ -106,6 +106,12 @@ regions:
         default:
           - { _type: card, title: First card }
 
+  # References store slugs as written; a multiple one nobody filled in is `[]`.
+  home.featured:
+    fields:
+      post: { type: reference, collection: blog }
+      guides: { type: reference, collection: guides, multiple: true }
+
 collections:
   # MDX: stored exactly like Markdown, read exactly like Markdown. The
   # difference is the extension, and that an editor must not reformat the body.
@@ -130,5 +136,6 @@ collections:
       title: { type: text, required: true, max: 120 }
       date: { type: date, required: true }
       tags: { type: list, of: { type: text }, max: 5 }
+      related: { type: reference, collection: blog, multiple: true }
       draft: { type: boolean, default: false }
       content: { type: richtext }

@@ -23,7 +23,8 @@ export interface Elsewhere {
 const humanize = (name: string) =>
   name.replace(/[-_]+/g, " ").replace(/^\w/, (first) => first.toUpperCase());
 
-function flatten(
+/** Every value in a document a person could read or point at, with the form path that holds it. */
+export function flatten(
   fields: Record<string, FieldDef>,
   values: Record<string, unknown>,
   path: Array<string | number>,
@@ -58,7 +59,14 @@ function flatten(
       case "list":
         if (Array.isArray(value)) {
           value.forEach((item, index) =>
-            flatten({ item: def.of }, { item }, [...at, index], blocks, out),
+            // An item is named after its list, not "Item".
+            flatten(
+              { item: { ...def.of, label: def.of.label ?? label } },
+              { item },
+              [...at, index],
+              blocks,
+              out,
+            ),
           );
         }
         break;

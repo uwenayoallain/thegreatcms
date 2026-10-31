@@ -1,0 +1,19 @@
+---
+import WorkCard from '../../components/WorkCard.astro';
+import Base from '../../layouts/Base.astro';
+import { projects } from '../../lib/cms';
+
+const all = projects();
+---
+
+<Base title="Work" description="Projects by Paraline: product design, motion systems, brand and front-end.">
+  <section class="page-hero">
+    <p class="eyebrow">Work</p>
+    <h1 class="page-hero__title">Things we made, <em>and why</em> they move the way they do.</h1>
+  </section>
+  <section class="work work--stacked" aria-label="All projects">
+    <div class="work__grid">
+      {all.map((project, i) => <WorkCard project={project} index={i} size="stacked" heading="h2" />)}
+    </div>
+  </section>
+</Base>

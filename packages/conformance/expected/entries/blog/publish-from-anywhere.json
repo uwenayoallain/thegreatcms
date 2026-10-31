@@ -4,6 +4,7 @@
     "title": "Publish from anywhere",
     "date": "2026-08-12",
     "tags": ["release", "git"],
+    "related": ["yaml-scalars"],
     "draft": false,
     "content": "\nContent lives in the repository, so a publish is a commit and a deploy is whatever\nCI you already had.\n\nThe CMS never becomes a runtime dependency of your site.\n"
   }

@@ -48,9 +48,9 @@ describe("injecting it into HTML", () => {
     expect(plugin.transformIndexHtml?.("<head></head>")).toContain(PREVIEW_CHROME);
   });
 
-  it("can be turned off", () => {
+  it("can be turned off, leaving no HTML hook for a framework to warn about", () => {
     const plugin = greatcmsWatch({ hideDevOverlays: false });
-    expect(plugin.transformIndexHtml?.("<head></head>")).toBe("<head></head>");
+    expect(plugin.transformIndexHtml).toBeUndefined();
   });
 });
 

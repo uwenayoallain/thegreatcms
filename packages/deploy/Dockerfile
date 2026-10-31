@@ -6,15 +6,14 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile --filter @greatcms/deploy...
 RUN pnpm --filter @greatcms/deploy... build
-# Reinstall without dev dependencies from the store already fetched, keeping the workspace layout
-# so pnpm's relative links between packages still resolve once the tree is copied.
-RUN CI=true pnpm install --prod --frozen-lockfile --offline --filter @greatcms/deploy...
 
+# It has no dependencies of its own: the build output and two launchers are the whole program.
 FROM node:24-alpine
 RUN apk add --no-cache git && corepack enable
-WORKDIR /app
-COPY --from=build /app ./
 WORKDIR /app/packages/deploy
+COPY --from=build /app/packages/deploy/dist ./dist
+COPY --from=build /app/packages/deploy/bin ./bin
+COPY --from=build /app/packages/deploy/package.json ./
 RUN mkdir -p /srv/www && chown -R node:node /srv/www /app
 USER node
 # pnpm's store, so repeated builds reinstall from cache rather than the network.

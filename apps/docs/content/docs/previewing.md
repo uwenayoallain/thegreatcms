@@ -8,7 +8,7 @@ order: 40
 
 Point a local site at your dev server's URL and the editor shows your real
 components beside the form. Publishing writes the files, your dev server
-reloads, and the pane updates — usually within a couple of seconds.
+reloads, and the pane updates: usually within a couple of seconds.
 
 For a Vite-based site this needs one plugin:
 
@@ -37,7 +37,7 @@ one can never be committed. And publishing clears the draft it came from, so the
 site stops showing an edit that has already landed.
 
 Without JavaScript nothing is written as you type, and the editor still
-publishes — the frame simply shows the site as last published.
+publishes: the frame simply shows the site as last published.
 
 ## Pointing at the page
 
@@ -95,7 +95,7 @@ throws the draft away and puts your dev server back to what is published. It
 is a plain form post, so it works with JavaScript switched off.
 
 Anything still unsaved is listed on the site's page in the studio, and
-`npx greatcms doctor` names it from the terminal — a draft you forgot is
+`npx greatcms doctor` names it from the terminal: a draft you forgot is
 otherwise visible only in dev, which is exactly where you would stop noticing
 it.
 

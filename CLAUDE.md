@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Read [AGENTS.md](./AGENTS.md) first — it holds the invariants (design decisions
+Read [AGENTS.md](./AGENTS.md) first: it holds the invariants (design decisions
 that must not be "fixed") and the current focus. This file covers commands and
 the architecture that spans several files.
 
@@ -12,7 +12,7 @@ the architecture that spans several files.
 pnpm install
 pnpm check        # the gate: oxlint, oxfmt --check, docs:check, typecheck, test
 pnpm build        # turbo run build (tsdown per package; Astro for the sites)
-pnpm test         # turbo run test (build runs first — tests import dist/)
+pnpm test         # turbo run test (build runs first: tests import dist/)
 pnpm docs:build   # regenerate docs/ from SPEC.md + README.md
 ```
 
@@ -29,17 +29,17 @@ timeout and half the cores per package, because turbo runs several at once.
 Change timeouts and worker counts there, not per file.
 
 `test` depends on `build`, so after changing a package that another one imports,
-run `pnpm build` before the dependent's tests — invoking `vitest` directly skips
-that. Vitest watch mode is not wired into turbo — run
+run `pnpm build` before the dependent's tests: invoking `vitest` directly skips
+that. Vitest watch mode is not wired into turbo: run
 `pnpm --filter <pkg> exec vitest` directly.
 
 Running things:
 
 ```sh
-STUDIO_PASSWORD='something long' pnpm dev        # studio (:8787) + Astro example (:4321)
+pnpm dev                                         # studio (:8787, password greatcms-dev) + every example site, connected
 STUDIO_PASSWORD='something long' pnpm studio     # the studio alone
 pnpm --filter @greatcms/docs dev
-pnpm --filter @greatcms/example-business-astro dev
+pnpm --filter @greatcms/example-studio-astro dev
 pnpm greatcms check                              # any CLI command, from this checkout
 ```
 
@@ -49,7 +49,7 @@ Browser tests (ProseMirror, live preview, colour contrast) need Chromium once:
 pnpm --filter @greatcms/studio exec playwright install chromium
 ```
 
-Without it they skip rather than fail — a green run on a fresh checkout has not
+Without it they skip rather than fail: a green run on a fresh checkout has not
 proven the client side.
 
 Cross-language conformance (CI runs this every build):
@@ -66,13 +66,13 @@ The product is the **file standard** in `SPEC.md`: `.cms/schema.yaml`,
 package is an implementation of that document; if they disagree, the code is
 wrong.
 
-**`packages/spec`** is the single source of truth for the format in TypeScript —
+**`packages/spec`** is the single source of truth for the format in TypeScript:
 schema parsing (`schema.ts`), config (`config.ts`), field types and defaults
 (`fields.ts`), content parsing/serializing (`content.ts`), validation
 (`validate.ts`), and path resolution (`paths.ts`). It is a convenience, not a
 requirement: it holds no I/O, so both the reader and the studio depend on it for
 the same resolution rules. Field types and their storage shapes live in
-`fields.ts` — adding a field type means touching that, `validate.ts`, the
+`fields.ts`: adding a field type means touching that, `validate.ts`, the
 studio's `views/fields.ts` renderer, and `SPEC.md`.
 
 **Resolution** is the concept that ties the halves together: a schema region plus
@@ -80,7 +80,7 @@ an optional content file resolves to a document, with schema defaults filling
 anything missing (`resolveRegion`). A missing content file is normal; a missing
 schema is fatal.
 
-**`packages/reader`** is the build-time consumer — synchronous `node:fs` reads,
+**`packages/reader`** is the build-time consumer: synchronous `node:fs` reads,
 no framework code. `vite.ts` exports `greatcmsWatch()`, needed because
 filesystem reads are invisible to Vite's dependency graph.
 
@@ -88,19 +88,33 @@ filesystem reads are invisible to Vite's dependency graph.
 The layering:
 
 - `main.ts` wires env → `Store` (SQLite via `node:sqlite`) → `createApp`.
-- `app.ts` is the whole HTTP surface: auth, site CRUD, the editor, publish,
-  media upload, form intake, inbox.
-- `repo.ts` defines `Repository` — read a file, list a directory, read the head,
-  commit a set of files — with `LocalRepository` as the only implementation.
+- `app.ts` holds every route: auth and editors, site CRUD, the editor, publish,
+  history, search, scheduling, rollback, media upload, form intake, inbox. Its
+  helpers live beside it by job: `block-edits.ts` (adding, moving, removing
+  blocks), `uploads.ts` (images chosen in a form), `http.ts` (bounded bodies,
+  safe redirects, form entries).
+- Feature modules the routes call: `elsewhere.ts` (other regions for the
+  preview inspector), `search.ts`, `schedule.ts` (time zones for publish-later),
+  `deploys.ts` (reads the builder's folder, asks it to roll back),
+  `views/viewer.ts` (who is signed in, per request).
+- `repo.ts` defines `Repository`, read a file, list a directory, read the head,
+  commit a set of files, with `LocalRepository` as the only implementation.
   **Adding a backend means implementing that interface, not branching in
   `app.ts`.** Everything above this line is backend-agnostic.
 - `sites.ts` (`SiteClient`) sits on `Repository` and speaks in schema/config/
   regions/collections rather than files.
-- `views/` renders HTML: `pages.ts` (screens), `fields.ts` (one renderer per
-  field type, plus error attachment), `layout.ts`.
-- `client/*.ts` is the only browser JavaScript (ProseMirror editor + live
-  preview). tsdown builds it to `public/*.js` in the same `pnpm build`; those
-  files are build output, and are loaded only on screens with a richtext field.
+- `views/` renders HTML, one module per screen family: `region-page.ts` and
+  `collection-pages.ts` (the editors), sharing `editor-parts.ts` (preview
+  panel, notices); `site-page.ts`, `sites-pages.ts`, `inbox-page.ts`,
+  `tool-pages.ts` (search, history), `account-pages.ts` (sign-in, share,
+  editors). `fields.ts` has one renderer per field type plus error
+  attachment; `layout.ts` is the page shell.
+- `client/*.ts` is the only browser JavaScript: `editor.ts` (ProseMirror, only
+  on screens with a richtext field), and on editor screens `live.ts` (drafts
+  and the preview inspector), `form.ts` (`when` conditions) and `shell.ts`
+  (resizable panes, shortcuts). tsdown builds them to `public/*.js` in the same
+  `pnpm build`; those files are build output. Every one is an enhancement over
+  forms that already work without it.
 
 **`packages/cli`** is `greatcms init` (framework detection in `detect.ts`,
 scaffolding in `init.ts`), `add` (edits an existing schema as text, preserving
@@ -113,7 +127,7 @@ purpose, so the studio's "never executes a managed repository" rule holds.
 
 **`packages/conformance`** is fixtures plus a verifier; it defines what "reads
 the standard correctly" means for any implementation in any language. The
-fixtures deliberately include the awkward cases — missing content file, content
+fixtures deliberately include the awkward cases: missing content file, content
 predating a schema field, block missing a defaulted field, decorative empty alt.
 
 **`docs/`** is generated by `scripts/gen-agent-docs.mjs` from `SPEC.md` and

@@ -1,7 +1,7 @@
 # Working in this repository
 
 Notes for agents and humans arriving cold. For _using_ GreatCMS on a site, read
-[SPEC.md](./SPEC.md) instead — this file is about changing GreatCMS itself.
+[SPEC.md](./SPEC.md) instead: this file is about changing GreatCMS itself.
 
 ## What this project is
 
@@ -9,7 +9,7 @@ A Git-backed CMS whose product is a **file standard**, not an application. The
 studio and the packages are implementations of `SPEC.md`. When the two disagree,
 `SPEC.md` is right and the code is a bug.
 
-## Invariants — breaking one is a design change, not a fix
+## Invariants: breaking one is a design change, not a fix
 
 - **The studio never executes anything from a managed repository.** Not to build
   a preview, not to read a schema, not a Git hook. Schemas are data; previews
@@ -27,8 +27,10 @@ studio and the packages are implementations of `SPEC.md`. When the two disagree,
   that already submits correctly: if the bundle fails, editing still works. Only
   screens with a richtext field load it; the rest still ship zero JavaScript,
   and tests assert both halves.
-- **Public sites ship zero JavaScript.** That one is not negotiable — it is the
-  product claim, and it is budgeted and tested.
+- **GreatCMS adds no JavaScript to a public site.** The reader runs at build
+  time and its dev integration only in development, so a built page carries
+  nothing of ours. A site may bring its own (`examples/studio-astro` does, for
+  motion); this project's own site ships none, and that is budgeted and tested.
 - **Client dependencies must be genuinely open.** ProseMirror over wrappers with
   a commercial tier: convenient abstractions are exactly what migrate behind a
   licence later.
@@ -38,7 +40,7 @@ studio and the packages are implementations of `SPEC.md`. When the two disagree,
 ## Layout
 
 ```
-SPEC.md                 the standard — the actual product
+SPEC.md                 the standard: the actual product
 apps/studio/            the CMS: auth, editor, publishing, inbox
 apps/docs/              the website: landing page and docs, managed by GreatCMS
 packages/spec/          schema parsing, validation, resolution rules
@@ -46,22 +48,24 @@ packages/reader/        build-time reader for JS frameworks
 packages/cli/           greatcms init / setup / add / types / check / doctor
 packages/conformance/   fixtures + verifier proving a reader is correct
 packages/deploy/        greatcms-deploy: builds each commit, swaps the live folder
-examples/               a real Astro site, and a Python reader
+examples/               five sites (minimal Astro, the Paraline showcase with its self-hosting
+                        stack, a bakery on Next.js, a journal on SvelteKit, a changelog on Nuxt)
+                        and a Python reader
 skills/greatcms/        the installable skill that teaches an agent to use GreatCMS on a site
-docs/                   generated agent surface — never edit by hand
+docs/                   generated agent surface: never edit by hand
 ```
 
 ## Current focus
 
 A site is a folder on this machine, and that is the only kind. The hosted
-path — a GitHub backend, draft branches, pull-request publishing, model-written
-PR titles — was built and then removed: it doubled every screen and every test
+path, a GitHub backend, draft branches, pull-request publishing, model-written
+PR titles, was built and then removed: it doubled every screen and every test
 for a workflow that is not the one being got right. Do not reintroduce a second
 backend without a reason that survives the cost of the branching it brings back.
 The submissions runtime is kept for work in progress.
 
 `greatcms init` scaffolds JavaScript frameworks only. The _standard_ remains
-language-agnostic and the conformance kit still proves it with a Python reader —
+language-agnostic and the conformance kit still proves it with a Python reader:
 that distinction is deliberate, so do not soften either half.
 
 ## Working here
@@ -69,7 +73,7 @@ that distinction is deliberate, so do not soften either half.
 ```sh
 pnpm install
 pnpm check      # lint, format, generated docs, typecheck, tests
-pnpm dev        # studio + the Astro example, rebuilding on change (needs STUDIO_PASSWORD)
+pnpm dev        # studio + every example site, connected; sign in with greatcms-dev
 pnpm greatcms   # the CLI from this checkout, e.g. `pnpm greatcms check`
 ```
 
@@ -77,7 +81,7 @@ pnpm greatcms   # the CLI from this checkout, e.g. `pnpm greatcms check`
 - The browser tests (`apps/studio/tests/browser.test.ts`,
   `examples/site-astro/tests/contrast.test.ts`) need Chromium:
   `pnpm --filter @greatcms/studio exec playwright install chromium`. Without one
-  they skip rather than fail, so a fresh checkout still runs everything else —
+  they skip rather than fail, so a fresh checkout still runs everything else:
   CI installs it, which is what stops that skip from hiding a regression.
 - Tooling is Rust where a Rust tool exists: **oxlint**, **oxfmt**, **tsdown**,
   **Vite 8 (Rolldown)**. Do not reintroduce ESLint, Prettier, or plain Rollup.
@@ -86,8 +90,8 @@ pnpm greatcms   # the CLI from this checkout, e.g. `pnpm greatcms check`
 - Changing the standard means bumping `version:` and documenting a migration.
   New optional keys and field types are additive within version 1; anything that
   changes how existing content _resolves_ is not.
-- Keep comments short. One line where the code cannot say it itself — a
-  constraint, a trap, a decision that looks wrong until you know why — and
+- Keep comments short. One line where the code cannot say it itself, a
+  constraint, a trap, a decision that looks wrong until you know why, and
   nothing where it can. Prefer a test that would have caught the bug over a
   comment explaining it.
   Several of the tests here exist because they caught a real one: branch names

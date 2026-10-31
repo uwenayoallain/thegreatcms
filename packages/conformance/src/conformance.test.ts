@@ -26,6 +26,7 @@ describe("the fixture site", () => {
     expect(ids).toContain("home.decor"); // decorative image, empty alt
     expect(ids).toContain("home.seo"); // region default over a group
     expect(ids).toContain("home.cards"); // defaulted blocks, no content file
+    expect(ids).toContain("home.featured"); // references, one never filled in
   });
 });
 
@@ -48,6 +49,13 @@ describe("the reference reader", () => {
       message: "We ship on every commit.",
       badge: "New",
       dismissible: true,
+    });
+  });
+
+  it("keeps a reference as the slug stored, and resolves an unfilled multiple one to []", () => {
+    expect(readFixtureRegion("home.featured")).toMatchObject({
+      post: "publish-from-anywhere",
+      guides: [],
     });
   });
 
@@ -128,6 +136,7 @@ describe("collections", () => {
       "content",
       "date",
       "draft",
+      "related",
       "tags",
       "title",
     ]);

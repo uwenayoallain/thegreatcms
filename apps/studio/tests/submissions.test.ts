@@ -45,7 +45,7 @@ const signedIn = {
 function submit(fields: Record<string, string>, headers: Record<string, string> = {}) {
   return app.request("/f/site-1/contact", {
     method: "POST",
-    // A real browser posting from another origin — exactly the case the studio must.
+    // A real browser posting from another origin: exactly the case the studio must.
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       origin: "https://example.com",
@@ -66,7 +66,22 @@ describe("receiving a submission", () => {
     expect(stored?.form).toBe("contact");
   });
 
-  it("needs no session — visitors are not signed in", async () => {
+  it("keeps every ticked box of a checkbox group, not just the last", async () => {
+    const body = new URLSearchParams([
+      ["name", "Ada"],
+      ["kind", "Brand"],
+      ["kind", "Motion system"],
+    ]);
+    await app.request("/f/site-1/contact", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+
+    expect(store.listSubmissions()[0]?.data).toEqual({ name: "Ada", kind: "Brand, Motion system" });
+  });
+
+  it("needs no session: visitors are not signed in", async () => {
     expect((await submit({ message: "Anonymous" })).status).toBe(200);
   });
 

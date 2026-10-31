@@ -7,7 +7,7 @@
 version: 1
 
 site:
-  name: Example — Astro
+  name: Example Astro site
 
 blocks:
   feature:
@@ -42,7 +42,7 @@ regions:
     allow: [feature, quote]
     max: 6
 
-  # Deliberately has no content file — proves the site builds from schema
+  # Deliberately has no content file: proves the site builds from schema
   # defaults before the CMS has ever touched it.
   about.intro:
     label: About intro

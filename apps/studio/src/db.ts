@@ -15,10 +15,15 @@ export interface Site {
   devUrl: string;
   /** Push each publish to the branch's upstream, so it deploys without anyone touching Git. */
   pushAfterPublish: boolean;
+  /** The builder's folder (`DEPLOY_ROOT`), so the studio can show what is live and roll back. */
+  deployRoot: string;
   createdAt: string;
 }
 
-export type NewSite = Omit<Site, "createdAt" | "pushAfterPublish"> & { pushAfterPublish?: boolean };
+export type NewSite = Omit<Site, "createdAt" | "pushAfterPublish" | "deployRoot"> & {
+  pushAfterPublish?: boolean;
+  deployRoot?: string;
+};
 
 const MIGRATIONS: Array<{ name: string; sql: string }> = [
   {
@@ -147,6 +152,51 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     name: "009-push-after-publish",
     sql: `ALTER TABLE sites ADD COLUMN push_after_publish INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    // People who edit, each signing in as themselves so a commit says who made it.
+    name: "009-editors",
+    sql: `
+      CREATE TABLE editors (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT NOT NULL,
+        email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE presence (
+        site_id TEXT NOT NULL,
+        path    TEXT NOT NULL,
+        actor   TEXT NOT NULL,
+        name    TEXT NOT NULL,
+        seen_at INTEGER NOT NULL,
+        PRIMARY KEY (site_id, path, actor)
+      );
+    `,
+  },
+  {
+    // Publishes waiting for their moment, kept here because the editor may close the tab.
+    name: "010-scheduled",
+    sql: `
+      CREATE TABLE scheduled (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+        target     TEXT NOT NULL,
+        label      TEXT NOT NULL,
+        form       TEXT NOT NULL,
+        due_at     INTEGER NOT NULL,
+        actor      TEXT NOT NULL,
+        author     TEXT,
+        status     TEXT NOT NULL DEFAULT 'waiting',
+        detail     TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX scheduled_due ON scheduled (status, due_at);
+    `,
+  },
+  {
+    name: "011-deploy-root",
+    sql: "ALTER TABLE sites ADD COLUMN deploy_root TEXT NOT NULL DEFAULT '';",
+  },
 ];
 
 export interface Submission {
@@ -158,6 +208,29 @@ export interface Submission {
   spamReasons: string[];
   readAt: string | null;
   createdAt: string;
+}
+
+export interface Editor {
+  id: number;
+  name: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+}
+
+export interface Scheduled {
+  id: number;
+  siteId: string;
+  /** `regions/<id>` or `collections/<name>/<slug>`: the editor path the form posts to. */
+  target: string;
+  label: string;
+  /** The form exactly as submitted, replayed as a publish when it falls due. */
+  form: Array<[string, string]>;
+  dueAt: number;
+  actor: string;
+  author: { name: string; email: string } | null;
+  status: "waiting" | "running" | "published" | "failed" | "cancelled";
+  detail: string | null;
 }
 
 export class Store {
@@ -206,9 +279,16 @@ export class Store {
   addSite(site: NewSite): Site {
     this.db
       .prepare(
-        "INSERT INTO sites (id, name, path, dev_url, push_after_publish) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO sites (id, name, path, dev_url, push_after_publish, deploy_root) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(site.id, site.name, site.path, site.devUrl ?? "", site.pushAfterPublish ? 1 : 0);
+      .run(
+        site.id,
+        site.name,
+        site.path,
+        site.devUrl ?? "",
+        site.pushAfterPublish ? 1 : 0,
+        site.deployRoot ?? "",
+      );
     const created = this.getSite(site.id);
     if (!created) throw new Error(`Site "${site.id}" vanished immediately after insert.`);
     return created;
@@ -217,11 +297,19 @@ export class Store {
   /** Everything but the folder can change; the folder is what the site is. */
   updateSite(
     id: string,
-    changes: { name: string; devUrl: string; pushAfterPublish: boolean },
+    changes: { name: string; devUrl: string; pushAfterPublish: boolean; deployRoot?: string },
   ): void {
     this.db
-      .prepare("UPDATE sites SET name = ?, dev_url = ?, push_after_publish = ? WHERE id = ?")
-      .run(changes.name, changes.devUrl, changes.pushAfterPublish ? 1 : 0, id);
+      .prepare(
+        "UPDATE sites SET name = ?, dev_url = ?, push_after_publish = ?, deploy_root = COALESCE(?, deploy_root) WHERE id = ?",
+      )
+      .run(
+        changes.name,
+        changes.devUrl,
+        changes.pushAfterPublish ? 1 : 0,
+        changes.deployRoot ?? null,
+        id,
+      );
   }
 
   removeSite(id: string): void {
@@ -347,14 +435,6 @@ export class Store {
       .run(entry.siteId, entry.regionId, entry.commitSha, entry.commitUrl, entry.actor ?? null);
   }
 
-  recentPublishes(siteId: string, limit = 10): Publish[] {
-    return this.db
-      .prepare(
-        "SELECT region_id, commit_sha, commit_url, actor, created_at FROM publishes WHERE site_id = ? ORDER BY id DESC LIMIT ?",
-      )
-      .all(siteId, limit) as unknown as Publish[];
-  }
-
   addSubmission(entry: {
     siteId: string;
     form: string;
@@ -376,7 +456,7 @@ export class Store {
     return Number(result.lastInsertRowid);
   }
 
-  /** Submissions across every site, newest first — the unified inbox. */
+  /** Submissions across every site, newest first: the unified inbox. */
   listSubmissions(
     options: { siteId?: string; includeSpam?: boolean; limit?: number } = {},
   ): Submission[] {
@@ -421,17 +501,140 @@ export class Store {
     this.db.prepare("DELETE FROM submissions WHERE id = ?").run(id);
   }
 
+  listEditors(): Editor[] {
+    return (
+      this.db
+        .prepare("SELECT * FROM editors ORDER BY name COLLATE NOCASE")
+        .all() as unknown as RawEditor[]
+    ).map(toEditor);
+  }
+
+  getEditor(id: number): Editor | null {
+    const row = this.db.prepare("SELECT * FROM editors WHERE id = ?").get(id) as unknown as
+      | RawEditor
+      | undefined;
+    return row ? toEditor(row) : null;
+  }
+
+  findEditor(email: string): Editor | null {
+    const row = this.db.prepare("SELECT * FROM editors WHERE email = ?").get(email.trim()) as
+      | RawEditor
+      | undefined;
+    return row ? toEditor(row) : null;
+  }
+
+  addEditor(editor: { name: string; email: string; passwordHash: string }): Editor {
+    const result = this.db
+      .prepare("INSERT INTO editors (name, email, password_hash) VALUES (?, ?, ?)")
+      .run(editor.name.trim(), editor.email.trim(), editor.passwordHash);
+    return this.getEditor(Number(result.lastInsertRowid)) as Editor;
+  }
+
+  setEditorPassword(id: number, passwordHash: string): void {
+    this.db.prepare("UPDATE editors SET password_hash = ? WHERE id = ?").run(passwordHash, id);
+  }
+
+  removeEditor(id: number): void {
+    this.db.prepare("DELETE FROM editors WHERE id = ?").run(id);
+  }
+
+  /** Marks `actor` as having this content open, and returns who else did recently. */
+  presence(
+    entry: { siteId: string; path: string; actor: string; name: string },
+    withinMs = 10 * 60_000,
+    now = Date.now(),
+  ): Array<{ name: string; seenAt: number }> {
+    this.db
+      .prepare(
+        "INSERT INTO presence (site_id, path, actor, name, seen_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (site_id, path, actor) DO UPDATE SET name = excluded.name, seen_at = excluded.seen_at",
+      )
+      .run(entry.siteId, entry.path, entry.actor, entry.name, now);
+    this.db.prepare("DELETE FROM presence WHERE seen_at < ?").run(now - withinMs);
+    return (
+      this.db
+        .prepare(
+          "SELECT name, seen_at AS seenAt FROM presence WHERE site_id = ? AND path = ? AND actor != ? ORDER BY seen_at DESC",
+        )
+        .all(entry.siteId, entry.path, entry.actor) as unknown as Array<{
+        name: string;
+        seenAt: number;
+      }>
+    ).map((row) => ({ name: row.name, seenAt: Number(row.seenAt) }));
+  }
+
+  schedule(entry: Omit<Scheduled, "id" | "status" | "detail">): Scheduled {
+    const result = this.db
+      .prepare(
+        "INSERT INTO scheduled (site_id, target, label, form, due_at, actor, author) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        entry.siteId,
+        entry.target,
+        entry.label,
+        JSON.stringify(entry.form),
+        entry.dueAt,
+        entry.actor,
+        entry.author ? JSON.stringify(entry.author) : null,
+      );
+    return this.getScheduled(Number(result.lastInsertRowid)) as Scheduled;
+  }
+
+  getScheduled(id: number): Scheduled | null {
+    const row = this.db.prepare("SELECT * FROM scheduled WHERE id = ?").get(id) as unknown as
+      | RawScheduled
+      | undefined;
+    return row ? toScheduled(row) : null;
+  }
+
+  listScheduled(siteId: string): Scheduled[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT * FROM scheduled WHERE site_id = ? AND (status = 'waiting' OR created_at > datetime('now', '-7 days')) ORDER BY due_at",
+        )
+        .all(siteId) as unknown as RawScheduled[]
+    ).map(toScheduled);
+  }
+
+  dueScheduled(now = Date.now()): Scheduled[] {
+    return (
+      this.db
+        .prepare("SELECT * FROM scheduled WHERE status = 'waiting' AND due_at <= ? ORDER BY due_at")
+        .all(now) as unknown as RawScheduled[]
+    ).map(toScheduled);
+  }
+
+  /** Takes a due publish for running; false when another run already took it. */
+  claimScheduled(id: number): boolean {
+    return (
+      Number(
+        this.db
+          .prepare("UPDATE scheduled SET status = 'running' WHERE id = ? AND status = 'waiting'")
+          .run(id).changes,
+      ) === 1
+    );
+  }
+
+  settleScheduled(id: number, status: Scheduled["status"], detail?: string): void {
+    this.db
+      .prepare(
+        "UPDATE scheduled SET status = ?, detail = ? WHERE id = ? AND status IN ('waiting', 'running')",
+      )
+      .run(status, detail ?? null, id);
+  }
+
+  /** Submissions older than `days` are deleted: an inbox is not an archive. */
+  pruneSubmissions(days: number): number {
+    return Number(
+      this.db
+        .prepare("DELETE FROM submissions WHERE created_at < datetime('now', ?)")
+        .run(`-${Math.floor(days)} days`).changes,
+    );
+  }
+
   close(): void {
     this.db.close();
   }
-}
-
-export interface Publish {
-  region_id: string;
-  commit_sha: string;
-  commit_url: string;
-  actor: string | null;
-  created_at: string;
 }
 
 interface RawSubmission {
@@ -473,6 +676,7 @@ interface RawSite {
   path: string;
   dev_url: string;
   push_after_publish: number;
+  deploy_root: string | null;
   created_at: string;
 }
 
@@ -483,6 +687,7 @@ function toSite(row: RawSite): Site {
     path: row.path ?? "",
     devUrl: row.dev_url ?? "",
     pushAfterPublish: row.push_after_publish === 1,
+    deployRoot: row.deploy_root ?? "",
     createdAt: row.created_at,
   };
 }
@@ -502,5 +707,51 @@ function toUploadResult(row: PendingFileRow): UploadResult {
     ...(row.width === null ? {} : { width: row.width }),
     ...(row.height === null ? {} : { height: row.height }),
     base64: Buffer.from(row.content).toString("base64"),
+  };
+}
+
+interface RawEditor {
+  id: number;
+  name: string;
+  email: string;
+  password_hash: string;
+  created_at: string;
+}
+
+function toEditor(row: RawEditor): Editor {
+  return {
+    id: Number(row.id),
+    name: row.name,
+    email: row.email,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+  };
+}
+
+interface RawScheduled {
+  id: number;
+  site_id: string;
+  target: string;
+  label: string;
+  form: string;
+  due_at: number;
+  actor: string;
+  author: string | null;
+  status: Scheduled["status"];
+  detail: string | null;
+}
+
+function toScheduled(row: RawScheduled): Scheduled {
+  return {
+    id: Number(row.id),
+    siteId: row.site_id,
+    target: row.target,
+    label: row.label,
+    form: JSON.parse(row.form),
+    dueAt: Number(row.due_at),
+    actor: row.actor,
+    author: row.author ? JSON.parse(row.author) : null,
+    status: row.status,
+    detail: row.detail,
   };
 }

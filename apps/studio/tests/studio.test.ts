@@ -9,6 +9,7 @@ import axe from "axe-core";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
+import { compact } from "../src/views/layout.js";
 import { Store } from "../src/db.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { makeSite, PASSWORD, SECRET, signedIn, type Fixture } from "./site.js";
@@ -32,7 +33,7 @@ beforeEach(() => {
 
 afterEach(() => site.cleanup());
 
-/** Commits made since the fixture was set up — a publish is exactly one. */
+/** Commits made since the fixture was set up: a publish is exactly one. */
 function commits(): string[] {
   const log = execFileSync("git", ["log", "--format=%s"], { cwd: site.root, encoding: "utf8" });
   return log
@@ -75,7 +76,7 @@ describe("access", () => {
   it("refuses a wrong password without hinting why", async () => {
     const response = await post("/sign-in", { password: "guess" }, {});
     expect(response.status).toBe(401);
-    expect(await response.text()).toContain("That password did not work");
+    expect(await response.text()).toContain("That did not work");
   });
 
   it("issues an HttpOnly session cookie on success", async () => {
@@ -140,6 +141,16 @@ describe("editing a region", () => {
     expect(listed.some((f: { block: { id: string } }) => f.block.id === "region:about.intro")).toBe(
       false,
     );
+  });
+
+  it("sends pages without the templates' indentation, and leaves typed text alone", async () => {
+    await post("/sites/site-1/regions/home.hero", { headSha: head(), "f[heading]": "Two  spaces" });
+    const page = await (await get("/sites/site-1/regions/home.hero")).text();
+    expect(page).not.toMatch(/\n[ \t]{2,}</);
+    expect(page).toContain("Two  spaces");
+    // Whitespace typed into a textarea or shown in a pre is content, and survives exactly.
+    const kept = "<textarea>\n    indented\n\n\n  lines</textarea><pre>  a\n    b</pre>";
+    expect(compact(`<div>\n    <p>x</p>\n  </div>${kept}`)).toBe(`<div>\n<p>x</p>\n</div>${kept}`);
   });
 
   it("shows schema defaults for a region nobody has edited", async () => {
@@ -333,7 +344,7 @@ describe("block lists", () => {
 
 describe("connecting a site", () => {
   it("requires a deliberate confirmation before disconnecting", async () => {
-    const response = await get("/sites/site-1");
+    const response = await get("/sites/site-1/settings");
     const { document } = new JSDOM(await response.text()).window;
     const disclosure = document.querySelector<HTMLDetailsElement>(".danger-confirm");
 
@@ -378,6 +389,24 @@ describe("forms on a site", () => {
 
     expect(document.querySelector('[aria-labelledby="forms"] pre')?.textContent).toContain(
       'action="http://localhost/f/site-1/contact"',
+    );
+  });
+
+  it("uses the studio's public address behind a tunnel that sends no forwarded host", async () => {
+    const tunnelled = createApp({
+      store: site.store,
+      password: PASSWORD,
+      secret: SECRET,
+      trustProxy: "cloudflare",
+      publicUrl: "https://studio.example.com",
+    });
+    const response = await tunnelled.request("http://studio.example.com/sites/site-1", {
+      headers: { ...signedIn, "x-forwarded-proto": "https" },
+    });
+    const { document } = new JSDOM(await response.text()).window;
+
+    expect(document.querySelector('[aria-labelledby="forms"] pre')?.textContent).toContain(
+      'action="https://studio.example.com/f/site-1/contact"',
     );
   });
 });

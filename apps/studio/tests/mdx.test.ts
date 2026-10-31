@@ -3,7 +3,8 @@
 import { entryExtension, hasFrontmatter, parseSchema } from "@greatcms/spec";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { get, makeSite, post, type Fixture } from "./site.js";
+import { hashPassword } from "../src/auth.js";
+import { get, makeSite, post, signedIn, type Fixture } from "./site.js";
 
 const SCHEMA = `version: 1
 regions:
@@ -148,7 +149,7 @@ describe("the editor for an MDX body", () => {
 });
 
 /**
- * Nested blocks — the PayloadCMS-shaped case: a managed section holding
+ * Nested blocks: the PayloadCMS-shaped case: a managed section holding
  * composed components rather than a flat list of fields.
  */
 describe("a block that contains blocks", () => {
@@ -315,4 +316,61 @@ describe("nested blocks in a collection entry", () => {
       expect(site.exists("content/pages/about.json")).toBe(false);
     },
   );
+});
+
+describe("an editor and an MDX body", () => {
+  /** An editor's session: signed in as a person, not as the owner. */
+  async function editor() {
+    site.store.addEditor({
+      name: "Ed",
+      email: "ed@example.com",
+      passwordHash: hashPassword("an editor's long password"),
+    });
+    const response = await site.app.request("/sign-in", {
+      method: "POST",
+      headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ email: "ed@example.com", password: "an editor's long password" }),
+    });
+    const cookie = response.headers
+      .getSetCookie()
+      .map((line) => line.split(";")[0] as string)
+      .find((line) => line.startsWith("greatcms_session="));
+    return { ...signedIn, cookie: cookie as string };
+  }
+
+  beforeEach(async () => {
+    site = makeSite({ schema: SCHEMA });
+    await post(site, "/sites/site-1/collections/guides/new", {
+      "f[title]": "Latency",
+      "f[content]": MDX_BODY,
+    });
+  });
+
+  it("cannot change the source, because MDX runs when the site builds", async () => {
+    const response = await post(
+      site,
+      "/sites/site-1/collections/guides/latency",
+      {
+        "f[title]": "Latency, revised",
+        "f[content]": "export const leak = process.env;\n\n<script>alert(1)</script>",
+      },
+      await editor(),
+    );
+
+    expect(response.status).toBe(200);
+    const file = site.read("src/content/guides/latency.mdx");
+    expect(file).toContain("title: Latency, revised");
+    expect(file).toContain('<Chart data={[1, 2, 3]} caption="p99 latency" />');
+    expect(file).not.toContain("process.env");
+  });
+
+  it("sees it read-only, and says why", async () => {
+    const body = await (
+      await get(site, "/sites/site-1/collections/guides/latency", await editor())
+    ).text();
+    const textarea = new JSDOM(body).window.document.querySelector("textarea.source");
+
+    expect(textarea?.hasAttribute("readonly")).toBe(true);
+    expect(body).toContain("owner can change it");
+  });
 });

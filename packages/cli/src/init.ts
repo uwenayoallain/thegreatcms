@@ -1,5 +1,6 @@
-/** `greatcms init` — scaffold a site's CMS configuration. */
+/** `greatcms init`: scaffold a site's CMS configuration. */
 
+import { ui } from "./ui.js";
 import { parseSchema, SPEC_VERSION } from "@greatcms/spec";
 import { quote } from "./add.js";
 import type { Framework } from "./detect.js";
@@ -16,7 +17,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "hero",
     label: "One managed region",
-    hint: "a hero section — the rest of the page stays code",
+    hint: "a hero section: the rest of the page stays code",
   },
   {
     id: "landing",
@@ -33,7 +34,7 @@ export const TEMPLATES: Template[] = [
     label: "Blog",
     hint: "a Markdown collection with a managed intro region",
   },
-  { id: "blank", label: "Blank", hint: "config only — you write the regions" },
+  { id: "blank", label: "Blank", hint: "config only: you write the regions" },
 ];
 
 export interface InitAnswers {
@@ -82,6 +83,8 @@ function renderAgentsNote(answers: InitAnswers): string {
 Some of this site's content is edited through GreatCMS and stored as files in
 this repository. The rules, in order of how often they are needed:
 
+- Before writing content, run \`npx greatcms describe\`: every field you may
+  write, its type and limits, and the file it lives in, in one outline.
 - \`.cms/schema.yaml\` says what is editable: regions (one JSON document each),
   blocks (reorderable sections) and collections (one file per entry). Change
   the content model there, never by hand-shaping JSON. Then run
@@ -196,7 +199,7 @@ regions:
     # Rendered until someone edits it, so the site is never blank.
     default:
       heading: Welcome
-      subtitle: Edit this in the studio — the rest of the page stays code.
+      subtitle: Edit this in the studio. The rest of the page stays code.
 `;
 
 const LANDING_BLOCKS = `
@@ -365,7 +368,7 @@ regions:
       locale: { type: text, default: en }
       shareImage: { type: image }
     default:
-      titleTemplate: ${quote(`%s — ${name}`)}
+      titleTemplate: ${quote(`%s · ${name}`)}
       defaultDescription: ${quote(`Learn more about ${name}.`)}
       locale: en
 
@@ -445,7 +448,7 @@ collections:
     label: Blog
     path: ${dir}
     # Markdown with frontmatter, which is what every static site generator
-    # already expects — no special pipeline needed.
+    # already expects: no special pipeline needed.
     format: markdown
     body: content
     slug: title
@@ -460,7 +463,8 @@ collections:
 
 /** Next steps, written so they can be followed without opening the docs. */
 export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
-  const lines = ["", "Created:", ...plan.files.map((file) => `  ${file.path}`), ""];
+  const u = ui();
+  const lines = ["", u.step("Created"), ...plan.files.map((file) => u.ok(file.path)), ""];
   const addSection =
     answers.template === "business"
       ? "greatcms add section testimonial --to home.sections --field quote:richtext! --field name:text!"
@@ -468,11 +472,11 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
 
   if (plan.firstRegion) {
     lines.push(
-      "Install the build-time reader:",
+      u.bold("Install the build-time reader:"),
       "",
       "  npm install --save-dev @greatcms/reader",
       "",
-      `Read the managed region in your ${answers.framework.label} templates:`,
+      u.bold(`Read the managed region in your ${answers.framework.label} templates:`),
       "",
       indent(answers.framework.snippet(plan.firstRegion, answers.regionsDir)),
       "",
@@ -481,7 +485,7 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
 
   if (answers.template === "business") {
     lines.push(
-      "The shared details, flexible sections, products, and pages use the same reader:",
+      u.bold("The shared details, flexible sections, products, and pages use the same reader:"),
       "",
       indent(
         [
@@ -503,7 +507,7 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
 
   if (["astro", "nuxt", "sveltekit"].includes(answers.framework.id)) {
     lines.push(
-      "Add the dev-time watcher, so editing content reloads your dev server:",
+      u.bold("Add the dev-time watcher, so editing content reloads your dev server:"),
       "",
       indent(
         [
@@ -521,12 +525,12 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
   }
 
   lines.push(
-    "Then:",
-    "  1. Commit .cms/ — the schema is part of your site, and reviewable in PRs.",
+    u.step("Next"),
+    "  1. Commit .cms/: the schema is part of your site, and reviewable in PRs.",
     "  2. Connect this folder in the studio, and give it your dev server's URL.",
     "  3. Edit, publish, and your existing deploy pipeline does the rest.",
     "",
-    "To manage another part of the page, do not hand-edit the schema:",
+    u.bold("To manage another part of the page, do not hand-edit the schema:"),
     "",
     indent(
       [
@@ -536,8 +540,8 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
       ].join("\n"),
     ),
     "",
-    "  greatcms check     confirm the content still matches the schema",
-    "  greatcms doctor    check this setup any time",
+    `  ${u.accent("greatcms check")}     confirm the content still matches the schema`,
+    `  ${u.accent("greatcms doctor")}    check this setup any time`,
     "",
   );
 

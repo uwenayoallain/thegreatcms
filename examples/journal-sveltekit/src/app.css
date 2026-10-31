@@ -1,0 +1,450 @@
+/* The Long Light: a reading face at every size, black ink, and one highlighter for links. */
+
+:root {
+  color-scheme: light dark;
+  --paper: #f5f5f2;
+  --ink: #161514;
+  --ink-soft: #5b5954;
+  --line: #dddcd6;
+  --mark: #ffe45c;
+  --serif: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --measure: 36rem;
+  --gap: clamp(1.25rem, 5vw, 3rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141413;
+    --ink: #ecebe6;
+    --ink-soft: #a9a7a0;
+    --line: #34332f;
+    --mark: #6b5a00;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.2rem/1.6 var(--serif);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.6rem, 1.6rem + 4.4vw, 5rem);
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  background: linear-gradient(var(--mark), var(--mark)) 0 100% / 100% 0.3em no-repeat;
+  transition: background-size 0.2s ease;
+}
+
+a:hover {
+  background-size: 100% 100%;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  padding: 0.5rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.75rem var(--gap);
+}
+
+.masthead .title {
+  font-size: 1.5rem;
+  font-style: italic;
+  font-weight: 500;
+  background: none;
+}
+
+.masthead nav {
+  display: flex;
+  gap: 1.5rem;
+  font: 500 0.95rem var(--sans);
+}
+
+.masthead nav a {
+  background-size: 100% 0;
+}
+
+.masthead nav a:hover,
+.masthead nav a[aria-current] {
+  background-size: 100% 0.3em;
+}
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0 var(--gap) 5rem;
+}
+
+.kicker,
+.meta,
+.section-label {
+  font: 600 0.78rem/1.4 var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 1.25rem;
+}
+
+.intro {
+  padding: clamp(3rem, 10vw, 7rem) 0 clamp(2.5rem, 6vw, 4.5rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.intro h1 {
+  max-width: 16ch;
+}
+
+.lede {
+  max-width: var(--measure);
+  margin-top: 1.75rem;
+  font-size: 1.35rem;
+  color: var(--ink-soft);
+}
+
+.lede p {
+  margin: 0;
+}
+
+/* The latest essay leads, set large beside its own first lines; the rest are an index. */
+.lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 2rem clamp(2rem, 6vw, 5rem);
+  align-items: center;
+  padding: clamp(2.5rem, 7vw, 4.5rem) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 52rem) {
+  .lead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.opening {
+  position: relative;
+  margin: 0;
+  padding: 0.5rem 0 0.5rem 1.75rem;
+  border-left: 3px solid var(--mark);
+}
+
+.opening p {
+  margin: 0;
+  font-size: clamp(1.25rem, 1.05rem + 0.6vw, 1.5rem);
+  line-height: 1.55;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lead h2 {
+  font-size: clamp(2.1rem, 1.4rem + 3vw, 3.6rem);
+  max-width: 20ch;
+}
+
+.lead h2 a {
+  background-size: 100% 0;
+}
+
+.lead h2 a:hover {
+  background-size: 100% 0.25em;
+}
+
+.dek {
+  max-width: var(--measure);
+  font-size: 1.35rem;
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 1.25rem 0 0;
+}
+
+.more {
+  display: inline-block;
+  margin-top: 1.75rem;
+  font: 600 0.95rem var(--sans);
+}
+
+.section-label {
+  margin-top: 3.5rem;
+}
+
+.archive {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archive li {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 1.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.archive time {
+  font: 500 0.9rem/2 var(--sans);
+  color: var(--ink-soft);
+}
+
+.archive h3 {
+  font-size: 1.65rem;
+}
+
+.archive h3 a {
+  background-size: 100% 0;
+}
+
+.archive h3 a:hover {
+  background-size: 100% 0.25em;
+}
+
+.archive p {
+  margin: 0.5rem 0 0;
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+
+.archive .facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin-top: 0.85rem;
+  font: 500 0.8rem/1.4 var(--sans);
+}
+
+.archive .facts .tag {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+/* What a reader selects is marked the way they would mark a page. */
+::selection {
+  background: var(--mark);
+  color: var(--ink);
+}
+
+@media (max-width: 40rem) {
+  .archive li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+}
+
+/* An essay: one measure, generous leading, headings that do not shout. */
+.essay {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding-top: clamp(3rem, 8vw, 6rem);
+}
+
+.essay header {
+  margin-bottom: 2.5rem;
+}
+
+.essay h1 {
+  font-size: clamp(2.4rem, 1.6rem + 3.4vw, 4rem);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font: 500 0.82rem var(--sans);
+}
+
+.tags li {
+  padding: 0.15rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+}
+
+.prose {
+  font-size: 1.25rem;
+  line-height: 1.7;
+}
+
+.prose h2 {
+  font-size: 1.6rem;
+  margin: 2.5rem 0 0.75rem;
+}
+
+.prose p:first-child::first-letter {
+  float: left;
+  font-size: 4.2em;
+  line-height: 0.8;
+  margin: 0.08em 0.1em 0 0;
+}
+
+.elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+  font: 600 0.95rem var(--sans);
+}
+
+.pager {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+  max-width: var(--measure);
+  margin: 4rem auto 0;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+
+.pager a {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 1.25rem;
+  background: none;
+}
+
+.pager a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--mark);
+  text-decoration-thickness: 0.3em;
+  text-underline-offset: -0.1em;
+  text-decoration-skip-ink: none;
+}
+
+.pager .older {
+  text-align: right;
+}
+
+.pager span {
+  font: 600 0.75rem var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  padding: clamp(3rem, 8vw, 5rem) 0 2.5rem;
+}
+
+/* The same column as the page above: the padding sits inside the width, as it does on main. */
+.letter,
+.colophon {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding-inline: var(--gap);
+}
+
+.letter h2 {
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.8rem);
+}
+
+.letter > p {
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+
+.letter label {
+  display: block;
+  margin: 1.5rem 0 0.5rem;
+  font: 600 0.9rem var(--sans);
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 30rem;
+}
+
+.inline input {
+  flex: 1 1 14rem;
+  min-height: 3rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--ink-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: 1rem var(--sans);
+}
+
+.inline button {
+  min-height: 3rem;
+  padding: 0.6rem 1.3rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 600 1rem var(--sans);
+  cursor: pointer;
+}
+
+.colophon {
+  margin-top: 4rem;
+  font: 0.85rem/1.5 var(--sans);
+  color: var(--ink-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a {
+    transition: none;
+  }
+}

@@ -169,6 +169,10 @@ describe("the docs", () => {
     const items = [...long.querySelectorAll(".on-this-page a")].map((a) => a.getAttribute("href"));
     expect(items).toContain("#greatcms-check");
     for (const href of items) expect(long.querySelector(href!)).not.toBeNull();
+    // The rail beside the article on wide screens lists the same headings as the copy inside it.
+    const hrefs = (selector: string) =>
+      [...long.querySelectorAll(`${selector} a`)].map((a) => a.getAttribute("href"));
+    expect(hrefs(".on-this-page.rail")).toEqual(hrefs(".prose .on-this-page"));
 
     expect(dom("docs/accessibility/index.html").querySelector(".on-this-page")).toBeNull();
   });
@@ -285,6 +289,14 @@ describe("weight", () => {
     const files = walk(DIST).filter((file) => /\.(html|css)$/.test(file));
     const total = kilobytes(files);
     expect(total, `${total.toFixed(1)} KB of HTML and CSS`).toBeLessThan(260);
+  });
+
+  it("keeps scroll timelines where browsers read them, not folded into the shorthand", () => {
+    const css = walk(DIST)
+      .filter((file) => file.endsWith(".css"))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("");
+    expect(css).not.toMatch(/animation:[^;}]*(view\(|scroll\()/);
   });
 
   it("ships one small stylesheet and no scripts", () => {

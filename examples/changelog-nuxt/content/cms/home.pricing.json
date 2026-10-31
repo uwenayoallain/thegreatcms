@@ -1,0 +1,29 @@
+{
+  "heading": "One price, no seat maths",
+  "plans": [
+    {
+      "name": "Personal",
+      "price": "$0",
+      "period": "for one calendar",
+      "features": ["Focus blocks", "One booking link", "Web and phone"]
+    },
+    {
+      "name": "Pro",
+      "price": "$8",
+      "period": "a month",
+      "features": [
+        "Every calendar you own",
+        "Unlimited booking links",
+        "Rolls unfinished work forward",
+        "Priority support"
+      ],
+      "featured": true
+    },
+    {
+      "name": "Team",
+      "price": "$6",
+      "period": "a person, a month",
+      "features": ["Everything in Pro", "Shared focus hours", "Team booking pages"]
+    }
+  ]
+}

@@ -1,6 +1,30 @@
-/** Field definitions — the vocabulary of `.cms/schema.yaml`. */
+/** Field definitions: the vocabulary of `.cms/schema.yaml`. */
 
-import { z } from "zod";
+import {
+  type Parser,
+  type Problem,
+  type Shape,
+  INVALID,
+  anything,
+  boolean,
+  count,
+  describe,
+  fail,
+  isRecord,
+  keyPath,
+  list,
+  mapping,
+  number,
+  object,
+  oneOf,
+  optional,
+  positiveCount,
+  readShape,
+  record,
+  required,
+  string,
+  withDefault,
+} from "./shape.js";
 
 /** Show a field only while a sibling holds a value: `when: { field: style, equals: carousel }`. */
 export interface FieldCondition {
@@ -9,21 +33,35 @@ export interface FieldCondition {
   in?: string[];
 }
 
-const condition = z
-  .object({
-    field: z.string().min(1),
-    equals: z.union([z.string(), z.number(), z.boolean()]).optional(),
-    in: z.array(z.string()).optional(),
-  })
-  .refine((c) => c.equals !== undefined || c.in !== undefined, {
-    message: "`when` needs `equals` or `in`",
-  });
+const conditionShape = object({
+  field: required(string({ nonEmpty: true }), "Name the sibling field, e.g. `field: style`."),
+  equals: optional((value, at, problems) =>
+    typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+      ? value
+      : fail(problems, at, `Expected text, a number or true/false, found ${describe(value)}.`),
+  ),
+  in: optional(list(string())),
+});
 
-const common = {
-  label: z.string().optional(),
-  description: z.string().optional(),
-  required: z.boolean().optional(),
-  when: condition.optional(),
+const condition: Parser<FieldCondition> = (value, at, problems) => {
+  const parsed = conditionShape(value, at, problems);
+  if (parsed === INVALID) return INVALID;
+  if (parsed.equals === undefined && parsed.in === undefined) {
+    return fail(
+      problems,
+      at,
+      "`when` needs `equals` or `in`.",
+      "Write e.g. `when: { field: style, equals: carousel }` or `when: { field: style, in: [a, b] }`.",
+    );
+  }
+  return parsed as unknown as FieldCondition;
+};
+
+const common: Shape = {
+  label: optional(string()),
+  description: optional(string()),
+  required: optional(boolean),
+  when: optional(condition),
 };
 
 /** Whether a conditional field applies, given the values beside it. */
@@ -38,13 +76,25 @@ export function conditionMet(def: { when?: FieldCondition }, siblings: unknown):
   return value === when.equals || String(value ?? "") === String(when.equals);
 }
 
-export const selectOption = z.union([
-  z.string(),
-  z.object({ value: z.string(), label: z.string().optional() }),
-]);
+export type SelectOption = string | { value: string; label?: string };
 
-/** Accessibility is structural here, not advisory: `alt` defaults to required, and the only way. */
-const altPolicy = z.enum(["required", "decorative-allowed"]).default("required");
+const optionShape = object({
+  value: required(string(), "Give the option a `value`, e.g. `{ value: navy, label: Navy }`."),
+  label: optional(string()),
+});
+
+/** `a`, or `{ value: a, label: A }`. */
+export const selectOption: Parser<SelectOption> = (value, at, problems) =>
+  typeof value === "string"
+    ? value
+    : isRecord(value)
+      ? (optionShape(value, at, problems) as SelectOption | typeof INVALID)
+      : fail(
+          problems,
+          at,
+          `Expected an option, found ${describe(value)}.`,
+          "Write an option as `a` or as `{ value: a, label: A }`.",
+        );
 
 export type FieldDef =
   | {
@@ -94,7 +144,7 @@ export type FieldDef =
       description?: string;
       required?: boolean;
       when?: FieldCondition;
-      options: Array<string | { value: string; label?: string }>;
+      options: SelectOption[];
       multiple?: boolean;
       default?: string | string[];
     }
@@ -135,6 +185,16 @@ export type FieldDef =
       default?: FileValue;
     }
   | {
+      /** Entries of a collection, by slug. */
+      type: "reference";
+      label?: string;
+      description?: string;
+      required?: boolean;
+      when?: FieldCondition;
+      collection: string;
+      multiple?: boolean;
+    }
+  | {
       type: "list";
       label?: string;
       description?: string;
@@ -147,8 +207,8 @@ export type FieldDef =
   | {
       /**
        * A nested, reorderable list of blocks. This is what lets a managed
-       * section hold real composed components — a grid of cards, a tabbed
-       * panel — rather than only flat fields.
+       * section hold real composed components, a grid of cards, a tabbed
+       * panel, rather than only flat fields.
        */
       type: "blocks";
       label?: string;
@@ -182,6 +242,7 @@ export const FIELD_TYPES: readonly FieldType[] = [
   "link",
   "image",
   "file",
+  "reference",
   "list",
   "group",
   "blocks",
@@ -214,105 +275,150 @@ export interface FileValue {
   size?: number;
 }
 
-export const FieldDefSchema: z.ZodType<FieldDef> = z.lazy(() =>
-  z.discriminatedUnion("type", [
-    z.object({
-      ...common,
-      type: z.literal("text"),
-      min: z.number().int().nonnegative().optional(),
-      max: z.number().int().positive().optional(),
-      pattern: z.string().optional(),
-      multiline: z.boolean().optional(),
-      default: z.string().optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("richtext"),
-      allow: z.array(z.string()).optional(),
-      default: z.object({ html: z.string(), _ast: z.unknown().optional() }).optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("number"),
-      min: z.number().optional(),
-      max: z.number().optional(),
-      step: z.number().positive().optional(),
-      integer: z.boolean().optional(),
-      default: z.number().optional(),
-    }),
-    z.object({ ...common, type: z.literal("boolean"), default: z.boolean().optional() }),
-    z.object({
-      ...common,
-      type: z.literal("select"),
-      options: z.array(selectOption).min(1),
-      multiple: z.boolean().optional(),
-      default: z.union([z.string(), z.array(z.string())]).optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("date"),
-      time: z.boolean().optional(),
-      default: z.string().optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("link"),
-      default: z
-        .object({
-          href: z.string(),
-          label: z.string().optional(),
-          external: z.boolean().optional(),
-        })
-        .optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("image"),
-      alt: altPolicy,
-      accept: z.array(z.string()).optional(),
-      default: z
-        .object({
-          src: z.string(),
-          alt: z.string(),
-          width: z.number().optional(),
-          height: z.number().optional(),
-        })
-        .optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("file"),
-      accept: z.array(z.string()).optional(),
-      default: z
-        .object({
-          src: z.string(),
-          name: z.string().optional(),
-          size: z.number().optional(),
-        })
-        .optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("list"),
-      of: FieldDefSchema,
-      min: z.number().int().nonnegative().optional(),
-      max: z.number().int().positive().optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("blocks"),
-      allow: z.array(z.string()).min(1),
-      min: z.number().int().nonnegative().optional(),
-      max: z.number().int().positive().optional(),
-      default: z.array(z.record(z.unknown())).optional(),
-    }),
-    z.object({
-      ...common,
-      type: z.literal("group"),
-      fields: z.record(FieldDefSchema),
-    }),
-  ]),
-) as z.ZodType<FieldDef>;
+const richTextValue = object({ html: required(string()), _ast: optional(anything) });
+const linkValue = object({
+  href: required(string()),
+  label: optional(string()),
+  external: optional(boolean),
+});
+const imageValue = object({
+  src: required(string()),
+  alt: required(string(), 'Give the default image `alt` text, or `alt: ""` if it is decorative.'),
+  width: optional(number()),
+  height: optional(number()),
+});
+const fileValue = object({
+  src: required(string()),
+  name: optional(string()),
+  size: optional(number()),
+});
+const strings = list(string());
+
+/** The keys each field type takes beyond `label`, `description`, `required` and `when`. */
+const FIELD_SHAPES: Record<FieldType, Shape> = {
+  text: {
+    min: optional(count),
+    max: optional(positiveCount),
+    pattern: optional(regexSource),
+    multiline: optional(boolean),
+    default: optional(string()),
+  },
+  richtext: { allow: optional(strings), default: optional(richTextValue) },
+  number: {
+    min: optional(number()),
+    max: optional(number()),
+    step: optional(number({ above: 0 })),
+    integer: optional(boolean),
+    default: optional(number()),
+  },
+  boolean: { default: optional(boolean) },
+  select: {
+    options: required(
+      list(selectOption, {
+        nonEmpty: true,
+        fix: "List at least one option, e.g. `[draft, live]`.",
+      }),
+      "List the choices, e.g. `options: [draft, live]`.",
+    ),
+    multiple: optional(boolean),
+    default: optional((value, at, problems) =>
+      Array.isArray(value) ? strings(value, at, problems) : string()(value, at, problems),
+    ),
+  },
+  date: { time: optional(boolean), default: optional(string()) },
+  link: { default: optional(linkValue) },
+  image: {
+    // Accessibility is structural here, not advisory: `alt` defaults to required.
+    alt: withDefault(oneOf(["required", "decorative-allowed"]), () => "required"),
+    accept: optional(strings),
+    default: optional(imageValue),
+  },
+  file: { accept: optional(strings), default: optional(fileValue) },
+  reference: {
+    collection: required(
+      string({ nonEmpty: true }),
+      "Name the collection its entries come from, e.g. `collection: blog`.",
+    ),
+    multiple: optional(boolean),
+  },
+  list: {
+    of: required(
+      (value, at, problems) => parseFieldDef(value, at, problems),
+      "Say what each item is, e.g. `of: { type: text }`.",
+    ),
+    min: optional(count),
+    max: optional(positiveCount),
+  },
+  blocks: {
+    allow: required(
+      list(string(), {
+        nonEmpty: true,
+        fix: "Name at least one block defined under `blocks:`.",
+      }),
+      "Name the blocks it may hold, e.g. `allow: [hero, text]`.",
+    ),
+    min: optional(count),
+    max: optional(positiveCount),
+    default: optional(list(mapping)),
+  },
+  group: {
+    fields: required(
+      (value, at, problems) => parseFields(value, at, problems),
+      "Give the group its own `fields:`.",
+    ),
+  },
+};
+
+function regexSource(value: unknown, at: string, problems: Problem[]): string | typeof INVALID {
+  const source = string()(value, at, problems);
+  if (source === INVALID) return INVALID;
+  try {
+    void new RegExp(source);
+    return source;
+  } catch (err) {
+    return fail(
+      problems,
+      at,
+      `Not a valid regular expression: ${(err as Error).message}.`,
+      "Fix the expression; in YAML, single-quote it so backslashes survive.",
+    );
+  }
+}
+
+const TYPE_HINT = `Use one of: ${FIELD_TYPES.join(", ")}.`;
+
+/** One field definition, checked against the keys its `type` takes. */
+export const parseFieldDef: Parser<FieldDef> = (value, at, problems) => {
+  if (!isRecord(value)) {
+    return fail(
+      problems,
+      at,
+      `Expected a field definition, found ${describe(value)}.`,
+      "Write a field as a mapping with a `type`, e.g. `{ type: text }`.",
+    );
+  }
+  const type = value.type;
+  if (type === undefined) {
+    return fail(problems, keyPath(at, "type"), "Field has no `type`.", TYPE_HINT);
+  }
+  if (typeof type !== "string" || !Object.hasOwn(FIELD_SHAPES, type)) {
+    return fail(
+      problems,
+      keyPath(at, "type"),
+      `${describe(type).replace(/^the text /, "")} is not a field type.`,
+      TYPE_HINT,
+    );
+  }
+  const parsed = readShape(
+    { type: required(anything), ...common, ...FIELD_SHAPES[type as FieldType] },
+    value,
+    at,
+    problems,
+  );
+  return parsed === INVALID ? INVALID : (parsed as FieldDef);
+};
+
+export const parseFields: Parser<Record<string, FieldDef>> = record(parseFieldDef);
 
 /** Normalizes `options` to the object form so consumers handle one shape. */
 export function selectOptions(field: Extract<FieldDef, { type: "select" }>): Array<{

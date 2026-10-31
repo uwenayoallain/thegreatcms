@@ -8,7 +8,7 @@ describe("STUDIO_SITES", () => {
   it("reads a list of sites with stable ids", () => {
     expect(
       parseSites(
-        '[{"id":"irona","path":"/srv/sites/irona","name":"IRONA","devUrl":"https://preview.icl.rw","pushAfterPublish":true}]',
+        '[{"id":"irona","path":"/srv/sites/irona","name":"IRONA","devUrl":"https://preview.icl.rw","probeUrl":"http://preview:4321","pushAfterPublish":true,"deployRoot":"/srv/www"}]',
       ),
     ).toEqual([
       {
@@ -16,7 +16,9 @@ describe("STUDIO_SITES", () => {
         path: "/srv/sites/irona",
         name: "IRONA",
         devUrl: "https://preview.icl.rw",
+        probeUrl: "http://preview:4321",
         pushAfterPublish: true,
+        deployRoot: "/srv/www",
       },
     ]);
   });
@@ -27,6 +29,18 @@ describe("STUDIO_SITES", () => {
       devUrl: "",
       pushAfterPublish: false,
     });
+  });
+
+  it("refuses a probeUrl that is not an address the studio can connect to", () => {
+    expect(() => parseSites('[{"id":"a","path":"/srv/a","probeUrl":"preview:4321"}]')).toThrow(
+      /probeUrl/,
+    );
+  });
+
+  it("wants the builder's folder as an absolute path", () => {
+    expect(() => parseSites('[{"id":"a","path":"/srv/a","deployRoot":"www"}]')).toThrow(
+      /absolute deployRoot/,
+    );
   });
 
   it("says exactly what is wrong instead of starting half-configured", () => {

@@ -80,6 +80,7 @@ collections:
 
 let context: BrowserContext;
 let server: ReturnType<typeof serve>;
+let devServer: ReturnType<typeof createServer>;
 let origin: string;
 let root: string;
 
@@ -105,13 +106,21 @@ beforeAll(async () => {
   const address = server.address();
   origin = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 
+  // The site's own dev server, on another origin: the studio refuses to be framed, rightly.
+  devServer = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "text/html" });
+    response.end("<!doctype html><title>Site</title><h1>Welcome</h1><p>Existing copy.</p>");
+  });
+  await new Promise<void>((resolve) => devServer.listen(0, "127.0.0.1", resolve));
+  const previewAddress = devServer.address();
+  const previewOrigin = `http://127.0.0.1:${typeof previewAddress === "object" && previewAddress ? previewAddress.port : 0}`;
+
   store.addSite({
     id: "site-1",
     name: "On disk",
     kind: "local",
     path: root,
-    // The frame needs somewhere real to point; the studio itself will do, since what.
-    devUrl: origin,
+    devUrl: previewOrigin,
     owner: "",
     repo: "",
     branch: "main",
@@ -128,6 +137,7 @@ afterAll(async () => {
   await context?.close();
   await browser?.close();
   server?.close();
+  devServer?.close();
   if (root) rmSync(root, { recursive: true, force: true });
 });
 
@@ -447,10 +457,17 @@ describe.skipIf(!browser)("accessibility with real layout", () => {
     ["a site", "/sites/site-1"],
     ["the editor", "/sites/site-1/regions/home.hero"],
     ["section removal confirmation", "/sites/site-1/regions/home.sections"],
+    ["publish later", "/sites/site-1/regions/home.hero#schedule"],
+    ["history", "/sites/site-1/regions/home.hero/history"],
+    ["search results", "/sites/site-1/search?q=e"],
+    ["editors", "/editors"],
+    ["the inbox", "/inbox"],
+    ["sign in", "/sign-in"],
   ])("%s has no axe violations, colour contrast included", async (_name, path) => {
-    const page = await open(path);
+    const page = await open(path.replace("#schedule", ""));
     if (path.endsWith("home.sections"))
       await page.locator(".block-remove-confirm > summary").first().click();
+    if (path.endsWith("#schedule")) await page.locator("details.schedule > summary").click();
     await page.evaluate(AXE_SOURCE);
 
     const violations = await page.evaluate(async () => {

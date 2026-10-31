@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "The GreatCMS studio: manage many Git-backed sites from one place.",
   "type": "module",
@@ -16,6 +16,7 @@
     "@hono/node-server": "^1.19.17",
     "hono": "^4.13.12",
     "htmlparser2": "^12.0.0",
+    "marked": "^15.0.12",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.5.0",
     "prosemirror-inputrules": "^1.5.1",
@@ -24,7 +25,7 @@
     "prosemirror-schema-basic": "^1.2.4",
     "prosemirror-schema-list": "^1.5.1",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.2"
+    "prosemirror-view": "^1.42.8"
   },
   "devDependencies": {
     "@greatcms/conformance": "workspace:*",

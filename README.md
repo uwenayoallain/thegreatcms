@@ -2,20 +2,20 @@
 
 A Git-backed CMS for sites that shouldn't need one at runtime.
 
-You pick which parts of a page it manages — a hero here, a feature list there,
+You pick which parts of a page it manages: a hero here, a feature list there,
 an entire blog, or the whole site. Everything else stays hand-written code the
 CMS never sees. Publishing writes files to your repository; the commit triggers
 whatever deploy pipeline you already had. One studio manages many websites and
-collects the things Git can't hold — form submissions — into a single inbox.
+collects the things Git can't hold, form submissions, into a single inbox.
 
 **It is not a framework plugin.** The integration surface is a schema file and
 some JSON, so a site consumes it with an import and no dependency. `greatcms
-init` scaffolds for Astro, Next, Nuxt, SvelteKit, and Eleventy. The format
-itself stays language-agnostic — it is JSON on disk, and a Python reader passes
-the same conformance suite — but the tooling claims only what it is exercised
+init` scaffolds for Astro, Next.js, Nuxt and SvelteKit. The format
+itself stays language-agnostic, it is JSON on disk, and a Python reader passes
+the same conformance suite, but the tooling claims only what it is exercised
 against.
 
-Read [SPEC.md](./SPEC.md) — that document is the actual product.
+Read [SPEC.md](./SPEC.md): that document is the actual product.
 
 ---
 
@@ -38,13 +38,16 @@ submissions from any site land in one inbox.
 
 ```
 apps/studio/            The CMS: sign in, connect site folders, edit regions, publish
-apps/docs/              The website — landing page and docs, managed by GreatCMS itself
+apps/docs/              The website: landing page and docs, managed by GreatCMS itself
 packages/cli/           `greatcms init`, `add`, `types`, `check`, `doctor`
 packages/spec/          The standard: schema parsing, validation, resolution rules
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
 packages/reader/        Build-time reader for any JS framework
 examples/site-astro/    A real Astro site: managed regions beside hand-written markup
-examples/business-astro/ A business starter: flexible sections and structured products
+examples/studio-astro/  A design studio site: case studies, variants, and high-end motion
+examples/bakery-next/   A bakery on Next.js: a priced menu collection, hours, a pre-order form
+examples/journal-sveltekit/ A writer's journal on SvelteKit: Markdown essays, prerendered with no JS
+examples/changelog-nuxt/ A product changelog on Nuxt: releases, pricing, prerendered with no JS
 examples/reader-python/ The same standard, implemented in ~120 lines of Python
 ```
 
@@ -64,20 +67,23 @@ STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
 # http://localhost:8787
 ```
 
-Or, while developing, `STUDIO_PASSWORD='something long' pnpm dev` runs the
-studio and the Astro example together, both rebuilding on change. `pnpm studio`
-runs the studio alone. Node 22.18 or newer; `.node-version` says so for
+Or, while developing, `pnpm dev` runs the studio and every example site,
+already connected: open http://localhost:8787, sign in with `greatcms-dev`, and
+edit any of them (Paraline, the minimal site, Hearth, The Long Light, Sundial)
+with each one rendering beside the form. The studio rebuilds on change and keeps
+you signed in across restarts. Set
+`STUDIO_PASSWORD` to use your own; `pnpm studio` runs the studio alone. Node 22.18 or newer; `.node-version` says so for
 version managers, and `.vscode/` recommends the oxc extension and wires the
 JSON Schemas to `.cms/*.yaml` for autocomplete.
 
 Point it at a folder containing a `.cms/schema.yaml` and it builds the editor
 from your schema. Point any site's
 contact form at `https://your-studio/f/{siteId}/contact` and the messages arrive
-in the inbox — set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emailed
+in the inbox: set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emailed
 about them too. Or run it as a
-container — `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
+container: `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
 For a server that also builds and serves the site on every publish, pair it with
-`greatcms-deploy` (`packages/deploy`); `examples/business-astro/deploy/` is the
+`greatcms-deploy` (`packages/deploy`); `examples/studio-astro/deploy/` is the
 whole arrangement as a Compose file, Caddy included.
 
 Behind a reverse proxy, set `STUDIO_TRUST_PROXY=1` so rate limiting sees the
@@ -92,19 +98,18 @@ Then look at the example site:
 
 ```bash
 pnpm --filter @greatcms/example-site-astro dev     # http://localhost:4321
-pnpm --filter @greatcms/example-business-astro dev # the business starter, on the next free port
+pnpm --filter @greatcms/example-studio-astro dev   # the studio showcase, on the next free port
 ```
 
-The home page shows a managed hero next to a hand-written section — both end up
+The home page shows a managed hero next to a hand-written section: both end up
 in the same static HTML. The about page renders from schema defaults, because
 nobody has ever edited it.
 
-The business example is the larger proof: company, owner/contact and search
-details, nested reorderable feature and process sections, products, and managed
-pages all feed a polished multi-page site. One dynamic route means adding an
-About, Services, or legal page is one new collection entry rather than another
-schema change. Its components remain site-owned, and its built pages still
-contain zero client JavaScript.
+The studio example is the larger proof: a design studio's site where every
+word, every section and every case study is managed, block variants choose
+layouts, and case-study covers are generated from fields the editor picks. Its
+motion is its own (scroll-driven CSS, cross-page view transitions, and a small
+script for the pointer), and it all stops for visitors who ask for less motion.
 
 ## Setting up a site
 
@@ -152,8 +157,8 @@ as that until a package is published.
 npx greatcms init
 ```
 
-It detects what you build with — Astro, Next, Nuxt, SvelteKit, Eleventy, or
-nothing in particular — and puts content where that generator already looks for
+It detects what you build with, Astro, Next, Nuxt, SvelteKit, Eleventy, or
+nothing in particular, and puts content where that generator already looks for
 it: `_data/cms` for Eleventy, `src/content/cms` for Astro, `content/cms` for
 Next. Then it asks what you want managed (one hero, a landing page, a complete
 small-business site, a blog, or nothing yet), writes a
@@ -202,7 +207,7 @@ in the site's renderer; editors can reuse it from then on. `add block` remains
 available for lower-level or nested content shapes.
 
 It edits the schema **as text**, so the comments explaining your site's own
-decisions survive — a parse-and-redump would throw them away. It refuses rather
+decisions survive: a parse-and-redump would throw them away. It refuses rather
 than corrupts: a duplicate name, an id the standard would reject, or a nested
 block type nobody has defined stops the command and names the one that fixes
 it. Then it prints how to read the new section in your framework's syntax.
@@ -213,8 +218,8 @@ it. Then it prints how to read the new section in your framework's syntax.
 npx greatcms types --out src/cms.d.ts
 ```
 
-Interfaces for every region, block, and collection — select options as unions,
-blocks discriminated by `_type`, nested blocks typed by what they allow — plus a
+Interfaces for every region, block, and collection: select options as unions,
+blocks discriminated by `_type`, nested blocks typed by what they allow: plus a
 module augmentation that types the reader by id:
 
 ```ts
@@ -233,7 +238,7 @@ reader takes any string, as it always did.
 ## Connecting a site
 
 A site is **a folder on this machine**. The studio reads and writes the working
-copy directly — no token, no network, no push. Publishing writes the files and
+copy directly: no token, no network, no push. Publishing writes the files and
 commits them if the folder is a Git repository. Give it your dev server's URL
 and the editor shows **your real components**, from your own build, updating as
 soon as your dev server reloads.
@@ -242,8 +247,8 @@ There is deliberately no hosted-repository backend. It existed, and it made
 every screen ask which of two worlds it was in; the local path is the one worth
 getting right first.
 
-For an Astro site, add the integration so an edit — published or still being
-typed — reloads the page:
+For an Astro site, add the integration so an edit, published or still being
+typed, reloads the page:
 
 ```js
 import greatcms from "@greatcms/reader/astro";
@@ -258,16 +263,16 @@ export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
 ```
 
 Both are dev-only, and both also hide the framework's dev toolbar **while the
-page is framed by the studio** — it belongs on your own tab, not on top of the
+page is framed by the studio**: it belongs on your own tab, not on top of the
 section you are editing. Your own tab keeps it. Pass
 `{ hideDevOverlays: false }` to keep it everywhere.
 
-The reader uses the filesystem on purpose — that is what keeps it
-framework-neutral — which also means Vite cannot know a content file is a
+The reader uses the filesystem on purpose, that is what keeps it
+framework-neutral, which also means Vite cannot know a content file is a
 dependency. Without the watcher the file changes and the page does not, which is
 worse than an error because it looks like nothing happened.
 
-The studio needs four operations from a repository — read a file, list a
+The studio needs four operations from a repository: read a file, list a
 directory, read the head commit, commit a set of files. Everything above that
 line is backend-agnostic, which is what keeps the editor, the validation, and
 the publish free of any knowledge of where the bytes are.
@@ -275,13 +280,13 @@ the publish free of any knowledge of where the bytes are.
 ## Publishing
 
 A publish writes the files and commits them, in one commit. Your existing deploy
-pipeline takes it from there — the CMS is not in that path.
+pipeline takes it from there: the CMS is not in that path.
 
 If the folder is not a Git repository, the files are simply written, which is
 the whole job.
 
 **Your own dev server is the preview.** Connect the site with its dev server
-URL and the editor frames it, rendering your real components as you type — the
+URL and the editor frames it, rendering your real components as you type: the
 unsaved edit is written to `.cms/draft/`, which the reader prefers over the
 committed file in development and never in a build. The framed page is
 dissected into its sections: point at a heading or a card and click, and its
@@ -289,7 +294,7 @@ field opens in the form; focus a field and the page scrolls to where it shows.
 
 `npx greatcms doctor` prints what a repository's setup looks like: regions,
 where each one's file lives, which are still rendering schema defaults, and any
-unsaved edit left in `.cms/draft/` — the one thing that shows in your dev server
+unsaved edit left in `.cms/draft/`: the one thing that shows in your dev server
 and nowhere else.
 
 ## Checking content in your own CI
@@ -307,7 +312,7 @@ npx greatcms check
 It exits non-zero, so it belongs in a build. It reports a required field left
 empty, a field the schema no longer has, a content file no region renders any
 more, an entry whose frontmatter will not parse, and an image pointing at a file
-nobody committed — each with the file, the field path, and what to do about it.
+nobody committed: each with the file, the field path, and what to do about it.
 `--json` gives the same report to a machine.
 
 A missing content file is never a failure. That resolves to schema defaults by
@@ -328,7 +333,7 @@ node packages/conformance/bin/greatcms-conformance.mjs verify /tmp/out
 
 **It ships nothing to the browser.** The built example sites, and this
 website, contain zero `<script>` tags, and each carries a weight budget its
-tests assert — `examples/site-astro/tests/a11y.test.ts` is the smallest.
+tests assert: `examples/site-astro/tests/a11y.test.ts` is the smallest.
 
 **It is accessible.** axe runs against every page of the example site _and_
 every screen of the studio, every form control is labelled, and errors are
@@ -339,11 +344,11 @@ one failure a static check cannot see and a reader cannot miss.
 **The visual editor is tested in a browser.** Chromium loads the studio and
 asserts what a person gets: ProseMirror mounts over the textarea, the toolbar
 applies marks and reports its own pressed state, the preview updates as you type
-without committing anything — and with JavaScript switched off, the same screen
+without committing anything: and with JavaScript switched off, the same screen
 still edits and publishes from a plain textarea.
 
-**The admin degrades to plain HTML.** Every mutation is a form POST — including
-adding, removing, and reordering blocks — so the studio is keyboard- and
+**The admin degrades to plain HTML.** Every mutation is a form POST, including
+adding, removing, and reordering blocks, so the studio is keyboard- and
 screen-reader-navigable by construction rather than by patching ARIA onto custom
 widgets. Rich text gets a visual editor built directly on **ProseMirror** (MIT,
 no commercial tier), loaded only on screens that have a richtext field. It is an
@@ -354,20 +359,20 @@ and publish.
 reaches the repository, a working copy that moved while you were editing gets a
 409 rather than an overwrite, and a commit Git refuses is reported as an error.
 
-**The studio never runs your code.** It reads your schema and writes content —
+**The studio never runs your code.** It reads your schema and writes content:
 that is the whole interaction, and it never runs your Git hooks. Previews render
 in your own dev server, which is also why one studio can manage several sites
 without carrying a toolchain for each of them.
 
 **Form submissions need nothing on the site.** A plain HTML `<form>` posting to
-the studio is the whole integration — no JavaScript, no third-party form
+the studio is the whole integration: no JavaScript, no third-party form
 service, no per-site backend. Spam is scored with a honeypot, submission timing,
 and a rate limit rather than a CAPTCHA, which is an accessibility tax paid by
 every legitimate visitor to inconvenience a bot that solves them anyway.
 
 **The awkward cases are covered.** The conformance fixture includes a region
 with no content file, a region edited before a field was added to the schema, a
-block missing a defaulted field, and a decorative image with empty alt text —
+block missing a defaulted field, and a decorative image with empty alt text:
 the four things naive implementations get wrong.
 
 ## Toolchain
@@ -399,7 +404,7 @@ image a deliberate act rather than an oversight.
 
 **A missing content file is never an error.** It resolves to schema defaults, so
 a site is correct before the CMS has ever been opened. A missing _schema_ file
-is an error — failing loudly beats quietly rendering empty regions.
+is an error: failing loudly beats quietly rendering empty regions.
 
 **Publishing is one commit.** Every file a publish touches is written before
 anything is staged, so a region and the images it references land together or
@@ -408,7 +413,7 @@ not at all. Half-applied content is how a branch stops building.
 ## The website
 
 `apps/docs` is the project's site: a landing page and the documentation. Its
-landing copy — the headline, the four claims, the closing note — is **managed by
+landing copy, the headline, the four claims, the closing note, is **managed by
 GreatCMS**, stored as JSON in this repository and edited in the studio like any
 other site. The docs are a Markdown collection, like any blog. The layout
 around all of it is ordinary Astro the CMS has never seen.
@@ -446,7 +451,7 @@ is an installable skill with the commands, file shapes and pitfalls
 (`npx skills add greatcms/greatcms@greatcms`); `greatcms init` leaves a note in
 the site's own `AGENTS.md`; and `greatcms check --json` and `greatcms doctor
 --json` answer in a form a script can act on. [AGENTS.md](./AGENTS.md) covers
-working _on_ GreatCMS — the invariants that are design decisions rather than
+working _on_ GreatCMS: the invariants that are design decisions rather than
 implementation details.
 
 ## Licence

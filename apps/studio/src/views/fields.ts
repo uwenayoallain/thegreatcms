@@ -10,6 +10,7 @@ import { fieldName, MEDIA_ROOT } from "../form.js";
 import { removeBlockControl } from "./block-actions.js";
 import { summarize, variantField, variantLabel } from "./summary.js";
 import { icon } from "./icons.js";
+import { viewer } from "./viewer.js";
 
 export type ErrorsByPath = Map<string, string>;
 
@@ -122,14 +123,23 @@ function renderControl(
 
     case "richtext": {
       const plain = render.plain?.has(String(path.at(-1)));
+      // MDX runs when the site builds, so an editor may read it but only the owner changes it.
+      const locked = plain && !viewer()?.owner;
       return shell(html`
-        <textarea ${shared} rows="14" ${raw(plain ? 'class="source"' : "data-richtext")}>
+        <textarea
+          ${shared}
+          rows="14"
+          ${raw(plain ? 'class="source"' : "data-richtext")}
+          ${raw(locked ? "readonly" : "")}
+        >
 ${asText(readRichText(value))}</textarea>
         <span class="hint"
           >${
-            plain
-              ? "MDX source. Edited as written, because the components in it are not HTML."
-              : "HTML. Stored as written, so any language can render it without a library."
+            locked
+              ? "MDX source runs when the site builds, so only the studio's owner can change it."
+              : plain
+                ? "MDX source. Edited as written, because the components in it are not HTML."
+                : "HTML. Stored as written, so any language can render it without a library."
           }</span
         >
       `);
@@ -168,9 +178,35 @@ ${asText(readRichText(value))}</textarea>
     case "select": {
       const options = selectOptions(def);
       const selected = new Set(Array.isArray(value) ? value.map(String) : [String(value ?? "")]);
+      if (def.multiple) {
+        // Several at once reads better as ticks than as a list box that wants Ctrl-click.
+        return html`<fieldset
+          class="field choices"
+          aria-describedby="${describedBy || undefined}"
+          aria-invalid="${error ? "true" : undefined}"
+        >
+          <legend>${label}</legend>
+          ${def.description ? html`<span class="hint" id="${id}-hint">${def.description}</span>` : ""}
+          <div class="chips">
+            ${options.map(
+              (option, index) => html`<label class="chip">
+                <input
+                  type="checkbox"
+                  id="${id}-${index}"
+                  name="${name}"
+                  value="${option.value}"
+                  ${attrs({ checked: selected.has(option.value) })}
+                />
+                <span>${option.label}</span>
+              </label>`,
+            )}
+          </div>
+          ${error ? html`<p class="error-text" id="${id}-error">${error}</p>` : ""}
+        </fieldset>`;
+      }
       return shell(html`
-        <select ${shared} ${raw(def.multiple ? "multiple" : "")}>
-          ${def.required ? "" : html`<option value="">— none —</option>`}
+        <select ${shared}>
+          ${def.required ? "" : html`<option value="">None</option>`}
           ${options.map(
             (option) => html`
               <option value="${option.value}" ${attrs({ selected: selected.has(option.value) })}>
@@ -260,8 +296,15 @@ ${asText(readRichText(value))}</textarea>
           </div>
 
           <div class="field">
-            <label for="${id}-src">Or use an image URL</label>
-            <input type="text" id="${id}-src" name="${name}[src]" value="${asText(image.src)}" />
+            <label for="${id}-src">Or use an image already on the site</label>
+            <input
+              type="text"
+              id="${id}-src"
+              name="${name}[src]"
+              value="${asText(image.src)}"
+              list="site-media"
+              autocomplete="off"
+            />
           </div>
           <div class="field">
             <label for="${id}-alt">
@@ -317,6 +360,24 @@ ${asText(readRichText(value))}</textarea>
     case "file": {
       const file = (value ?? {}) as { src?: string };
       return shell(html`<input type="text" ${shared} value="${asText(file.src)}" />`);
+    }
+
+    case "reference": {
+      // The collection's entries are offered by a list the page renders once; check confirms they exist.
+      const slugs = Array.isArray(value) ? value.map(asText).join(", ") : asText(value);
+      const placeholder = def.multiple
+        ? `${def.collection} entries, separated by commas`
+        : `a ${def.collection} entry`;
+      return shell(
+        html`<input
+          type="text"
+          ${shared}
+          value="${slugs}"
+          placeholder="${placeholder}"
+          list="entries-${def.collection}"
+          autocomplete="off"
+        />`,
+      );
     }
 
     case "list": {

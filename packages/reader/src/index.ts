@@ -1,4 +1,4 @@
-/** @greatcms/reader — read managed content at build time. */
+/** @greatcms/reader: read managed content at build time. */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -19,7 +19,7 @@ import {
 } from "@greatcms/spec";
 
 export interface ReaderOptions {
-  /** Site root — the directory containing `.cms/`. Defaults to `process.cwd()`. */
+  /** Site root: the directory containing `.cms/`. Defaults to `process.cwd()`. */
   root?: string;
   /** Throw when a region is missing from the schema. */
   strictRegions?: boolean;
@@ -40,7 +40,7 @@ export interface GreatCMSCollections {}
 /**
  * True until a generated file augments `GreatCMSRegions`. It is what lets the
  * loose `string` overload exist for a site that has not run `greatcms types`,
- * and disappear for one that has — so an unknown id is a compile error there
+ * and disappear for one that has: so an unknown id is a compile error there
  * rather than `undefined` at build time.
  */
 type NoRegionsDeclared = [keyof GreatCMSRegions] extends [never] ? true : false;

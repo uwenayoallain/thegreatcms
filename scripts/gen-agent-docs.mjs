@@ -34,8 +34,8 @@ const summary = [
   "Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.",
   "",
   "It is not a framework plugin. The integration surface is a schema file and some JSON, so Astro,",
-  "Hugo, Eleventy, Next, Jekyll, Laravel, or a hand-rolled Go generator all consume it identically.",
-  "If you are an agent wiring a site up to it, read the standard below and write files — there is no",
+  "Next.js, Nuxt, SvelteKit, Astro, Hugo, Laravel, or a hand-rolled Go generator all consume it identically.",
+  "If you are an agent wiring a site up to it, read the standard below and write files: there is no",
   "SDK to install and no runtime to call.",
 ].join("\n");
 
@@ -97,9 +97,9 @@ const llms = [
   "## Machine-readable entrypoints",
   "",
   `- [docs.json](${SITE}/docs.json)`,
-  `- [llms-full.txt](${SITE}/llms-full.txt) — every document above in one fetch`,
-  `- [schema.schema.json](${SITE}/json-schema/schema.schema.json) — JSON Schema for .cms/schema.yaml`,
-  `- [config.schema.json](${SITE}/json-schema/config.schema.json) — JSON Schema for .cms/config.yaml`,
+  `- [llms-full.txt](${SITE}/llms-full.txt): every document above in one fetch`,
+  `- [schema.schema.json](${SITE}/json-schema/schema.schema.json): JSON Schema for .cms/schema.yaml`,
+  `- [config.schema.json](${SITE}/json-schema/config.schema.json): JSON Schema for .cms/config.yaml`,
   "",
   "## Agent skill",
   "",
@@ -111,6 +111,7 @@ const llms = [
   "```",
   "",
   "Inside a managed repository, `greatcms init` leaves a note in AGENTS.md, and",
+  "`greatcms describe` prints the content model as one outline to write content against, and",
   "`greatcms check --json` / `greatcms doctor --json` give machine-readable answers.",
   "",
   "## Conformance",
@@ -125,7 +126,7 @@ const llms = [
 ].join("\n");
 
 const llmsFull = [
-  "# GreatCMS — complete documentation",
+  "# GreatCMS: complete documentation",
   "",
   "This file concatenates the public docs in source order, for agents that prefer one fetch.",
   "",

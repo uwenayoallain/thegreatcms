@@ -1,6 +1,7 @@
 /** Talking to a managed repository. */
 
 import {
+  type FieldDef,
   collectionEntryPath,
   DEFAULT_CONFIG,
   parseFrontmatter,
@@ -22,8 +23,11 @@ import {
   entryExtension,
   type CollectionFormat,
 } from "@greatcms/spec";
+import { marked } from "marked";
 import type { Site } from "./db.js";
 import {
+  type Author,
+  type HistoryEntry,
   LocalRepository,
   type CommitResult,
   type FileChange,
@@ -34,11 +38,29 @@ import {
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
 const CONFIG_CANDIDATES = [".cms/config.yaml", ".cms/config.yml", ".cms/config.json"];
 
-export interface UnsavedDraft {
+/** A region or entry, named the way the editor names it. */
+export interface ContentTarget {
   label: string;
   href: string;
+  /** Relative to the site page: `regions/home.hero` or `collections/posts/hello`. */
+  target: string;
+}
+
+export interface UnsavedDraft extends ContentTarget {
   /** Repo-relative path of the content file this draft stands in for. */
   path: string;
+}
+
+/** A commit that changed content, with what it changed. */
+export interface ContentChange extends HistoryEntry {
+  touched: Array<ContentTarget & { removed: boolean }>;
+}
+
+/** What changed lately, and when each region or entry was last committed to. */
+export interface Activity {
+  recent: ContentChange[];
+  /** Keyed by target, plus `collections/<name>` for the newest change in a collection. */
+  edited: Map<string, { author: string; date: string }>;
 }
 
 export interface CollectionEntry {
@@ -58,7 +80,7 @@ export interface SiteContext {
 export class SiteNotConfiguredError extends Error {
   constructor(site: Site) {
     super(
-      `${site.path} has no .cms/schema.yaml.\n  fix: add one — see SPEC.md, or run \`greatcms init\` in that folder — then reload this page.`,
+      `${site.path} has no .cms/schema.yaml.\n  fix: add one: see SPEC.md, or run \`greatcms init\` in that folder: then reload this page.`,
     );
     this.name = "SiteNotConfiguredError";
   }
@@ -124,7 +146,7 @@ export class SiteClient {
     return file ? parseRegionFile(file.content, path) : null;
   }
 
-  /** Stored content layered over schema defaults — what the editor shows. */
+  /** Stored content layered over schema defaults: what the editor shows. */
   async resolvedRegion(context: SiteContext, regionId: string): Promise<RegionDocument> {
     const stored = await this.readRegion(context, regionId);
     return resolveRegion(context.schema, regionId, stored) ?? {};
@@ -153,6 +175,14 @@ export class SiteClient {
           String(b.data.date ?? "").localeCompare(String(a.data.date ?? "")) ||
           a.slug.localeCompare(b.slug),
       );
+  }
+
+  /** How many entries a collection has, without reading them. */
+  async entryCount(context: SiteContext, name: string): Promise<number> {
+    const collection = this.collection(context, name);
+    const extension = `.${entryExtension(collection.format)}`;
+    const paths = await this.repo.listDirectory(collection.path);
+    return paths.filter((path) => path.endsWith(extension)).length;
   }
 
   async readEntry(
@@ -226,9 +256,14 @@ export class SiteClient {
 
     const { data, body } = parseFrontmatter(source, path);
     if (collection.body) {
-      // The body carries the shape its field type declares: richtext is an object.
+      // The body carries the shape its field type declares: richtext is an object. A Markdown body
+      // written by hand becomes the HTML the editor works in; HTML the studio wrote passes through.
       const field = collection.fields[collection.body];
-      data[collection.body] = field?.type === "richtext" ? { html: body.trim() } : body.trim();
+      const text = body.trim();
+      data[collection.body] =
+        field?.type !== "richtext"
+          ? text
+          : { html: collection.format === "markdown" ? markdownToHtml(text) : text };
     }
     return { slug, path, data };
   }
@@ -239,6 +274,7 @@ export class SiteClient {
     slug: string;
     document: RegionDocument;
     actor?: string;
+    author?: Author;
     expectedHeadSha?: string;
     /** Uploads, committed atomically with the entry that references them. */
     media?: FileChange[];
@@ -250,6 +286,7 @@ export class SiteClient {
       message: context.config.publish.commitMessage.replace("{summary}", `${name}/${slug}`),
       files: [...(options.media ?? []), file],
       expectedHeadSha,
+      author: options.author,
     });
   }
 
@@ -258,12 +295,14 @@ export class SiteClient {
     name: string;
     slug: string;
     actor?: string;
+    author?: Author;
   }): Promise<CommitResult> {
     const { context, name, slug } = options;
     const collection = this.collection(context, name);
     return this.repo.commitFiles({
       message: `content: remove ${name}/${slug}`,
       files: [{ path: collectionEntryPath(context.config, collection, slug), delete: true }],
+      author: options.author,
     });
   }
 
@@ -273,10 +312,106 @@ export class SiteClient {
     regionId?: string;
     collection?: { name: string; slug: string };
     document: RegionDocument;
+    /** The commit the editor loaded, so a later publish of this draft is checked against it. */
+    base?: string;
   }): Promise<boolean> {
     const { path, content } = this.contentFile(options);
-    await this.repo.writeDraft(path, content);
+    await this.repo.writeDraft(path, content, options.base);
     return true;
+  }
+
+  /** Entries of every collection a reference field points at, by slug and title, to choose from. */
+  async referenceChoices(
+    context: SiteContext,
+  ): Promise<Record<string, Array<{ slug: string; title: string }>>> {
+    const wanted = new Set<string>();
+    const walk = (fields: Record<string, FieldDef>) => {
+      for (const def of Object.values(fields)) {
+        if (def.type === "reference") wanted.add(def.collection);
+        else if (def.type === "group") walk(def.fields);
+        else if (def.type === "list") walk({ item: def.of });
+      }
+    };
+    for (const region of Object.values(context.schema.regions)) {
+      if ("fields" in region) walk(region.fields);
+    }
+    for (const block of Object.values(context.schema.blocks)) walk(block.fields);
+    for (const collection of Object.values(context.schema.collections)) walk(collection.fields);
+
+    const names = [...wanted].filter((name) => context.schema.collections[name]);
+    const lists = await Promise.all(names.map((name) => this.listEntries(context, name)));
+    return Object.fromEntries(
+      names.map((name, index) => {
+        const titleField = context.schema.collections[name]?.slug ?? "title";
+        return [
+          name,
+          (lists[index] ?? []).map((entry) => ({
+            slug: entry.slug,
+            title: String(entry.data[titleField] ?? entry.data.title ?? entry.slug),
+          })),
+        ];
+      }),
+    );
+  }
+
+  /** The images already in the media folder, as the URLs content stores, for reuse. */
+  async mediaChoices(context: SiteContext): Promise<string[]> {
+    const dir = context.config.content.media.replace(/\/+$/, "");
+    const prefix = context.config.mediaUrlPrefix.replace(/\/+$/, "");
+    const files = await this.repo.listDirectory(dir);
+    return files
+      .map((path) => path.slice(dir.length + 1))
+      .filter((name) => /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(name) && !name.startsWith("."))
+      .toSorted()
+      .map((name) => `${prefix}/${name}`);
+  }
+
+  /** Every commit that changed this content, newest first. */
+  async contentHistory(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+  }): Promise<HistoryEntry[]> {
+    return this.repo.history(this.contentFile({ ...options, document: {} }).path);
+  }
+
+  /**
+   * Puts the content as it was at `sha` into the editor as an unsaved edit, based on the current
+   * commit. Restoring is then an ordinary publish: previewed first, validated, one commit.
+   */
+  async restoreToDraft(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+    sha: string;
+  }): Promise<boolean> {
+    const { context, regionId, collection, sha } = options;
+    const { path } = this.contentFile({ ...options, document: {} });
+    const source = await this.repo.fileAt(sha, path);
+    if (source === null) return false;
+    const document = regionId
+      ? parseRegionFile(source, path)
+      : collection
+        ? this.parseEntry(this.collection(context, collection.name), path, source).data
+        : null;
+    if (!document) return false;
+    return this.writeLiveDraft({ context, regionId, collection, document, base: context.headSha });
+  }
+
+  /**
+   * Where an unsaved edit stands: the commit it started from, and whether the published file
+   * changed since. The editor hands that commit back to the form, so publishing a stale draft
+   * is refused instead of quietly overwriting someone else's change.
+   */
+  async liveDraftBase(options: {
+    context: SiteContext;
+    regionId?: string;
+    collection?: { name: string; slug: string };
+  }): Promise<{ base: string; stale: boolean } | null> {
+    const { path } = this.contentFile({ ...options, document: {} });
+    const base = await this.repo.readDraftBase(path);
+    if (!base) return null;
+    return { base, stale: await this.repo.changedSince(base, path) };
   }
 
   /**
@@ -305,37 +440,65 @@ export class SiteClient {
    */
   async listLiveDrafts(context: SiteContext): Promise<UnsavedDraft[]> {
     const paths = await this.repo.listDrafts();
-    const drafts: UnsavedDraft[] = [];
-
-    for (const path of paths) {
-      const regionId = regionIdFromPath(context.config, path);
-      if (regionId && context.schema.regions[regionId]) {
-        const region = context.schema.regions[regionId];
-        drafts.push({
-          label: region.label ?? regionId,
-          href: `/sites/${this.site.id}/regions/${regionId}`,
-          path,
-        });
-        continue;
-      }
-
-      const entry = this.entryFromPath(context, path);
-      if (entry) drafts.push(entry);
-    }
-
-    return drafts.toSorted((a, b) => a.label.localeCompare(b.label));
+    return paths
+      .flatMap((path) => {
+        const found = this.targetOf(context, path);
+        return found ? [{ ...found, path }] : [];
+      })
+      .toSorted((a, b) => a.label.localeCompare(b.label));
   }
 
-  /** Which collection entry a path belongs to, if it belongs to one at all. */
-  private entryFromPath(context: SiteContext, path: string): UnsavedDraft | null {
-    for (const [name, collection] of Object.entries(context.schema.collections)) {
-      const dir = `${collection.path.replace(/\/+$/, "")}/`;
-      if (!path.startsWith(dir)) continue;
-      const slug = stripExtension(path.slice(dir.length), collection.format);
+  /**
+   * Commits that changed this site's content, newest first, read from Git so a
+   * change made outside the studio shows up too.
+   */
+  async activity(context: SiteContext, shown = 8): Promise<Activity> {
+    const folders = [
+      context.config.content.regions,
+      ...Object.values(context.schema.collections).map((collection) => collection.path),
+    ].map((folder) => folder.replace(/^\/+|\/+$/g, ""));
+    const changes = await this.repo.changes([...new Set(folders)]);
+    const edited = new Map<string, { author: string; date: string }>();
+    const recent: ContentChange[] = [];
+
+    for (const change of changes) {
+      const touched: ContentChange["touched"] = [];
+      for (const file of change.files) {
+        const found = this.targetOf(context, file.path);
+        if (!found) continue;
+        touched.push({ ...found, removed: file.removed });
+        const stamp = { author: change.author, date: change.date };
+        if (!edited.has(found.target)) edited.set(found.target, stamp);
+        const collection = found.target.match(/^collections\/[^/]+/)?.[0];
+        if (collection && !edited.has(collection)) edited.set(collection, stamp);
+      }
+      if (touched.length > 0 && recent.length < shown) recent.push({ ...change, touched });
+    }
+    return { recent, edited };
+  }
+
+  /** Which region or collection entry a content path belongs to, if any. */
+  private targetOf(context: SiteContext, path: string): ContentTarget | null {
+    const regionId = regionIdFromPath(context.config, path);
+    if (regionId && context.schema.regions[regionId]) {
+      const target = `regions/${regionId}`;
       return {
-        label: `${collection.label ?? name} — ${slug}`,
-        href: `/sites/${this.site.id}/collections/${name}/${encodeURIComponent(slug)}`,
-        path,
+        label: context.schema.regions[regionId].label ?? regionId,
+        href: `/sites/${this.site.id}/${target}`,
+        target,
+      };
+    }
+    for (const [name, collection] of Object.entries(context.schema.collections)) {
+      const dir = `${collection.path.replace(/^\/+|\/+$/g, "")}/`;
+      if (!path.startsWith(dir) || path.slice(dir.length).includes("/")) continue;
+      const extension = `.${entryExtension(collection.format)}`;
+      if (!path.endsWith(extension)) continue;
+      const slug = stripExtension(path.slice(dir.length), collection.format);
+      const target = `collections/${name}/${encodeURIComponent(slug)}`;
+      return {
+        label: `${collection.label ?? name}: ${slug}`,
+        href: `/sites/${this.site.id}/${target}`,
+        target,
       };
     }
     return null;
@@ -374,6 +537,7 @@ export class SiteClient {
     regionId: string;
     document: RegionDocument;
     actor?: string;
+    author?: Author;
     expectedHeadSha?: string;
     /** Uploads, committed atomically with the content that references them. */
     media?: FileChange[];
@@ -394,6 +558,7 @@ export class SiteClient {
       // One commit: the image and the JSON pointing at it land together, or neither.
       files: [...(options.media ?? []), { path, content }],
       expectedHeadSha,
+      author: options.author,
     });
 
     return result;
@@ -415,4 +580,9 @@ export class SiteClient {
 function stripExtension(name: string, format: CollectionFormat): string {
   const suffix = `.${entryExtension(format)}`;
   return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
+}
+
+/** Markdown the way the sites render it, so the editor opens on what a visitor reads. */
+function markdownToHtml(text: string): string {
+  return text === "" ? "" : marked.parse(text, { async: false, gfm: true }).trim();
 }

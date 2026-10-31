@@ -1,4 +1,4 @@
-/** Defaults and fallback — the mechanics of the hybrid model. */
+/** Defaults and fallback: the mechanics of the hybrid model. */
 
 import type { FieldDef } from "./fields.js";
 import { type CmsSchema, type RegionDef, blockVariants, isBlocksRegion } from "./schema.js";
@@ -26,6 +26,10 @@ export function fieldDefaults(fields: Record<string, FieldDef>): RegionDocument 
     }
     if (def.type === "blocks") {
       if (def.default) out[name] = def.default;
+      continue;
+    }
+    if (def.type === "reference") {
+      if (def.multiple) out[name] = [];
       continue;
     }
     if ("default" in def && def.default !== undefined) {
@@ -65,7 +69,7 @@ export function resolveRegion(
 }
 
 /**
- * One block, with its own field defaults filled in — and then the same again
+ * One block, with its own field defaults filled in: and then the same again
  * for any block nested inside it. Resolution has to reach every depth the
  * content actually has, or a nested block renders without its defaults.
  */
@@ -155,7 +159,7 @@ export function parseRegionFile(source: string, file: string): RegionDocument {
     }
     return parsed as RegionDocument;
   } catch (err) {
-    throw new Error(`${file}: could not read region content — ${(err as Error).message}`, {
+    throw new Error(`${file}: could not read region content: ${(err as Error).message}`, {
       cause: err,
     });
   }

@@ -168,7 +168,7 @@ describe("interactive setup", () => {
       return confirm(question, initial);
     };
     await setupProject({ root, prompt, stdout: (text) => output.push(text) });
-    expect(output).toEqual(["Nothing to change.\n"]);
+    expect(output).toEqual(["  ✓ Nothing to change.\n"]);
   });
 
   it("upgrades a reader helper an earlier version wrote, which broke once bundled", async () => {

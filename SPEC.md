@@ -1,4 +1,4 @@
-# The GreatCMS Content Standard — version 1
+# The GreatCMS Content Standard: version 1
 
 This document is the product. Everything else in this repository is an
 implementation of it.
@@ -6,7 +6,7 @@ implementation of it.
 A site is managed by GreatCMS if it contains a schema file and reads content
 from the paths described here. That is the entire integration surface. No
 plugin, no SDK, no runtime dependency, no build hook. If you can read JSON and
-YAML, you can consume a GreatCMS site — and if you can read only JSON, you can
+YAML, you can consume a GreatCMS site: and if you can read only JSON, you can
 still consume one, because the schema may be written as JSON too.
 
 Reading this document should be enough to write a consumer in any language in
@@ -19,8 +19,8 @@ under half an hour. If it is not, that is a bug in this document.
 ```
 your-site/
 ├── .cms/
-│   ├── schema.yaml       # or schema.json — the content model
-│   └── config.yaml       # or config.json — paths and publishing (optional)
+│   ├── schema.yaml       # or schema.json: the content model
+│   └── config.yaml       # or config.json: paths and publishing (optional)
 ├── content/
 │   ├── cms/              # structured regions, written by the studio
 │   │   ├── home.hero.json
@@ -37,15 +37,15 @@ Nothing else in the repository is touched by the CMS, ever.
 
 ## 2. Concepts
 
-**Region** — a named slice of a page under CMS control: `home.hero`,
+**Region**: a named slice of a page under CMS control: `home.hero`,
 `pricing.faq`. Everything not declared a region is ordinary code the CMS never
 sees. This is the hybrid model: a page can have one managed region, or be
 entirely managed, and both are the same mechanism.
 
-**Block** — a reusable field set. A _blocks region_ holds an ordered list of
+**Block**: a reusable field set. A _blocks region_ holds an ordered list of
 blocks the editor can add, remove, and reorder.
 
-**Collection** — a folder of entries with a shared shape: a blog, case studies,
+**Collection**: a folder of entries with a shared shape: a blog, case studies,
 changelog. Entries are Markdown with YAML frontmatter by default.
 
 ---
@@ -133,20 +133,21 @@ meaning of a schema without a word.
 
 Every field accepts `label`, `description`, `required`, and `when`.
 
-| Type       | Extra keys                                      | Stored value                                            |
-| ---------- | ----------------------------------------------- | ------------------------------------------------------- |
-| `text`     | `min`, `max`, `pattern`, `multiline`, `default` | string                                                  |
-| `richtext` | `allow`, `default`                              | `{ "html": "…", "_ast": … }`                            |
-| `number`   | `min`, `max`, `step`, `integer`, `default`      | number                                                  |
-| `boolean`  | `default`                                       | boolean                                                 |
-| `select`   | `options`, `multiple`, `default`                | string, or array if `multiple`                          |
-| `date`     | `time`, `default`                               | ISO 8601 string                                         |
-| `link`     | `default`                                       | `{ "href": "…", "label"?: "…", "external"?: bool }`     |
-| `image`    | `alt`, `accept`, `default`                      | `{ "src": "…", "alt": "…", "width"?: n, "height"?: n }` |
-| `file`     | `accept`, `default`                             | `{ "src": "…", "name"?: "…", "size"?: n }`              |
-| `list`     | `of`, `min`, `max`                              | array of the `of` type                                  |
-| `group`    | `fields`                                        | nested object                                           |
-| `blocks`   | `allow`, `min`, `max`, `default`                | array of block objects, each with `_type`               |
+| Type        | Extra keys                                      | Stored value                                            |
+| ----------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `text`      | `min`, `max`, `pattern`, `multiline`, `default` | string                                                  |
+| `richtext`  | `allow`, `default`                              | `{ "html": "…", "_ast": … }`                            |
+| `number`    | `min`, `max`, `step`, `integer`, `default`      | number                                                  |
+| `boolean`   | `default`                                       | boolean                                                 |
+| `select`    | `options`, `multiple`, `default`                | string, or array if `multiple`                          |
+| `date`      | `time`, `default`                               | ISO 8601 string                                         |
+| `link`      | `default`                                       | `{ "href": "…", "label"?: "…", "external"?: bool }`     |
+| `image`     | `alt`, `accept`, `default`                      | `{ "src": "…", "alt": "…", "width"?: n, "height"?: n }` |
+| `file`      | `accept`, `default`                             | `{ "src": "…", "name"?: "…", "size"?: n }`              |
+| `reference` | `collection`, `multiple`                        | entry slug, or array of slugs if `multiple`             |
+| `list`      | `of`, `min`, `max`                              | array of the `of` type                                  |
+| `group`     | `fields`                                        | nested object                                           |
+| `blocks`    | `allow`, `min`, `max`, `default`                | array of block objects, each with `_type`               |
 
 `options` for `select` is either `[a, b]` or `[{ value: a, label: A }]`.
 
@@ -189,7 +190,7 @@ sees one, and validation refuses a value the block does not declare.
 
 ### Nested blocks
 
-A `blocks` field holds the same shape a blocks region does — an ordered array
+A `blocks` field holds the same shape a blocks region does: an ordered array
 whose entries each carry a `_type` naming a block defined at the top level:
 
 ```yaml
@@ -212,11 +213,43 @@ blocks:
 }
 ```
 
-This is what lets a managed section hold a composed component — a card grid, a
-tabbed panel, a set of columns — instead of only flat fields. Nesting is
+This is what lets a managed section hold a composed component, a card grid, a
+tabbed panel, a set of columns, instead of only flat fields. Nesting is
 unbounded: a block reachable through `allow` may itself have a `blocks` field.
 A schema that nests a block inside itself is legal, and a consumer is expected
 to stop at the depth the content actually has, not to pre-expand the schema.
+
+### References
+
+A `reference` field points at entries of a collection by slug: the entry's
+file name without its extension:
+
+```yaml
+collections:
+  people:
+    path: content/people
+    fields:
+      name: { type: text, required: true }
+  blog:
+    path: content/blog
+    fields:
+      title: { type: text, required: true }
+      author: { type: reference, collection: people }
+      related: { type: reference, collection: blog, multiple: true }
+```
+
+```yaml
+author: ann-mukamana
+related: [publish-from-anywhere, why-git]
+```
+
+`collection` must name a collection the schema defines; a schema that names
+any other is invalid. The stored value is one slug, or an array of slugs with
+`multiple: true`, and a reader returns it as stored: following a reference to
+the entry is the site's job, not resolution's. A multiple reference resolves to
+`[]` when nothing is stored, and `required` on one means at least one slug.
+Whether each slug names an entry that exists cannot be decided from one
+document; that check belongs to tools that can see the whole repository.
 
 ### Rich text
 
@@ -227,6 +260,15 @@ was posted to it. The editor's structured document is preserved in `_ast`
 for lossless round-tripping. **Consumers should ignore `_ast`.** Any key
 beginning with `_` is machinery and may be ignored by consumers.
 
+### Addresses
+
+A link's `href` and an image's or file's `src` are a relative URL, a fragment,
+or an `http:`, `https:`, `mailto:` or `tel:` address. Anything else, such as
+`javascript:`, `data:` or `vbscript:`, fails validation with `unsafe_url`, so
+a site that prints the value into an attribute cannot be made to run script.
+Browsers ignore whitespace and control characters inside a scheme, so
+validation does too: `java\tscript:` is `javascript:`.
+
 ### Images and accessibility
 
 Uploads are committed alongside content, into `content.media`, and served from
@@ -234,7 +276,7 @@ Uploads are committed alongside content, into `content.media`, and served from
 and edited bytes get a new one.
 
 `alt` is required by default. A field may set `alt: decorative-allowed`, which
-is the only way an empty `alt` validates — making an inaccessible image a
+is the only way an empty `alt` validates: making an inaccessible image a
 deliberate choice rather than an oversight. `width` and `height` are recorded on
 upload so consumers can prevent layout shift.
 
@@ -294,7 +336,7 @@ The prose around the component is ordinary Markdown.
 ```
 
 The standard stores that body verbatim. It does not parse the JSX, resolve the
-imports, or care whether the components exist — that is the site's build, and
+imports, or care whether the components exist: that is the site's build, and
 it is deliberately none of the CMS's business.
 
 **Frontmatter fences.** An entry has frontmatter when its first line is exactly
@@ -323,9 +365,9 @@ the file is the whole document: `default` on a collection's fields is an
 authoring convenience for a new entry, not a read-time rule. A reader that
 filled in defaults would report fields the file does not contain.
 
-JSON files — regions and `json` collection entries — are written with two-space
+JSON files: regions and `json` collection entries: are written with two-space
 indentation, the keys of every object sorted by code point at every depth with
-`_`-prefixed keys last, and a trailing newline — so diffs stay readable and two
+`_`-prefixed keys last, and a trailing newline: so diffs stay readable and two
 tools writing the same content produce the same bytes. Code point, not locale
 collation: `B` sorts before `a` on every machine and in every language.
 
@@ -336,8 +378,9 @@ collation: `B` sorts before `a` on every machine and in every language.
 A consumer resolves a region in three steps. Getting these right is what the
 conformance kit checks.
 
-1. **Start from defaults.** Collect `default` from each field. For a blocks
-   region, the default is the region's `default` array, or `[]`.
+1. **Start from defaults.** Collect `default` from each field; a `reference`
+   field with `multiple: true` defaults to `[]`. For a blocks region, the
+   default is the region's `default` array, or `[]`.
 2. **Apply the region's `default` object** over the field-level defaults,
    merged deeply like everything else, so a region default for one key of a
    group keeps the group's other defaults.
@@ -346,7 +389,7 @@ conformance kit checks.
 Merge rules:
 
 - Objects merge **deeply**, key by key.
-- Arrays are **replaced wholesale** — merging lists item-by-item produces
+- Arrays are **replaced wholesale**: merging lists item-by-item produces
   results no author would predict.
 - Within a blocks region, each stored block is merged over its block's field
   defaults, so a field added to a block later still renders. A block whose
@@ -356,7 +399,7 @@ Merge rules:
   defaults, so a site builds correctly before the CMS has ever run.
 - **A missing schema file _is_ an error.** Defaults live in the schema, so a
   consumer that cannot find it should fail loudly rather than quietly render
-  empty regions. The schema is part of the site, committed alongside the code —
+  empty regions. The schema is part of the site, committed alongside the code:
   what a site never depends on is the _studio_: no network call, no database, no
   API key, and no running service at build or request time. Shut the studio down
   permanently and every site it managed keeps building from what is in Git.
@@ -444,7 +487,7 @@ Reserved names, stripped before storage:
 | `company`   | Honeypot. Hide it visually _and_ from assistive technology. |
 
 Everything else is stored as the submission. Spam is scored from the honeypot,
-the time between render and submit, and link density — never a CAPTCHA, which
+the time between render and submit, and link density: never a CAPTCHA, which
 taxes every legitimate visitor to inconvenience a bot that solves them anyway.
 Suspected spam is kept, not discarded, so nothing is lost silently.
 
@@ -461,7 +504,7 @@ Point your reader at the fixture site, dump each resolved region as
 `<region-id>.json` into a directory, and run `verify`. The fixture deliberately
 includes a region with no content file, a region edited before a field was
 added, a blocks region with a block missing a defaulted field, and a decorative
-image with empty alt text — the four cases naive implementations get wrong.
+image with empty alt text: the four cases naive implementations get wrong.
 
 A reference reader in Python (stdlib + PyYAML, ~120 lines) lives at
 `examples/reader-python/read.py` and passes the suite. It is the shortest honest

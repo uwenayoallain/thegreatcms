@@ -1,738 +1,938 @@
 {
-  "$ref": "#/definitions/GreatCMS schema",
-  "definitions": {
-    "GreatCMS schema": {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GreatCMS schema",
+  "description": "Content model for a site managed by GreatCMS (.cms/schema.yaml).",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Version of the standard this file is written for.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "site": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "version": {
-          "type": "integer",
-          "exclusiveMinimum": 0
+        "name": {
+          "type": "string"
         },
-        "site": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            },
-            "locale": {
-              "type": "string",
-              "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
-            }
-          },
-          "additionalProperties": false
-        },
-        "blocks": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "label": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "variants": {
-                "type": "array",
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "type": "string"
-                        },
-                        "label": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    }
-                  ]
-                },
-                "minItems": 1
-              },
-              "fields": {
-                "type": "object",
-                "additionalProperties": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "type": "string"
-                        },
-                        "description": {
-                          "type": "string"
-                        },
-                        "required": {
-                          "type": "boolean"
-                        },
-                        "when": {
-                          "type": "object",
-                          "properties": {
-                            "field": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "equals": {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean"
-                              ]
-                            },
-                            "in": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            }
-                          },
-                          "required": [
-                            "field"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "text"
-                        },
-                        "min": {
-                          "type": "integer",
-                          "minimum": 0
-                        },
-                        "max": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0
-                        },
-                        "pattern": {
-                          "type": "string"
-                        },
-                        "multiline": {
-                          "type": "boolean"
-                        },
-                        "default": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "richtext"
-                        },
-                        "allow": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "default": {
-                          "type": "object",
-                          "properties": {
-                            "html": {
-                              "type": "string"
-                            },
-                            "_ast": {}
-                          },
-                          "required": [
-                            "html"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "number"
-                        },
-                        "min": {
-                          "type": "number"
-                        },
-                        "max": {
-                          "type": "number"
-                        },
-                        "step": {
-                          "type": "number",
-                          "exclusiveMinimum": 0
-                        },
-                        "integer": {
-                          "type": "boolean"
-                        },
-                        "default": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "boolean"
-                        },
-                        "default": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "select"
-                        },
-                        "options": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/variants/items"
-                          },
-                          "minItems": 1
-                        },
-                        "multiple": {
-                          "type": "boolean"
-                        },
-                        "default": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "options"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "date"
-                        },
-                        "time": {
-                          "type": "boolean"
-                        },
-                        "default": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "link"
-                        },
-                        "default": {
-                          "type": "object",
-                          "properties": {
-                            "href": {
-                              "type": "string"
-                            },
-                            "label": {
-                              "type": "string"
-                            },
-                            "external": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "href"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "image"
-                        },
-                        "alt": {
-                          "type": "string",
-                          "enum": [
-                            "required",
-                            "decorative-allowed"
-                          ],
-                          "default": "required"
-                        },
-                        "accept": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "default": {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string"
-                            },
-                            "alt": {
-                              "type": "string"
-                            },
-                            "width": {
-                              "type": "number"
-                            },
-                            "height": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "src",
-                            "alt"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "file"
-                        },
-                        "accept": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "default": {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "size": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "src"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "list"
-                        },
-                        "of": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties"
-                        },
-                        "min": {
-                          "type": "integer",
-                          "minimum": 0
-                        },
-                        "max": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "of"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "blocks"
-                        },
-                        "allow": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          },
-                          "minItems": 1
-                        },
-                        "min": {
-                          "type": "integer",
-                          "minimum": 0
-                        },
-                        "max": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0
-                        },
-                        "default": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "additionalProperties": {}
-                          }
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "allow"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "label": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/label"
-                        },
-                        "description": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/description"
-                        },
-                        "required": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/required"
-                        },
-                        "when": {
-                          "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties/anyOf/0/properties/when"
-                        },
-                        "type": {
-                          "type": "string",
-                          "const": "group"
-                        },
-                        "fields": {
-                          "type": "object",
-                          "additionalProperties": {
-                            "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties"
-                          }
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "fields"
-                      ],
-                      "additionalProperties": false
-                    }
-                  ]
-                }
-              }
-            },
-            "required": [
-              "fields"
-            ],
-            "additionalProperties": false
-          }
-        },
+        "locale": {
+          "description": "BCP 47 tag for the content's language, e.g. `rw` or `fr-RW`.",
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+        }
+      }
+    },
+    "blocks": {
+      "description": "Reusable blocks, named in lowercase.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/block"
+      }
+    },
+    "regions": {
+      "description": "Managed sections of the site, keyed by region id, e.g. `home.hero`.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9_-]*(\\.[a-z0-9][a-z0-9_-]*)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/region"
+      }
+    },
+    "collections": {
+      "description": "Sets of entries, one file each, named in lowercase.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/collection"
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "required": ["regions"],
+      "properties": {
         "regions": {
           "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "blocks"
-                  },
-                  "label": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "allow": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "minItems": 1
-                  },
-                  "min": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "max": {
-                    "type": "integer",
-                    "exclusiveMinimum": 0
-                  },
-                  "default": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "additionalProperties": {}
-                    }
-                  }
-                },
-                "required": [
-                  "type",
-                  "allow"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "single"
-                  },
-                  "label": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties"
-                    }
-                  },
-                  "default": {
-                    "type": "object",
-                    "additionalProperties": {}
-                  }
-                },
-                "required": [
-                  "fields"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          }
-        },
+          "minProperties": 1
+        }
+      }
+    },
+    {
+      "required": ["collections"],
+      "properties": {
         "collections": {
           "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "label": {
-                "type": "string"
-              },
-              "entryLabel": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string",
-                "minLength": 1
-              },
-              "format": {
-                "type": "string",
-                "enum": [
-                  "markdown",
-                  "mdx",
-                  "json"
-                ],
-                "default": "markdown"
-              },
-              "body": {
-                "type": "string"
-              },
-              "slug": {
-                "type": "string"
-              },
-              "fields": {
-                "type": "object",
-                "additionalProperties": {
-                  "$ref": "#/definitions/GreatCMS schema/properties/blocks/additionalProperties/properties/fields/additionalProperties"
-                }
-              }
-            },
-            "required": [
-              "path",
-              "fields"
-            ],
-            "additionalProperties": false
+          "minProperties": 1
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "label": {
+      "description": "What an editor sees.",
+      "type": "string"
+    },
+    "description": {
+      "description": "A hint shown under the label.",
+      "type": "string"
+    },
+    "required": {
+      "description": "Whether the field must hold a value.",
+      "type": "boolean"
+    },
+    "when": {
+      "description": "Show the field only while a sibling holds a value.",
+      "type": "object",
+      "required": ["field"],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "equals": {
+          "type": ["string", "number", "boolean"]
+        },
+        "in": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       },
-      "required": [
-        "version"
-      ],
-      "additionalProperties": false
+      "anyOf": [
+        {
+          "required": ["equals"]
+        },
+        {
+          "required": ["in"]
+        }
+      ]
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "positiveCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "strings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "option": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": ["value"],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/field"
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": [
+            "text",
+            "richtext",
+            "number",
+            "boolean",
+            "select",
+            "date",
+            "link",
+            "image",
+            "file",
+            "reference",
+            "list",
+            "group",
+            "blocks"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "text"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/textField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "richtext"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/richtextField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "number"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/numberField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "boolean"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/booleanField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "select"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/selectField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "date"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/dateField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "link"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/linkField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "image"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/imageField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "file"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/fileField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "reference"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/referenceField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "list"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/listField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "group"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/groupField"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "blocks"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/definitions/blocksField"
+          }
+        }
+      ]
+    },
+    "textField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "text"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "min": {
+          "$ref": "#/definitions/count"
+        },
+        "max": {
+          "$ref": "#/definitions/positiveCount"
+        },
+        "pattern": {
+          "description": "A regular expression the text must match.",
+          "type": "string"
+        },
+        "multiline": {
+          "type": "boolean"
+        },
+        "default": {
+          "type": "string"
+        }
+      }
+    },
+    "richtextField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "richtext"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "allow": {
+          "$ref": "#/definitions/strings"
+        },
+        "default": {
+          "type": "object",
+          "required": ["html"],
+          "additionalProperties": false,
+          "properties": {
+            "html": {
+              "type": "string"
+            },
+            "_ast": {}
+          }
+        }
+      }
+    },
+    "numberField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "number"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "integer": {
+          "type": "boolean"
+        },
+        "default": {
+          "type": "number"
+        }
+      }
+    },
+    "booleanField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "boolean"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "default": {
+          "type": "boolean"
+        }
+      }
+    },
+    "selectField": {
+      "type": "object",
+      "required": ["options"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "select"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/option"
+          }
+        },
+        "multiple": {
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/definitions/strings"
+            }
+          ]
+        }
+      }
+    },
+    "dateField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "date"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "time": {
+          "type": "boolean"
+        },
+        "default": {
+          "type": "string"
+        }
+      }
+    },
+    "linkField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "link"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "default": {
+          "type": "object",
+          "required": ["href"],
+          "additionalProperties": false,
+          "properties": {
+            "href": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "external": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "imageField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "image"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "alt": {
+          "description": "`decorative-allowed` is the only way an empty alt text validates.",
+          "enum": ["required", "decorative-allowed"],
+          "default": "required"
+        },
+        "accept": {
+          "$ref": "#/definitions/strings"
+        },
+        "default": {
+          "type": "object",
+          "required": ["src", "alt"],
+          "additionalProperties": false,
+          "properties": {
+            "src": {
+              "type": "string"
+            },
+            "alt": {
+              "type": "string"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "fileField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "file"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "accept": {
+          "$ref": "#/definitions/strings"
+        },
+        "default": {
+          "type": "object",
+          "required": ["src"],
+          "additionalProperties": false,
+          "properties": {
+            "src": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "size": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "referenceField": {
+      "type": "object",
+      "required": ["collection"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "reference"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "collection": {
+          "description": "The collection whose entries this field points at, by slug.",
+          "type": "string",
+          "minLength": 1
+        },
+        "multiple": {
+          "description": "Store an array of slugs.",
+          "type": "boolean"
+        }
+      }
+    },
+    "listField": {
+      "type": "object",
+      "required": ["of"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "list"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "of": {
+          "$ref": "#/definitions/field"
+        },
+        "min": {
+          "$ref": "#/definitions/count"
+        },
+        "max": {
+          "$ref": "#/definitions/positiveCount"
+        }
+      }
+    },
+    "groupField": {
+      "type": "object",
+      "required": ["fields"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "group"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "fields": {
+          "$ref": "#/definitions/fields"
+        }
+      }
+    },
+    "blocksField": {
+      "type": "object",
+      "required": ["allow"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "blocks"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "required": {
+          "$ref": "#/definitions/required"
+        },
+        "when": {
+          "$ref": "#/definitions/when"
+        },
+        "allow": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "min": {
+          "$ref": "#/definitions/count"
+        },
+        "max": {
+          "$ref": "#/definitions/positiveCount"
+        },
+        "default": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["fields"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "variants": {
+          "description": "Named looks; an instance picks one as `_variant`, the first when it names none.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/option"
+          }
+        },
+        "fields": {
+          "$ref": "#/definitions/fields"
+        }
+      }
+    },
+    "region": {
+      "type": "object",
+      "if": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "const": "blocks"
+          }
+        }
+      },
+      "then": {
+        "$ref": "#/definitions/blocksRegion"
+      },
+      "else": {
+        "$ref": "#/definitions/singleRegion"
+      }
+    },
+    "singleRegion": {
+      "type": "object",
+      "required": ["fields"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "single"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "fields": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/definitions/field"
+          }
+        },
+        "default": {
+          "description": "Content the region starts with.",
+          "type": "object"
+        }
+      }
+    },
+    "blocksRegion": {
+      "type": "object",
+      "required": ["type", "allow"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "blocks"
+        },
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "allow": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "min": {
+          "$ref": "#/definitions/count"
+        },
+        "max": {
+          "$ref": "#/definitions/positiveCount"
+        },
+        "default": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "required": ["path", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/definitions/label"
+        },
+        "entryLabel": {
+          "description": "Singular noun used for actions such as \"Add product\".",
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/definitions/description"
+        },
+        "path": {
+          "description": "Folder holding the entries.",
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "enum": ["markdown", "mdx", "json"],
+          "default": "markdown"
+        },
+        "body": {
+          "description": "Field whose value becomes the prose body. Ignored for `json`.",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Field used to derive the file name.",
+          "type": "string"
+        },
+        "fields": {
+          "$ref": "#/definitions/fields"
+        }
+      }
     }
-  },
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GreatCMS schema",
-  "description": "Content model for a site managed by GreatCMS (.cms/schema.yaml)."
+  }
 }

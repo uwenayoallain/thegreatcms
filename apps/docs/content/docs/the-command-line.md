@@ -85,15 +85,41 @@ string.
 
 ```sh
 npx greatcms check
-# content: OK (3 regions, 6 entries, 1 media reference)
+# content: OK (3 regions, 6 entries, 1 media reference, 4 internal links)
 ```
 
 Validates every content file and collection entry against the schema and exits
-non-zero if anything would not render: a required field left empty, a field
-the schema no longer has, a file no region renders any more, frontmatter that
-will not parse, an image pointing at a file nobody committed. Each report names
-the file, the field path, and what to do. `--json` gives the same report to a
-machine.
+non-zero if anything would not render, or would render broken:
+
+- a required field left empty, a field the schema no longer has, a file no
+  region renders any more, frontmatter that will not parse;
+- an image or file pointing at an upload nobody committed, whether it sits in
+  an image field, a link, a rich-text `<img>`, or a Markdown `![]()`;
+- an internal link to an entry that does not exist.
+
+Each report names the file, the field path, and what to do.
+
+Internal links are link fields, rich-text `<a href>`, and Markdown links whose
+target starts with `/`. `check` drops the `#fragment`, the `?query`, a trailing
+`.html` and a trailing slash, then reads the path back through
+`preview.paths` in `.cms/config.yaml`: with `updates: "/updates/{slug}"`,
+`/updates/launch` is broken unless `content/updates/launch.md` exists, and with
+`pages: { home: "/", "*": "/{slug}" }`, `/` needs a `home` page. A path that
+matches no pattern, like `/assets/report.pdf`, is a route the site writes
+itself and is left alone, as is the index a pattern sits under (`/updates`).
+Without `preview.paths`, links are counted but not checked.
+
+Some things are worth fixing but never break a build. `check` reports them as
+warnings, lists them apart from problems, and still exits zero:
+
+- an upload in `content.media` that no region, entry, unpublished draft or
+  schema default refers to (dotfiles such as `.gitkeep` are ignored). `check`
+  only reads content, so a file the site's own code imports shows up here too;
+- a rich-text link with no text, which a screen reader announces as its URL;
+- headings in one rich-text field that skip a level, such as `h2` then `h4`.
+
+`--json` gives the same report to a machine: `ok` is false only when `issues`
+is non-empty, and warnings come in their own `warnings` array.
 
 A region with no content file is never a failure. It renders schema defaults,
 and `check` says so.
@@ -103,3 +129,24 @@ and `check` says so.
 Prints every region, the file it resolves to, which ones are still rendering
 schema defaults, and any unsaved edit left in `.cms/draft/`: the one thing that
 shows in your dev server and nowhere else.
+
+## `greatcms describe`
+
+The content model in one screen, for whoever is about to write content by
+hand: a person, or a coding agent. Every region with its file, every block
+with its variants, every collection with its entry path, the slugs that exist
+and the page each becomes; and each field as one line with its type, limits,
+condition, default and the schema's own description:
+
+```
+region home.hero → content/cms/home.hero.json
+  eyebrow: text (≤ 60 chars)
+  lines: list<text> (1–4 items)  # The headline, one line per item
+  primary!: link
+block selected-work  _variant: grid | stacked (first is the default)
+  heading!: text (≤ 60 chars)
+collection work → content/work/<slug>.json  page /work/{slug}/
+  entries: atlas-rail, fernhouse, lumen, oculi, tidewater
+```
+
+`!` marks a required field. `--json` gives the same outline as data.

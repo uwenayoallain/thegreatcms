@@ -1,0 +1,24 @@
+{
+  "name": "Paraline",
+  "tagline": "Design and motion for products people keep open",
+  "email": "hello@paraline.example",
+  "city": "Kigali, and wherever you are",
+  "availability": "Booking from March",
+  "social": [
+    {
+      "href": "https://example.com/paraline/instagram",
+      "label": "Instagram",
+      "external": true
+    },
+    {
+      "href": "https://example.com/paraline/linkedin",
+      "label": "LinkedIn",
+      "external": true
+    },
+    {
+      "href": "https://example.com/paraline/read",
+      "label": "Journal",
+      "external": true
+    }
+  ]
+}

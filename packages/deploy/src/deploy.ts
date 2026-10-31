@@ -4,6 +4,7 @@ import { execFile, spawn } from "node:child_process";
 import {
   mkdirSync,
   readdirSync,
+  existsSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -42,6 +43,8 @@ export interface Release {
 
 export interface Status {
   live?: Release;
+  /** Rolled back by hand: this release stays live until the branch moves past `tip`. */
+  pinned?: { sha: string; tip: string; at: string };
   /** The newest commit that would not build, until one does. */
   failed?: Release & { log: string };
   checkedAt: string;
@@ -78,12 +81,59 @@ export class Deployer {
     });
   }
 
+  /**
+   * Puts an earlier release back live without building anything, and holds it there until
+   * the next commit arrives: a rollback that the next check quietly undid would be no rollback.
+   */
+  async rollback(sha: string): Promise<boolean> {
+    const { root, log } = this.options;
+    const release = join(root, "releases", sha);
+    if (!/^[0-9a-f]{40}$/.test(sha) || !existsSync(release)) return false;
+    const status = readStatus(root) ?? { checkedAt: "" };
+    this.swap(release);
+    status.live = { sha, message: await this.subject(sha), at: new Date().toISOString() };
+    status.pinned = { sha, tip: await this.tip(), at: status.live.at };
+    this.writeStatus(status);
+    log(`${sha.slice(0, 7)} rolled back to; held until the next commit`);
+    return true;
+  }
+
+  /** A rollback the studio asked for by writing `rollback` into the root. */
+  async takeRequest(): Promise<void> {
+    const file = join(this.options.root, "rollback");
+    if (!existsSync(file)) return;
+    const sha = readFileSync(file, "utf8").trim();
+    rmSync(file, { force: true });
+    if (!(await this.rollback(sha)))
+      this.options.log(`rollback to ${sha.slice(0, 7)} refused: no such release`);
+  }
+
+  /** The releases kept on disk, newest first, which are what a rollback can go back to. */
+  releases(): string[] {
+    const dir = join(this.options.root, "releases");
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({ name: entry.name, at: statTime(join(dir, entry.name)) }))
+      .toSorted((a, b) => b.at - a.at)
+      .map((entry) => entry.name);
+  }
+
   private async deploy(requested?: string): Promise<Outcome> {
     const { root, source, log } = this.options;
     mkdirSync(join(root, "releases"), { recursive: true });
     const status = readStatus(root) ?? { checkedAt: "" };
     const sha = requested ?? (await this.tip());
     status.checkedAt = new Date().toISOString();
+
+    if (!requested && status.pinned) {
+      if (status.pinned.tip === sha) {
+        this.writeStatus(status);
+        return { outcome: "unchanged", sha: status.pinned.sha };
+      }
+      // Something new was published: the rollback has done its job.
+      delete status.pinned;
+    }
 
     if (status.live?.sha === sha) {
       this.writeStatus(status);

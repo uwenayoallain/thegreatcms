@@ -1,0 +1,70 @@
+---
+import Base from '../layouts/Base.astro';
+import { cms } from '../lib/cms';
+
+const page = cms.region('contact.page');
+const identity = cms.region('site.identity');
+// The studio's inbox takes the form; `pnpm dev` points it at the studio on this machine.
+const studio = (import.meta.env.PUBLIC_CMS_URL ?? 'https://studio.paraline.example').replace(/\/+$/, '');
+const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'paraline';
+const action = `${studio}/f/${encodeURIComponent(siteId)}/contact`;
+---
+
+<Base title="Contact" description={`Start a project with ${identity.name}.`}>
+  <section class="contact">
+    <div class="contact__intro">
+      <p class="eyebrow">Contact</p>
+      <h1 class="page-hero__title">{page.heading}</h1>
+      {page.body?.html && <div class="prose contact__body" set:html={page.body.html} />}
+      <a class="contact__mail" href={`mailto:${identity.email}`} data-cursor="Write" data-magnetic>{identity.email}</a>
+      {
+        (page.prompts ?? []).length > 0 && (
+          <ol class="contact__prompts">
+            {(page.prompts ?? []).map((prompt) => <li>{prompt}</li>)}
+          </ol>
+        )
+      }
+    </div>
+
+    <div class="contact__panel">
+      <p id="sent" class="contact__sent" role="status">{page.thanks}</p>
+      <form class="contact__form" method="POST" action={action}>
+        {
+          (page.kinds ?? []).length > 0 && (
+            <fieldset class="kinds">
+              <legend>What are you after?</legend>
+              {(page.kinds ?? []).map((kind) => (
+                <label class="kind">
+                  <input type="checkbox" name="kind" value={kind} />
+                  <span>{kind}</span>
+                </label>
+              ))}
+            </fieldset>
+          )
+        }
+        <div class="line">
+          <input id="name" name="name" autocomplete="name" placeholder=" " required />
+          <label for="name">Your name</label>
+        </div>
+        <div class="line">
+          <input id="email" name="email" type="email" autocomplete="email" placeholder=" " required />
+          <label for="email">Email</label>
+        </div>
+        <div class="line">
+          <textarea id="message" name="message" rows="5" placeholder=" " required></textarea>
+          <label for="message">What are you making?</label>
+        </div>
+        <input type="hidden" name="_redirect" value="/contact/#sent" />
+        <input type="hidden" name="_t" value={String(Date.now())} />
+        <div class="trap" aria-hidden="true">
+          <label for="company">Company</label>
+          <input id="company" name="company" tabindex="-1" autocomplete="off" />
+        </div>
+        <button class="cta__button contact__send" type="submit" data-magnetic data-cursor="Send">
+          <span>Send it</span>
+          <span class="cta__arrow" aria-hidden="true">→</span>
+        </button>
+      </form>
+    </div>
+  </section>
+</Base>

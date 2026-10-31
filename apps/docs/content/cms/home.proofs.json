@@ -11,8 +11,8 @@
     },
     {
       "_type": "proof",
-      "title": "Two sites you can run",
-      "body": "A minimal Astro site beside a complete small-business site: managed pages, nested sections, products, a contact form.",
+      "title": "Four sites you can run",
+      "body": "A minimal Astro site, Paraline's motion-heavy studio, a bakery on Next.js and a writer's journal on SvelteKit, all reading the same standard.",
       "link": {
         "href": "/docs/examples/",
         "label": "The examples"

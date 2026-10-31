@@ -1,0 +1,26 @@
+{
+  "title": "Atlas Rail",
+  "client": "Atlas Rail",
+  "year": 2025,
+  "disciplines": ["Product design", "Front-end build"],
+  "summary": "A journey planner that shows the whole route at once, so changing trains stops being a surprise.",
+  "palette": "dusk",
+  "motif": "grid",
+  "featured": true,
+  "order": 3,
+  "body": {
+    "html": "<p>Atlas connects six cities with four kinds of train. Its old planner listed legs; travellers wanted to see the journey.</p><h2>The route is the interface</h2><p>We drew every journey as a single line on a grid of stations, and animated each change of train along it. Delays bend the line instead of hiding in a footnote.</p>"
+  },
+  "results": [
+    {
+      "_type": "stat",
+      "value": "−28%",
+      "label": "Missed connections"
+    },
+    {
+      "_type": "stat",
+      "value": "1",
+      "label": "Screen per journey"
+    }
+  ]
+}

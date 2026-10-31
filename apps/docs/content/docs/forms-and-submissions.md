@@ -32,7 +32,7 @@ No JavaScript is involved. Adding a site to the inbox is a row in a table.
 
 ## Spam
 
-Scored from the honeypot, the gap between render and submit, and link density —
+Scored from the honeypot, the gap between render and submit, and link density:
 never a CAPTCHA, which taxes every legitimate visitor to inconvenience a bot
 that solves them anyway. Suspected spam is stored and hidden rather than
 discarded, so nothing is lost silently.

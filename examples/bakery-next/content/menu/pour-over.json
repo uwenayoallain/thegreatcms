@@ -1,0 +1,8 @@
+{
+  "name": "Single-origin pour-over",
+  "category": "coffee",
+  "price": 3000,
+  "description": "Brewed by hand, one cup at a time. Ask what came in this week.",
+  "dietary": ["vegan"],
+  "featured": true
+}

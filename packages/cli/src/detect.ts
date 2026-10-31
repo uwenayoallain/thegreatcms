@@ -52,7 +52,7 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
     mediaUrlPrefix: "/media",
     snippet: (regionId) =>
       [
-        "// app/page.tsx — a server component",
+        "// app/page.tsx: a server component",
         'import { createReader } from "@greatcms/reader";',
         "",
         "export default function Page() {",

@@ -19,7 +19,8 @@ interface Field {
 }
 
 type Message =
-  | { greatcms: "ready" }
+  /** `reloads: false` is a page whose dev server does not watch content, so the studio asks it to. */
+  | { greatcms: "ready"; reloads?: boolean }
   | { greatcms: "pick"; path?: string; block?: string }
   | { greatcms: "matched"; fields: number; of: number; blocks: number }
   | { greatcms: "mode"; select?: boolean; sections?: boolean };
@@ -28,7 +29,7 @@ const status = () => document.getElementById("live-status");
 const remembered = (key: string) => localStorage.getItem(`greatcms:${key}`) === "1";
 const say = (text: string) => status()?.replaceChildren(document.createTextNode(text));
 
-function setUpDraft(form: HTMLFormElement, endpoint: string): void {
+function setUpDraft(form: HTMLFormElement, endpoint: string, saved: () => void): void {
   let timer: number | undefined;
   let inFlight = false;
   let queued = false;
@@ -54,6 +55,7 @@ function setUpDraft(form: HTMLFormElement, endpoint: string): void {
       const response = await fetch(endpoint, { method: "POST", body, signal: aborter.signal });
       if (!response.ok) throw new Error(`draft failed: ${response.status}`);
       say("Your site is showing this edit");
+      saved();
     } catch (error) {
       if (stopped) return;
       say("Could not reach your dev server");
@@ -92,8 +94,17 @@ const dotted = (name: string) =>
 
 const labelOf = (control: Element) => {
   const field = control.closest(".field");
-  const label = field?.querySelector("label");
-  return (label?.childNodes[0]?.textContent ?? label?.textContent ?? "").trim() || "Field";
+  // The control's own label: a link field holds two, its address and its words.
+  const label =
+    (control.id ? field?.querySelector(`label[for="${CSS.escape(control.id)}"]`) : null) ??
+    field?.querySelector("label");
+  const text = (label?.childNodes[0]?.textContent ?? label?.textContent ?? "").trim() || "Field";
+  // A list's rows are labelled "Item 2"; the list's own name says more.
+  const row = /^Item (\d+)$/.exec(text);
+  const list = row
+    ? field?.parentElement?.closest("fieldset")?.querySelector("legend")?.textContent?.trim()
+    : null;
+  return list ? `${list} ${row![1]}` : text;
 };
 
 /** The outermost section a control sits in, or the region itself when the page has none. */
@@ -150,7 +161,8 @@ function reveal(target: Element): void {
   (focusable ?? (target as HTMLElement)).focus({ preventScroll: true });
 }
 
-function setUpInspector(form: HTMLFormElement, frame: HTMLIFrameElement): void {
+/** Returns what to do once a draft is written: nothing, or ask a page that cannot reload itself to. */
+function setUpInspector(form: HTMLFormElement, frame: HTMLIFrameElement): () => void {
   const frameOrigin = new URL(frame.src, location.href).origin;
   const post = (message: Record<string, unknown>) =>
     frame.contentWindow?.postMessage(message, frameOrigin);
@@ -183,18 +195,44 @@ function setUpInspector(form: HTMLFormElement, frame: HTMLIFrameElement): void {
     mode();
   };
 
+  let reloadsItself = true;
+  // A page that never says hello is a dev server that is not running, or one without the reader's
+  // preview. A page's hello usually arrives before its load event, so a load only starts the clock
+  // when that document has not spoken yet.
+  let silent = 0;
+  let heard = false;
+  const listen = () => {
+    window.clearTimeout(silent);
+    if (heard) {
+      heard = false;
+      return;
+    }
+    silent = window.setTimeout(
+      () => say("No answer from the page yet. Is its dev server running?"),
+      5000,
+    );
+  };
+  listen();
+  frame.addEventListener("load", listen);
   window.addEventListener("message", (event: MessageEvent<Message>) => {
     if (event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object" || typeof data.greatcms !== "string") return;
 
-    if (data.greatcms === "ready") sendFields();
-    else if (data.greatcms === "matched") {
+    if (data.greatcms === "ready") {
+      window.clearTimeout(silent);
+      heard = true;
+      // The studio could not reach the dev server, but this browser can: the page is its own proof.
+      frame.closest(".live-stage")?.classList.remove("is-down");
+      document.querySelector(".live-down")?.remove();
+      reloadsItself = data.reloads !== false;
+      sendFields();
+    } else if (data.greatcms === "matched") {
       const found = data.fields > 0 || data.blocks > 0;
       const where = select?.checked ? "Click anything on the page to edit it" : "";
       say(
         found
-          ? `${data.blocks} sections and ${data.fields} fields found on the page. ${where}`.trim()
+          ? `${count(data.blocks, "section")} and ${count(data.fields, "field")} on this page. ${where}`.trim()
           : "Nothing from this form is on the page you are looking at",
       );
     } else if (data.greatcms === "pick") {
@@ -221,15 +259,23 @@ function setUpInspector(form: HTMLFormElement, frame: HTMLIFrameElement): void {
 
   // Land in a field here and the page scrolls to where it shows.
   form.addEventListener("focusin", (event) => {
-    const field = (event.target as Element).closest(".field");
-    const control = field?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      'input[name^="f["], textarea[name^="f["]',
-    );
+    // The control itself when it has a name (a link's label, not its address), else the field's first.
+    const target = event.target as HTMLInputElement;
+    const control = target.name?.startsWith("f[")
+      ? target
+      : target
+          .closest(".field")
+          ?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            'input[name^="f["], textarea[name^="f["]',
+          );
     if (control?.name) post({ greatcms: "focus", path: control.name });
   });
 
   // Fields come back as the page reloads itself, so a draft only needs the page to ask again.
   frame.addEventListener("load", sendFields);
+  return () => {
+    if (!reloadsItself) post({ greatcms: "reload" });
+  };
 }
 
 function start(): void {
@@ -252,8 +298,7 @@ function start(): void {
     });
   }
 
-  setUpInspector(form, frame);
-  setUpDraft(form, endpoint);
+  setUpDraft(form, endpoint, setUpInspector(form, frame));
 
   // Arriving from another editor's preview: open at the field that was clicked there.
   const wanted = location.hash.slice(1);
@@ -265,4 +310,8 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", start, { once: true });
 } else {
   start();
+}
+
+function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }

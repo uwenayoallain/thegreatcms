@@ -55,10 +55,11 @@ const highlighted = await Promise.all(files.map((file) => highlight(file.code, f
 const proofs = cms.blocks<ProofBlock>("home.proofs");
 ---
 
-<Base title={`GreatCMS — ${hero.heading}`} description={hero.subtitle}>
+<Base title={`GreatCMS: ${hero.heading}`} description={hero.subtitle}>
   <!-- A switch, not a script: with it on, every managed region on this page is labelled with the file it lives in. -->
   <input type="checkbox" id="seams" class="seams-toggle" />
 
+  <div class="band ink hero-band">
   <section class="hero">
     <div class="reveal">
       {hero.eyebrow && <p class="stamp">{hero.eyebrow}</p>}
@@ -81,30 +82,38 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
       </label>
     </div>
 
-    <!-- Hand-written: one publish, as it happens — the field, the commit, the page. -->
-    <div class="sequence bezel" aria-label="A publish: an edit in the studio becomes one commit and a live page">
-      <div class="pane">
-        <div class="pane-bar"><span>Studio</span> <span class="mono">home.hero</span></div>
-        <div class="pane-body">
-          <span class="field-label">Heading</span>
-          <div class="field"><span class="typed">Publish from anywhere</span></div>
-          <span class="publish">Publish</span>
+    <!-- Hand-written: one publish as it happens, on repeat. The field, the commit, the page. -->
+    <ol class="pipeline" aria-label="A publish: an edit in the studio becomes one commit and a live page">
+      <li class="step step-edit">
+        <div class="card">
+          <p class="step-name"><span>Edit in the studio</span> <span class="mono">home.hero</span></p>
+          <div class="step-body">
+            <span class="field-label">Heading</span>
+            <div class="field"><span class="typed">Publish from anywhere</span></div>
+            <span class="publish">Publish</span>
+          </div>
         </div>
-      </div>
-      <div class="pane">
-        <div class="pane-bar"><span>Your repository</span> <span class="mono">content/cms/home.hero.json</span></div>
-        <pre class="diff"><span class="del">- "heading": "A CMS that gets out of the way"</span><span class="add">+ "heading": "Publish from anywhere"</span></pre>
-        <div class="commit"><span class="sha">c4a1f3e</span> <span>Update home hero</span></div>
-      </div>
-      <div class="pane">
-        <div class="pane-bar"><span class="live">Live</span> <span class="mono">your-site.com</span></div>
-        <div class="page">
-          <p class="h">Publish from anywhere</p>
-          <p class="p">Content in Git. Deploys on commit.</p>
+      </li>
+      <li class="step step-commit">
+        <div class="card">
+          <p class="step-name"><span>One commit</span> <span class="mono sha">c4a1f3e</span></p>
+          <pre class="diff"><span class="del">- "heading": "A CMS that gets out of the way"</span><span class="add">+ "heading": "Publish from anywhere"</span></pre>
+          <p class="mono file">content/cms/home.hero.json</p>
         </div>
-      </div>
-    </div>
+      </li>
+      <li class="step step-live">
+        <div class="card">
+          <p class="step-name"><span>Your site</span> <span class="mono">your-site.com</span></p>
+          <div class="page">
+            <p class="h"><span class="old">A CMS that gets out of the way</span><span class="new">Publish from anywhere</span></p>
+            <p class="p">Content in Git. Deploys on commit.</p>
+          </div>
+        </div>
+      </li>
+    </ol>
   </section>
+  <div class="commit-rule" aria-hidden="true"></div>
+  </div>
 
   <section class="claims" aria-labelledby="claims-heading">
     <div class="claims-intro">
@@ -126,7 +135,6 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
 
   <!-- Hand-written: the whole integration surface, shown rather than described. -->
   <section class="files" aria-labelledby="files-heading">
-    <div aria-hidden="true" class="corner corner-tr"></div>
     <div class="files-intro">
       <h2 id="files-heading" class="stamp">The whole integration</h2>
       <p class="files-lede">Three files. The first two are the standard; the third is whatever you already write.</p>
@@ -134,7 +142,7 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
     <ol class="file-list">
       {
         files.map((file) => (
-          <li>
+          <li class="ink">
             <h3 class="mono">{file.name}</h3>
             <p>{file.note}</p>
             <pre><code set:html={highlighted[files.indexOf(file)]} /></pre>
@@ -163,9 +171,10 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
     </ul>
   </section>
 
-  <section class="closing">
-    <div aria-hidden="true" class="corner corner-br"></div>
-    <h2 class="seam" data-file="content/cms/home.closing.json · heading">{closing.heading}</h2>
-    <p class="seam" data-file="content/cms/home.closing.json · body">{closing.body}</p>
+  <section class="closing band ink">
+    <div class="inner">
+      <h2 class="seam" data-file="content/cms/home.closing.json · heading">{closing.heading}</h2>
+      <p class="seam" data-file="content/cms/home.closing.json · body">{closing.body}</p>
+    </div>
   </section>
 </Base>

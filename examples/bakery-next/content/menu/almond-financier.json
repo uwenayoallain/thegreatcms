@@ -1,0 +1,7 @@
+{
+  "name": "Almond financier",
+  "category": "pastry",
+  "price": 1500,
+  "description": "Brown butter and ground almonds, baked to order in the afternoon.",
+  "dietary": ["nuts", "gluten-free"]
+}

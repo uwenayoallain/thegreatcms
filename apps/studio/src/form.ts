@@ -57,7 +57,11 @@ function setPath(target: Record<string, unknown>, path: string[], value: string)
     }
     node = node[key] as Record<string, unknown>;
   }
-  node[path.at(-1) as string] = value;
+  // A name sent more than once, as a multiple choice sends each ticked value, collects them all.
+  const leaf = path.at(-1) as string;
+  const prior = node[leaf];
+  node[leaf] =
+    typeof prior === "string" ? [prior, value] : Array.isArray(prior) ? [...prior, value] : value;
 }
 
 /** Numeric keys mean the author was editing a list. */
@@ -120,6 +124,7 @@ function coerceField(
     case "select": {
       if (def.multiple) {
         const list = toArrayIfIndexed(value);
+        if (typeof list === "string") return list === "" ? [] : [list];
         return Array.isArray(list) ? list.map(asString).filter(Boolean) : [];
       }
       const text = asString(value);
@@ -158,6 +163,16 @@ function coerceField(
       return src === "" ? undefined : { src };
     }
 
+    case "reference": {
+      if (!def.multiple) {
+        const slug = asString(value);
+        return slug === "" ? undefined : slug;
+      }
+      const list = toArrayIfIndexed(value);
+      const slugs = Array.isArray(list) ? list.map(asString) : asString(list).split(",");
+      return slugs.map((slug) => slug.trim()).filter(Boolean);
+    }
+
     case "list": {
       const list = toArrayIfIndexed(value);
       if (!Array.isArray(list)) return [];
@@ -190,7 +205,7 @@ function coerceField(
   }
 }
 
-/** Blocks carry `_type` alongside their fields, and each block's shape depends on it —. */
+/** Blocks carry `_type` alongside their fields, and each block's shape depends on it. */
 export function decodeBlocks(
   entries: Iterable<[string, string]>,
   blockFields: (type: string) => Record<string, FieldDef> | undefined,

@@ -1,0 +1,202 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/schema.schema.json
+#
+# Paraline, a fictional design and motion studio. Every word on the site is here or in
+# content/; the motion is the site's own CSS, which the CMS never sees.
+
+version: 1
+
+site:
+  name: Paraline
+  locale: en
+
+blocks:
+  client:
+    label: Client
+    fields:
+      name: { type: text, required: true, max: 40 }
+
+  service:
+    label: Service
+    fields:
+      title: { type: text, required: true, max: 40 }
+      summary: { type: text, multiline: true, required: true, max: 240 }
+      deliverables: { type: list, of: { type: text, max: 40 }, max: 6 }
+
+  step:
+    label: Step
+    fields:
+      title: { type: text, required: true, max: 40 }
+      description: { type: text, multiline: true, required: true, max: 200 }
+
+  stat:
+    label: Number
+    fields:
+      value:
+        {
+          type: text,
+          required: true,
+          max: 12,
+          description: "A number with an optional suffix, e.g. 140+ or 9 yrs",
+        }
+      label: { type: text, required: true, max: 60 }
+
+  clients:
+    label: Client strip
+    fields:
+      heading: { type: text, max: 60 }
+      items: { type: blocks, allow: [client], min: 3, max: 24 }
+
+  selected-work:
+    label: Selected work
+    variants: [{ value: grid, label: Two-column grid }, { value: stacked, label: Full-width rows }]
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      introduction: { type: text, multiline: true, max: 200 }
+      link: { type: link, description: Usually the work index }
+
+  statement:
+    label: Statement
+    fields:
+      eyebrow: { type: text, max: 40 }
+      text:
+        {
+          type: text,
+          multiline: true,
+          required: true,
+          max: 320,
+          description: Read word by word as the visitor scrolls,
+        }
+
+  services:
+    label: Services
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      items: { type: blocks, allow: [service], min: 1, max: 6 }
+
+  process:
+    label: Process
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      steps: { type: blocks, allow: [step], min: 2, max: 7 }
+
+  numbers:
+    label: Numbers
+    fields:
+      items: { type: blocks, allow: [stat], min: 2, max: 4 }
+
+  quote:
+    label: Quote
+    fields:
+      quote: { type: text, multiline: true, required: true, max: 360 }
+      name: { type: text, required: true, max: 60 }
+      role: { type: text, max: 80 }
+
+  cta:
+    label: Call to action
+    fields:
+      heading: { type: text, required: true, max: 80 }
+      body: { type: text, multiline: true, max: 200 }
+      link: { type: link, required: true }
+
+regions:
+  site.identity:
+    label: Studio
+    fields:
+      name: { type: text, required: true, max: 40, default: Paraline }
+      tagline: { type: text, max: 80 }
+      email: { type: text, required: true, default: hello@paraline.example }
+      city: { type: text, max: 60 }
+      availability: { type: text, max: 60, description: Shown as a small badge in the header }
+      social: { type: list, of: { type: link }, max: 6 }
+
+  home.hero:
+    label: Home hero
+    fields:
+      eyebrow: { type: text, max: 60 }
+      lines:
+        {
+          type: list,
+          of: { type: text, max: 24 },
+          min: 1,
+          max: 4,
+          description: "The headline, one line per item",
+        }
+      rotating:
+        {
+          type: list,
+          of: { type: text, max: 18 },
+          max: 6,
+          description: Words that cycle after the headline,
+        }
+      lede: { type: text, multiline: true, max: 240 }
+      primary: { type: link, required: true }
+      secondary: { type: link }
+
+  home.sections:
+    label: Home sections
+    type: blocks
+    allow: [clients, selected-work, statement, services, process, numbers, quote, cta]
+
+  contact.page:
+    label: Contact page
+    fields:
+      heading: { type: text, required: true, max: 60, default: "Tell us what you're making." }
+      body: { type: richtext }
+      prompts:
+        { type: list, of: { type: text, max: 80 }, max: 6, description: Things worth telling us }
+      kinds:
+        {
+          type: list,
+          of: { type: text, max: 24 },
+          max: 6,
+          description: "What the visitor can tick: the kind of work",
+        }
+      thanks:
+        {
+          type: text,
+          multiline: true,
+          max: 200,
+          default: "Thank you. We read every message and reply within two working days.",
+        }
+
+collections:
+  work:
+    label: Work
+    entryLabel: project
+    path: content/work
+    format: json
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 60 }
+      client: { type: text, required: true, max: 60 }
+      year: { type: number, integer: true, min: 2000, max: 2100 }
+      disciplines: { type: list, of: { type: text, max: 30 }, max: 5 }
+      summary: { type: text, multiline: true, required: true, max: 240 }
+      palette:
+        type: select
+        description: Colours of the generated cover
+        options:
+          [
+            { value: ember, label: Ember },
+            { value: tide, label: Tide },
+            { value: moss, label: Moss },
+            { value: dusk, label: Dusk },
+            { value: bone, label: Bone },
+          ]
+        default: ember
+      motif:
+        type: select
+        description: Shape of the generated cover
+        options:
+          [
+            { value: rings, label: Rings },
+            { value: grid, label: Grid },
+            { value: waves, label: Waves },
+            { value: orbit, label: Orbit },
+          ]
+        default: rings
+      cover: { type: image, description: Optional; replaces the generated cover }
+      featured: { type: boolean, default: false, description: Shown on the home page }
+      order: { type: number, integer: true, default: 10, description: Lower comes first }
+      body: { type: richtext }
+      results: { type: blocks, allow: [stat], max: 3 }

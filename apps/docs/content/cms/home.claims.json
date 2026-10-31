@@ -9,13 +9,13 @@
     {
       "_type": "claim",
       "title": "Hybrid by default",
-      "body": "A region is any slice of a page you opt in \u2014 one hero, or the whole site. Everything else stays hand-written code the studio never sees.",
+      "body": "A region is any slice of a page you opt in: one hero, or the whole site. Everything else stays hand-written code the studio never sees.",
       "proof": "A missing content file renders schema defaults"
     },
     {
       "_type": "claim",
       "title": "Not a framework plugin",
-      "body": "The integration surface is a schema file and some JSON. Astro, Hugo, Eleventy, Next, Jekyll, and Laravel consume it identically.",
+      "body": "The integration surface is a schema file and some JSON. Astro, Next.js, Nuxt, SvelteKit, Hugo and Laravel consume it identically.",
       "proof": "A 120-line Python reader passes the same conformance suite"
     },
     {

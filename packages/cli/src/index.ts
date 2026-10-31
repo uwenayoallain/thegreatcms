@@ -1,5 +1,6 @@
-/** @greatcms/cli — the local half of the workflow. */
+/** @greatcms/cli: the local half of the workflow. */
 
+import { describeSite, formatDescription } from "./describe.js";
 import { access, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
@@ -7,6 +8,7 @@ import { promisify } from "node:util";
 import {
   DEFAULT_CONFIG,
   DRAFT_DIR,
+  entryExtension,
   parseConfig,
   parseSchema,
   regionFilePath,
@@ -47,6 +49,9 @@ import {
 import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } from "./prompt.js";
 import { CliError, type FilePort, type GitPort } from "./ports.js";
 import { setupProject } from "./setup.js";
+import { plainUi, ui, useUi, type Ui } from "./ui.js";
+
+export { createUi, wantsColour, type Ui } from "./ui.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -190,6 +195,8 @@ export interface RunOptions {
   prompt?: PromptPort;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
+  /** Colour and marks; the binary passes one that knows its terminal, anything else gets plain text. */
+  ui?: Ui;
 }
 
 /** Prompts need a person on both ends: keys coming in, and a screen to redraw. */
@@ -199,13 +206,16 @@ function isInteractive(): boolean {
 
 export async function run(options: RunOptions): Promise<number> {
   const { argv, stdout, stderr } = options;
+  useUi(options.ui ?? plainUi);
   const [command = "help", ...rest] = argv;
   const flags = parseFlags(rest);
-  const knownCommand = ["setup", "init", "add", "check", "types", "doctor"].includes(command);
+  const knownCommand = ["setup", "init", "add", "check", "types", "doctor", "describe"].includes(
+    command,
+  );
 
   // Help must be side-effect free even when it follows a mutating command.
   if (knownCommand && (rest.includes("--help") || rest.includes("-h"))) {
-    stdout(HELP);
+    stdout(help());
     return 0;
   }
 
@@ -245,22 +255,24 @@ export async function run(options: RunOptions): Promise<number> {
         return await typesCommand({ ...options, flags });
       case "doctor":
         return await doctorCommand({ ...options, flags });
+      case "describe":
+        return await describeCommand({ ...options, flags });
       case "help":
       case "--help":
       case "-h":
-        stdout(HELP);
+        stdout(help());
         return 0;
       default:
-        stderr(`Unknown command "${command}".\n\n${HELP}`);
+        stderr(`${ui().err(`Unknown command "${command}".`)}\n\n${help()}`);
         return 1;
     }
   } catch (error) {
     if (error instanceof PromptCancelled) {
-      stderr("\nCancelled. Nothing was written.\n");
+      stderr(`\n${ui().warn("Cancelled. Nothing was written.")}\n`);
       return 130;
     }
     if (error instanceof AddError || error instanceof CliError || error instanceof SpecError) {
-      stderr(`${error.message}\n`);
+      stderr(`${ui().err(error.message)}\n`);
       return 1;
     }
     throw error;
@@ -302,13 +314,15 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
   const frameworkFlag = flags.string("framework");
   const chosenFramework = frameworkFlag ? frameworkFromFlag(frameworkFlag) : null;
 
-  stdout(`\nSetting up GreatCMS in ${root}\n\n`);
+  stdout(`\n${ui().step("Setting up GreatCMS")}\n${ui().note(root)}\n\n`);
   prompt.note(
-    chosenFramework
-      ? `Using ${chosenFramework.label} (--framework).`
-      : detection.confident
-        ? `Detected ${detection.framework.label} (${detection.evidence}).`
-        : `No framework detected (${detection.evidence}).`,
+    ui().info(
+      chosenFramework
+        ? `Using ${chosenFramework.label} (--framework).`
+        : detection.confident
+          ? `Detected ${detection.framework.label} (${detection.evidence}).`
+          : `No framework detected (${detection.evidence}).`,
+    ),
   );
 
   const name =
@@ -360,7 +374,7 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
 }
 
 /**
- * `greatcms add` — the step between `init` and having a site. Everything it
+ * `greatcms add`: the step between `init` and having a site. Everything it
  * writes could be typed into the schema by hand; the point is that the YAML
  * indentation, the field syntax, and the file path are no longer yours to get
  * right.
@@ -489,7 +503,7 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
   });
   const snippet = readSnippet(plan, detection.framework, config);
 
-  const lines = ["", `Added ${requestedKind} ${id} to ${found.name}.`, ""];
+  const lines = ["", ui().ok(`Added ${requestedKind} ${ui().bold(id)} to ${found.name}.`), ""];
   if (plan.kind === "block" && plan.to) {
     lines.push(`Editors can now add it in ${plan.to}.`, "");
     if (requestedKind === "section") {
@@ -522,7 +536,10 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
       "",
     );
   }
-  lines.push("  greatcms check     confirm the content still matches the schema", "");
+  lines.push(
+    `  ${ui().accent("greatcms check")}     confirm the content still matches the schema`,
+    "",
+  );
 
   stdout(lines.join("\n"));
   return 0;
@@ -686,12 +703,13 @@ async function typesCommand(options: RunOptions & { flags: Flags }): Promise<num
   if (flags.boolean("check")) {
     const current = await nodeFiles(root).read(out);
     if (current === source) {
-      stdout(`${out} is up to date.\n`);
+      stdout(`${ui().ok(`${out} is up to date.`)}\n`);
       return 0;
     }
     options.stderr(
-      `${out} does not match .cms/schema.yaml.\n` +
-        `  fix: run \`greatcms types --out ${out}\` and commit the result.\n`,
+      `${ui().err(
+        `${out} does not match .cms/schema.yaml.\n  fix: run \`greatcms types --out ${out}\` and commit the result.`,
+      )}\n`,
     );
     return 1;
   }
@@ -703,9 +721,51 @@ async function typesCommand(options: RunOptions & { flags: Flags }): Promise<num
     `${Object.keys(schema.collections).length} collections`,
   ];
   stdout(
-    `\nWrote ${out} (${counts.join(", ")}).\n\n` +
-      `Include it in your tsconfig and \`cms.region("home.hero")\` is typed by its id.\n` +
-      `Regenerate it when the schema changes — in a build script, or in CI with --check.\n\n`,
+    `\n${ui().ok(`Wrote ${out} (${counts.join(", ")}).`)}\n\n` +
+      `${ui().note(
+        `Include it in your tsconfig and \`cms.region("home.hero")\` is typed by its id.\n` +
+          `Regenerate it when the schema changes: in a build script, or in CI with --check.`,
+      )}\n\n`,
+  );
+  return 0;
+}
+
+async function describeCommand(options: RunOptions & { flags: Flags }): Promise<number> {
+  const { cwd, stdout, flags } = options;
+  const root = resolve(cwd);
+  const config = await loadConfig(root);
+  const schema = await loadSchema(root);
+  const files = nodeCheckFiles(root);
+  const [edited, entries] = await Promise.all([
+    Promise.all(
+      Object.keys(schema.regions).map(async (id) =>
+        (await files.read(regionFilePath(config, id))) === null ? null : id,
+      ),
+    ),
+    Promise.all(
+      Object.entries(schema.collections).map(async ([name, collection]) => {
+        const extension = `.${entryExtension(collection.format)}`;
+        const dir = collection.path.replace(/\/+$/, "");
+        const paths = await files.list(dir);
+        return [
+          name,
+          paths
+            .filter((path) => path.endsWith(extension))
+            .map((path) => path.slice(dir.length + 1, -extension.length)),
+        ] as const;
+      }),
+    ),
+  ]);
+  const description = describeSite({
+    schema,
+    config,
+    edited: new Set(edited.filter((id): id is string => id !== null)),
+    entries: Object.fromEntries(entries),
+  });
+  stdout(
+    flags.boolean("json")
+      ? `${JSON.stringify(description, null, 2)}\n`
+      : formatDescription(description),
   );
   return 0;
 }
@@ -717,10 +777,16 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
   const schema = await loadSchema(root);
   const files = nodeFiles(root);
 
-  const lines: string[] = ["GreatCMS setup looks like this:", ""];
-  lines.push(`  spec version   ${schema.version}`);
-  lines.push(`  regions dir    ${config.content.regions}`);
-  lines.push("", `Regions (${Object.keys(schema.regions).length}):`);
+  const u = ui();
+  const lines: string[] = [
+    u.step("GreatCMS setup"),
+    u.kv([
+      ["spec version", String(schema.version)],
+      ["regions dir", config.content.regions],
+    ]),
+    "",
+    u.step(`Regions (${Object.keys(schema.regions).length})`),
+  ];
 
   const statuses = await Promise.all(
     Object.keys(schema.regions).map(async (regionId) => {
@@ -729,22 +795,27 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
     }),
   );
 
+  const idWidth = Math.max(0, ...statuses.map(({ regionId }) => regionId.length));
   let unedited = 0;
   for (const { regionId, path, exists } of statuses) {
     if (!exists) unedited += 1;
-    lines.push(`  ${exists ? "edited " : "default"} ${regionId}  →  ${path}`);
+    lines.push(
+      `  ${exists ? "edited " : u.muted("default")}  ${regionId.padEnd(idWidth)}  ${u.muted(`→ ${path}`)}`,
+    );
   }
 
   if (unedited > 0) {
     lines.push(
       "",
-      `${unedited} region${unedited === 1 ? "" : "s"} ${unedited === 1 ? "has" : "have"} no content file yet, and will render schema defaults. That is normal, not a problem.`,
+      u.note(
+        `${unedited} region${unedited === 1 ? "" : "s"} ${unedited === 1 ? "has" : "have"} no content file yet, and will render schema defaults. That is normal, not a problem.`,
+      ),
     );
   }
 
   const collections = Object.keys(schema.collections);
   if (collections.length > 0) {
-    lines.push("", `Collections: ${collections.join(", ")}`);
+    lines.push("", u.step(`Collections (${collections.length})`), `  ${collections.join(", ")}`);
   }
 
   // An unsaved draft only shows in dev, so the only way to notice a forgotten
@@ -778,10 +849,12 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
   if (drafts.length > 0) {
     lines.push(
       "",
-      `${drafts.length} unsaved edit${drafts.length === 1 ? "" : "s"} in ${DRAFT_DIR}, which your dev server is showing instead of what is published:`,
-      ...drafts.map((path) => `  ${path}`),
-      `  fix: publish it in the studio, or delete ${DRAFT_DIR} to go back to what is committed.`,
+      u.warn(
+        `${drafts.length} unsaved edit${drafts.length === 1 ? "" : "s"} in ${DRAFT_DIR}, which your dev server is showing instead of what is published:\n${drafts.map((path) => `  ${path}`).join("\n")}\nfix: publish it in the studio, or delete ${DRAFT_DIR} to go back to what is committed.`,
+      ),
     );
+  } else {
+    lines.push("", u.ok("No drafts waiting: the dev server shows what is committed."));
   }
 
   stdout(`${lines.join("\n")}\n`);
@@ -850,7 +923,20 @@ export function parseFlags(argv: string[]): Flags {
   };
 }
 
-const HELP = `greatcms — local tools for a Git-backed site
+/** The usage text, commands in the accent so the eye finds them. */
+function help(): string {
+  const u = ui();
+  if (!u.colour) return HELP;
+  return HELP.split("\n")
+    .map((line, index) => {
+      if (index === 0) return u.bold(line);
+      const usage = line.match(/^(  greatcms .+?)(\s{2,}.*)?$/);
+      return usage ? `${u.accent(usage[1]!)}${usage[2] ?? ""}` : line;
+    })
+    .join("\n");
+}
+
+const HELP = `greatcms: local tools for a Git-backed site
 
   greatcms setup [directory]     scan a new/existing project or workspace, build
                                  custom regions, sections and collections,
@@ -868,7 +954,8 @@ const HELP = `greatcms — local tools for a Git-backed site
   greatcms add section <name>    define a reusable page section and make it
                                  selectable in a reorderable region
   greatcms add block <name>      add a block type a blocks region can hold
-  greatcms add collection <name> add a folder of entries
+  greatcms add collection <name>
+                                 add a folder of entries
     --field name:type            repeatable. text richtext image link number
                                  boolean date file, select(a|b), list(text);
                                  a trailing ! means required
@@ -879,7 +966,9 @@ const HELP = `greatcms — local tools for a Git-backed site
     --dir <path>                 collections only, where entries live
 
   greatcms check [--json]        validate this repository's content against the
-                                 schema; exits non-zero, so CI can run it
+                                 schema, media and internal links; exits
+                                 non-zero on problems (not warnings), so CI
+                                 can run it
 
   greatcms types [--out <path>]  TypeScript for every region, block, and
                                  collection, plus the augmentation that types
@@ -891,6 +980,11 @@ const HELP = `greatcms — local tools for a Git-backed site
 
   greatcms doctor [--json]       check this repository's CMS setup; --json for
                                  a machine-readable summary
+
+  greatcms describe [--json]     the content model in one screen: every region,
+                                 block and collection, each field's type and
+                                 limits, and where its file goes. Read this
+                                 before writing content by hand.
 
 Everything here runs on your machine, with your toolchain. Nothing from this
 repository is ever executed by the studio.

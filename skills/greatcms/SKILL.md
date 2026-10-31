@@ -17,8 +17,9 @@ YAML: it keeps indentation, field syntax and paths right.
 ## Add it to a site
 
 ```sh
-npx greatcms init --yes            # detects Astro, Next, Nuxt, SvelteKit, Eleventy
+npx greatcms init --yes            # detects Astro, Next.js, Nuxt, SvelteKit
 npx greatcms doctor                # prints what it set up and where content lives
+npx greatcms describe              # every field, its type and limits, and the file it lives in: read before writing content
 ```
 
 `init` writes `.cms/schema.yaml`, `.cms/config.yaml` and a note in `AGENTS.md`
@@ -45,6 +46,20 @@ npx greatcms types --out src/cms.d.ts   # TypeScript for every region, block and
 Field types: `text richtext image link number boolean date file`, `select(a|b)`,
 `list(text)`. A trailing `!` means required. These commands edit the existing
 schema as text and keep its comments; do not rewrite the file wholesale.
+
+Three schema keys the commands do not write, added by hand when needed:
+
+```yaml
+author: { type: reference, collection: people } # an entry's slug; `multiple: true` for a list
+slides: { type: blocks, allow: [slide], when: { field: style, equals: carousel } } # shown only then
+cta: # a block with looks the editor picks
+  variants: [{ value: dark, label: Dark panel }, { value: light, label: Light panel }]
+  fields: { heading: { type: text, required: true } }
+```
+
+A block with `variants` always resolves with `_variant` set (the first unless
+the content names another), so a component branches on `block._variant`.
+Run `greatcms types` again after any schema change.
 
 ## Read content in a page
 
@@ -92,6 +107,9 @@ Then check before committing:
 npx greatcms check --json     # exit 0 and {"ok":true,...} when every file matches the schema
 ```
 
+It also reports missing images, internal links to entries that do not exist,
+and references to missing entries as errors; unused media, links without text
+and skipped heading levels come back as `warnings`, which do not fail the run.
 A failure names the file, the field and the fix, for example:
 
 ```

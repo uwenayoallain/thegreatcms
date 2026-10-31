@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/schema.schema.json
+#
+# A bakery's whole content model. Next.js reads it through @greatcms/reader in
+# lib/cms.ts, from Server Components; no page touches a file directly.
+
+version: 1
+
+site:
+  name: Hearth Bakery
+  locale: en
+
+regions:
+  site.identity:
+    label: Bakery
+    fields:
+      name: { type: text, required: true, max: 40 }
+      tagline: { type: text, max: 90 }
+      address: { type: text, multiline: true }
+      phone: { type: text, max: 40 }
+      email: { type: text, max: 80 }
+      notice:
+        type: text
+        max: 110
+        description: One line above everything, such as a holiday closure. Leave empty to hide it.
+    default:
+      name: Hearth
+      tagline: Bread, pastry and coffee, baked before you wake.
+
+  home.hero:
+    label: Home hero
+    fields:
+      eyebrow: { type: text, max: 40 }
+      heading: { type: text, required: true, max: 70 }
+      lede: { type: text, multiline: true, max: 240 }
+      cta: { type: link, label: Button }
+    default:
+      heading: Baked this morning, gone by evening.
+
+  home.story:
+    label: Our story
+    fields:
+      heading: { type: text, required: true, max: 70 }
+      body: { type: richtext }
+
+  visit.hours:
+    label: Opening hours
+    fields:
+      hours:
+        type: list
+        max: 7
+        of:
+          type: group
+          fields:
+            days: { type: text, required: true, max: 30 }
+            open: { type: text, required: true, max: 30 }
+      note: { type: text, max: 140 }
+
+collections:
+  menu:
+    label: Menu
+    entryLabel: item
+    description: Everything on the counter. Featured items also appear on the home page.
+    path: content/menu
+    format: json
+    slug: name
+    fields:
+      name: { type: text, required: true, max: 50 }
+      category:
+        type: select
+        required: true
+        options:
+          - { value: bread, label: Bread }
+          - { value: pastry, label: Pastry }
+          - { value: coffee, label: Coffee & tea }
+      price:
+        { type: number, required: true, min: 0, integer: true, description: In Rwandan francs. }
+      description: { type: text, multiline: true, max: 160 }
+      dietary:
+        type: select
+        multiple: true
+        options:
+          - { value: vegan, label: Vegan }
+          - { value: gluten-free, label: Gluten-free }
+          - { value: nuts, label: Contains nuts }
+      featured: { type: boolean, description: Show it on the home page under “From the oven”. }

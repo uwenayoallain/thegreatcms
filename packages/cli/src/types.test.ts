@@ -31,6 +31,8 @@ regions:
       cta: { type: link }
       body: { type: richtext }
       tags: { type: list, of: { type: text } }
+      featured: { type: reference, collection: blog }
+      related: { type: reference, collection: blog, multiple: true }
       seo:
         type: group
         fields:
@@ -75,6 +77,11 @@ describe("what it says about a field", () => {
 
   it("makes an ordinary optional field optional", () => {
     expect(source).toMatch(/note\?: string;/);
+  });
+
+  it("types a reference as the slug it stores, and a multiple one as always present", () => {
+    expect(source).toMatch(/featured\?: string;/);
+    expect(source).toMatch(/related: string\[\];/);
   });
 
   it("types a Markdown entry's body as the Markdown string the reader hands back", () => {

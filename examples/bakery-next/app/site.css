@@ -1,0 +1,751 @@
+/* Hearth: an enamel-sign blue on white, a serif for what is said aloud, a printed menu. */
+
+:root {
+  color-scheme: light;
+  --edge: max(var(--gap), calc((100% - 76rem) / 2 + var(--gap)));
+  --paper: #fdfdfb;
+  --raised: #ffffff;
+  --ink: #1b1a17;
+  --ink-soft: #57554f;
+  --line: #e4e2dc;
+  --blue: #1f3fbf;
+  --blue-deep: #172f8f;
+  --blue-wash: #eef1fb;
+  --butter: #f3c94a;
+  --serif: var(--font-serif), "Iowan Old Style", Georgia, serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --gap: clamp(1.25rem, 4vw, 3rem);
+  --radius: 14px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 clamp(1rem, 0.96rem + 0.2vw, 1.08rem) / 1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(3rem, 1.6rem + 6vw, 6.5rem);
+}
+
+h2 {
+  font-size: clamp(2.2rem, 1.5rem + 3vw, 3.6rem);
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin: 0;
+}
+
+p {
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 10;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 8px;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+.notice {
+  margin: 0;
+  max-width: none;
+  padding: 0.6rem var(--gap);
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  /* The same edges as the page below it, however wide the window. */
+  padding: 1.1rem var(--edge);
+  border-bottom: 1px solid var(--line);
+}
+
+.wordmark {
+  font: 400 1.7rem/1 var(--serif);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--blue);
+  margin: 0;
+}
+
+.masthead ul {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.masthead a {
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.masthead a:hover,
+.masthead a[aria-current="page"] {
+  color: var(--blue);
+}
+
+.pill {
+  padding: 0.45rem 1rem;
+  border: 1.5px solid var(--blue);
+  border-radius: 999px;
+  color: var(--blue);
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 var(--gap) 5rem;
+}
+
+main > section,
+.page-head {
+  padding-top: clamp(3rem, 8vw, 6rem);
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.lede {
+  font-size: clamp(1.1rem, 1rem + 0.5vw, 1.35rem);
+  color: var(--ink-soft);
+  margin: 1.5rem 0 0;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0.75rem 1.4rem;
+  border: 1.5px solid var(--blue);
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--blue-deep);
+  border-color: var(--blue-deep);
+}
+
+.button.ghost {
+  background: transparent;
+  color: var(--blue);
+}
+
+.button.ghost:hover {
+  background: var(--blue-wash);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 2.25rem 0 0;
+}
+
+/* Today's hours and the street, the two things a visitor came to the page for. */
+.open-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 1.75rem 0 0;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.open-line span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.open-line span:first-child::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--butter);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--butter) 30%, transparent);
+}
+
+.open-line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The hero: the promise on the left, a baker's stamp on the right. */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.stamp {
+  width: clamp(9rem, 22vw, 15rem);
+  height: auto;
+  color: var(--blue);
+}
+
+.stamp circle {
+  fill: var(--blue-wash);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.stamp text {
+  fill: currentColor;
+  font: 600 13px var(--sans);
+  letter-spacing: 0.24em;
+}
+
+.stamp .wheat {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 44rem) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stamp {
+    order: -1;
+    width: 7rem;
+  }
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.section-head a {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.featured {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  border-radius: var(--radius);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -14px rgb(23 47 143 / 0.35);
+}
+
+.card .eyebrow {
+  margin-bottom: 0.6rem;
+}
+
+.card h3 {
+  font: 400 1.9rem/1.05 var(--serif);
+}
+
+.card p:not(.eyebrow, .price) {
+  color: var(--ink-soft);
+  margin: 0.75rem 0 1.25rem;
+}
+
+.card .price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: auto 0 0;
+  font-weight: 650;
+  color: var(--blue);
+}
+
+.card .price .tag {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--blue-wash);
+  color: var(--blue-deep);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.card .price .tag:first-of-type {
+  margin-left: auto;
+}
+
+/* The story on the enamel blue, full width without the page scrolling sideways. */
+main > section.story {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: var(--gap);
+  margin-top: clamp(3rem, 8vw, 6rem);
+  padding-block: clamp(3.5rem, 8vw, 6rem);
+  border-image: conic-gradient(var(--blue) 0 0) fill 0 / /0 100vmax;
+  color: #fff;
+}
+
+.story h2 {
+  color: #fff;
+}
+
+.story h2::after {
+  content: "";
+  display: block;
+  width: 3.5rem;
+  height: 4px;
+  margin-top: 1.25rem;
+  background: var(--butter);
+}
+
+.story .prose {
+  color: rgb(255 255 255 / 0.88);
+}
+
+.story .prose strong {
+  color: var(--butter);
+}
+
+.prose {
+  font-size: 1.1rem;
+}
+
+.prose p:first-child {
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 52rem) {
+  main > section.story {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.visit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--gap);
+  margin-top: 2rem;
+}
+
+.hours {
+  margin: 0;
+  border-top: 2px solid var(--ink);
+}
+
+.hours div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.hours dt {
+  font-weight: 600;
+}
+
+.hours dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+address {
+  font-style: normal;
+  font-size: 1.15rem;
+  line-height: 1.5;
+}
+
+.note {
+  margin-top: 1.25rem;
+  padding: 1rem 1.2rem;
+  border-left: 4px solid var(--butter);
+  background: var(--raised);
+  color: var(--ink-soft);
+}
+
+/* The order form posts to the studio's inbox, as a plain form. */
+.order {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .order {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.order-intro > p {
+  color: var(--ink-soft);
+  margin: 1rem 0 0;
+}
+
+.order-notes {
+  margin: 1.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.order-notes li {
+  padding: 0.85rem 0 0.85rem 1.6rem;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(var(--blue), var(--blue)) 0 1.45rem / 0.6rem 2px no-repeat;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 1.25rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 18px 40px -28px rgb(23 47 143 / 0.35);
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  margin: 0;
+}
+
+.field.wide,
+.form > .button {
+  grid-column: 1 / -1;
+}
+
+.form > .button {
+  justify-self: start;
+}
+
+fieldset.field {
+  border: 0;
+  padding: 0;
+}
+
+label,
+legend {
+  font-weight: 600;
+}
+
+.hint {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+input:not([type="checkbox"]),
+textarea {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #bdbab2;
+  border-radius: 10px;
+  background: var(--raised);
+  color: inherit;
+  font: inherit;
+}
+
+input:focus-visible,
+textarea:focus-visible {
+  border-color: var(--blue);
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #bdbab2;
+  border-radius: 999px;
+  background: var(--raised);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.choice:has(input:checked) {
+  border-color: var(--blue);
+  background: var(--blue-wash);
+  color: var(--blue-deep);
+}
+
+.choice input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  border: 1.5px solid #9d9a93;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.choice input:checked {
+  border-color: var(--blue);
+  background: var(--blue)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3.5 8.5 3 3 6-7'/%3E%3C/svg%3E")
+    center / 0.8rem no-repeat;
+}
+
+.choice input:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* The menu reads like the card on the counter: name, dotted leader, price. */
+.page-head.narrow {
+  max-width: 44rem;
+}
+
+.jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.jump a {
+  padding: 0.4rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raised);
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.jump a:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.menu-section {
+  scroll-margin-top: 1rem;
+}
+
+.menu-section h2 {
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--ink);
+}
+
+.items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  column-gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.item-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.leader {
+  flex: 1;
+  border-bottom: 2px dotted #b8b5ad;
+  transform: translateY(-0.3em);
+}
+
+.price {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.item p {
+  margin: 0.4rem 0 0;
+  color: var(--ink-soft);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--blue-wash);
+  color: var(--blue-deep);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.footer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.5rem var(--gap);
+  padding: 3rem var(--edge);
+  background: var(--ink);
+  color: #e9e7e1;
+}
+
+.footer .wordmark {
+  color: #fff;
+}
+
+.footer p {
+  margin: 0.6rem 0 0;
+}
+
+.footer-hours {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.footer-hours div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.footer-hours dt {
+  color: #b9b6ae;
+}
+
+.footer-hours dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.footer .small {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  color: #b9b6ae;
+}
+
+/* A phone keeps the whole masthead on one line. */
+@media (max-width: 30rem) {
+  .masthead ul {
+    gap: 1rem;
+  }
+
+  .wordmark {
+    font-size: 1.4rem;
+  }
+
+  .pill {
+    padding: 0.35rem 0.8rem;
+  }
+}

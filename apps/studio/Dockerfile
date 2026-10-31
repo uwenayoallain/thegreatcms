@@ -1,5 +1,6 @@
 # The studio is one Node process and one SQLite file. No database server, no
 # native modules to compile, nothing to orchestrate.
+#   docker build -t greatcms-studio -f apps/studio/Dockerfile .
 FROM node:24-alpine AS build
 
 WORKDIR /app
@@ -9,19 +10,17 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/studio ./apps/studio
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter @greatcms/studio...
 RUN pnpm --filter @greatcms/studio... build
-# Reinstall without dev dependencies from the store already fetched, keeping the workspace layout
-# so pnpm's relative links between packages still resolve once the tree is copied.
-RUN CI=true pnpm install --prod --frozen-lockfile --offline --filter @greatcms/studio...
 
+# The server is one bundled file and the browser code a few more: no node_modules ship.
 FROM node:24-alpine
 # Publishing is a git commit, and a push when the site asks for it.
 RUN apk add --no-cache git openssh-client
-WORKDIR /app
-
-COPY --from=build /app ./
 WORKDIR /app/apps/studio
+
+COPY --from=build /app/apps/studio/dist ./dist
+COPY --from=build /app/apps/studio/public ./public
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node
 

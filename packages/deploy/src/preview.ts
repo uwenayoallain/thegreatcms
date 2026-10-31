@@ -216,7 +216,7 @@ export function createPreviewServer(options: PreviewOptions) {
   return { server, runner };
 }
 
-export const PREVIEW_HELP = `greatcms-preview — a site's dev server, running only while someone looks at it.
+export const PREVIEW_HELP = `greatcms-preview: a site's dev server, running only while someone looks at it.
 
 Environment:
   PREVIEW_SOURCE    the site's working copy                                   (required)

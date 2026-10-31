@@ -104,7 +104,7 @@ def regions_dir(config: dict) -> str:
 
 
 def field_defaults(fields: dict) -> dict:
-    """Defaults declared on the fields themselves. Lists default to absent."""
+    """Defaults declared on the fields themselves. Lists default to absent, multiple references to []."""
     out: dict = {}
     for name, field in (fields or {}).items():
         kind = field.get("type")
@@ -114,6 +114,9 @@ def field_defaults(fields: dict) -> dict:
                 out[name] = nested
         elif kind == "list":
             continue
+        elif kind == "reference":
+            if field.get("multiple"):
+                out[name] = []
         elif kind == "blocks":
             if "default" in field:
                 out[name] = field["default"]
@@ -198,7 +201,7 @@ def read_entries(site_dir: str, collection: dict) -> list[dict]:
     """A collection entry is what its file says: frontmatter plus the body field.
 
     Schema defaults are deliberately not applied here. They are an authoring
-    convenience for a new entry, not a read-time rule — an entry that exists
+    convenience for a new entry, not a read-time rule: an entry that exists
     says what it says.
     """
     extension = EXTENSIONS.get(collection.get("format", "markdown"), ".md")

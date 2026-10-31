@@ -1,0 +1,87 @@
+# The studio alone, reached through a Cloudflare Tunnel: no open ports, no certificates to renew.
+#
+#   cp .env.example .env     # then fill it in
+#   docker compose up -d --build
+#
+# In Cloudflare, give the tunnel the public hostname STUDIO_HOST -> http://studio:8787, and one per
+# preview, <site>-preview.PREVIEW_DOMAIN -> http://caddy:80. No port is published, so the tunnel is
+# the only way in, and a preview is shown only to someone signed in to the studio.
+
+name: greatcms-studio
+
+services:
+  studio:
+    build:
+      context: ../../..
+      dockerfile: apps/studio/Dockerfile
+    restart: unless-stopped
+    environment:
+      STUDIO_PASSWORD: "${STUDIO_PASSWORD:?set STUDIO_PASSWORD in .env}"
+      STUDIO_SECRET: "${STUDIO_SECRET:?set STUDIO_SECRET in .env}"
+      STUDIO_URL: https://${STUDIO_HOST:?set STUDIO_HOST in .env}
+      # Only cloudflared can reach the studio, so the visitor address it reports can be trusted.
+      STUDIO_TRUST_PROXY: cloudflare
+      # Signing in also opens the previews, which live on sibling names under this domain.
+      STUDIO_COOKIE_DOMAIN: ${PREVIEW_DOMAIN:-}
+      STUDIO_SITES: ${STUDIO_SITES:-}
+      GIT_AUTHOR_NAME: ${GIT_NAME:-Studio}
+      GIT_AUTHOR_EMAIL: ${GIT_EMAIL:-studio@example.com}
+      GIT_COMMITTER_NAME: ${GIT_NAME:-Studio}
+      GIT_COMMITTER_EMAIL: ${GIT_EMAIL:-studio@example.com}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      NOTIFY_FROM: ${NOTIFY_FROM:-}
+      NOTIFY_TO: ${NOTIFY_TO:-}
+    volumes:
+      # Mounted at the same path, so a site's folder is written the same way inside and out.
+      - ${SITES_DIR:?set SITES_DIR in .env}:${SITES_DIR}
+      - studio-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/sign-in"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+
+  # Every site's dev server, so the editor frames the real site wherever the studio is opened.
+  previews:
+    image: node:24-bookworm-slim
+    restart: unless-stopped
+    # The checkout's own user, so caches the dev servers write stay editable outside the container.
+    user: "${PREVIEW_UID:-1000}:${PREVIEW_GID:-1000}"
+    working_dir: ${SITES_DIR}
+    command: ["node", "apps/studio/tunnel/previews.mjs"]
+    environment:
+      SITES_DIR: ${SITES_DIR}
+      PREVIEW_DOMAIN: ${PREVIEW_DOMAIN:?set PREVIEW_DOMAIN in .env}
+      HOME: /tmp
+      ASTRO_TELEMETRY_DISABLED: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NUXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - ${SITES_DIR}:${SITES_DIR}
+    # Six dev servers; a ceiling keeps them from starving the rest of the machine.
+    mem_limit: ${PREVIEW_MEMORY:-3g}
+
+  # The door to the previews: asks the studio about each visitor, then passes them through.
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      PREVIEW_DOMAIN: ${PREVIEW_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - studio
+      - previews
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.5
+    restart: unless-stopped
+    depends_on:
+      studio:
+        condition: service_healthy
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    command: tunnel --no-autoupdate run
+
+volumes:
+  studio-data:

@@ -1,0 +1,166 @@
+{
+  "blocks": [
+    {
+      "_type": "clients",
+      "heading": "Trusted by teams who sweat the details",
+      "items": [
+        {
+          "_type": "client",
+          "name": "Northwind"
+        },
+        {
+          "_type": "client",
+          "name": "Halo Labs"
+        },
+        {
+          "_type": "client",
+          "name": "Umbra"
+        },
+        {
+          "_type": "client",
+          "name": "Kestrel Bank"
+        },
+        {
+          "_type": "client",
+          "name": "Atlas Rail"
+        },
+        {
+          "_type": "client",
+          "name": "Oculi"
+        },
+        {
+          "_type": "client",
+          "name": "Fernhouse"
+        },
+        {
+          "_type": "client",
+          "name": "Tessera"
+        },
+        {
+          "_type": "client",
+          "name": "Lumen Health"
+        },
+        {
+          "_type": "client",
+          "name": "Driftwood"
+        }
+      ]
+    },
+    {
+      "_type": "selected-work",
+      "_variant": "grid",
+      "heading": "Selected work",
+      "introduction": "A few projects we are proud of, chosen because the hard part was invisible by the end.",
+      "link": {
+        "href": "/work/",
+        "label": "All projects"
+      }
+    },
+    {
+      "_type": "statement",
+      "eyebrow": "How we think",
+      "text": "Good motion is not decoration. It is the interface explaining itself: where things came from, where they went, and what just happened because you touched it."
+    },
+    {
+      "_type": "services",
+      "heading": "What we do",
+      "items": [
+        {
+          "_type": "service",
+          "title": "Product design",
+          "summary": "Research, flows and interfaces for web and native apps, designed in the browser as early as we can.",
+          "deliverables": ["Product strategy", "UX flows", "Interface design", "Design systems"]
+        },
+        {
+          "_type": "service",
+          "title": "Motion systems",
+          "summary": "A shared language of easing, timing and choreography, so every transition in your product feels like the same hand made it.",
+          "deliverables": ["Motion principles", "Interaction specs", "Prototypes", "Lottie & code"]
+        },
+        {
+          "_type": "service",
+          "title": "Brand & identity",
+          "summary": "Marks, type and colour that hold up at 16 pixels and on a billboard, and know how to move.",
+          "deliverables": ["Identity", "Typography", "Brand motion", "Guidelines"]
+        },
+        {
+          "_type": "service",
+          "title": "Front-end build",
+          "summary": "We ship what we design: fast, accessible sites and component libraries your team can keep building on.",
+          "deliverables": ["Marketing sites", "Component libraries", "Performance", "Accessibility"]
+        }
+      ]
+    },
+    {
+      "_type": "process",
+      "heading": "From first call to launch",
+      "steps": [
+        {
+          "_type": "step",
+          "title": "Listen",
+          "description": "A week of calls, product walkthroughs and support tickets, until we can say what is actually wrong."
+        },
+        {
+          "_type": "step",
+          "title": "Frame",
+          "description": "One page that names the problem, the constraints and what done looks like. Everyone signs it."
+        },
+        {
+          "_type": "step",
+          "title": "Prototype",
+          "description": "Clickable, animated, ugly where it does not matter yet. We test it with real people in week three."
+        },
+        {
+          "_type": "step",
+          "title": "Refine",
+          "description": "Type, colour, motion and copy tightened until nothing is left to explain."
+        },
+        {
+          "_type": "step",
+          "title": "Ship",
+          "description": "Production code or a handover your engineers enjoy reading, and two weeks of us on call."
+        }
+      ]
+    },
+    {
+      "_type": "numbers",
+      "items": [
+        {
+          "_type": "stat",
+          "value": "140+",
+          "label": "Products shipped"
+        },
+        {
+          "_type": "stat",
+          "value": "9 yrs",
+          "label": "Working together"
+        },
+        {
+          "_type": "stat",
+          "value": "38",
+          "label": "Countries reached"
+        },
+        {
+          "_type": "stat",
+          "value": "12",
+          "label": "People, on purpose"
+        }
+      ]
+    },
+    {
+      "_type": "quote",
+      "quote": "Paraline found the three seconds of our onboarding that were losing people, and made them the part everyone screenshots.",
+      "name": "Amara Okafor",
+      "role": "Head of Product, Halo Labs"
+    },
+    {
+      "_type": "cta",
+      "heading": "Have something that should feel better?",
+      "body": "Tell us about it. We reply within two working days, usually with questions.",
+      "link": {
+        "href": "/contact/",
+        "label": "Start a project"
+      }
+    }
+  ]
+}

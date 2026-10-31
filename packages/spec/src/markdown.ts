@@ -35,7 +35,7 @@ export function parseFrontmatter(source: string, file = "entry.md"): Frontmatter
   try {
     data = parseYaml(yaml) ?? {};
   } catch (err) {
-    throw new Error(`${file}: frontmatter is not valid YAML — ${(err as Error).message}`, {
+    throw new Error(`${file}: frontmatter is not valid YAML: ${(err as Error).message}`, {
       cause: err,
     });
   }

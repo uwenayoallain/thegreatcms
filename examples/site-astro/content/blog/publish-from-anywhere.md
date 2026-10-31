@@ -5,7 +5,7 @@ date: 2026-08-12
 ---
 
 Pressing **Publish** writes your content into this repository as a single
-commit. That commit is the deploy trigger — whatever CI this site already had
+commit. That commit is the deploy trigger: whatever CI this site already had
 picks it up and rebuilds.
 
 There is no webhook to configure, no cache to purge, and no database for the

@@ -1,0 +1,10 @@
+{
+  "heading": "About",
+  "body": {
+    "html": "<p>Ines Mukamana is a writer and translator in Kigali. Before writing full time she spent nine years teaching secondary-school literature in Huye, which is where most of these essays began, as notes in the margins of other people's books.</p><p>Her translations of Rwandan oral poetry into English have appeared in small magazines on three continents. <strong>The Long Light</strong> is where the essays live now.</p>"
+  },
+  "elsewhere": [
+    { "href": "mailto:ines@longlight.example", "label": "Write to me" },
+    { "href": "https://example.com/translations", "label": "Translations", "external": true }
+  ]
+}

@@ -1,0 +1,26 @@
+---
+/**
+ * A project's cover, drawn from its palette and motif rather than a photograph: four layers of
+ * gradients that the stylesheet arranges and, where motion is welcome, slowly moves.
+ */
+interface Props {
+  palette: string;
+  motif: string;
+  /** Names the cover for cross-page transitions, so a card can become its case study. */
+  transition?: string;
+  class?: string;
+}
+
+const { palette, motif, transition, class: className } = Astro.props;
+---
+
+<div
+  class:list={['art', `art--${motif}`, `palette--${palette}`, className]}
+  style={transition ? `view-transition-name: ${transition}` : undefined}
+  aria-hidden="true"
+>
+  <span class="art__a"></span>
+  <span class="art__b"></span>
+  <span class="art__c"></span>
+  <span class="art__grain"></span>
+</div>

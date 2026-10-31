@@ -1,0 +1,92 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/schema.schema.json
+#
+# A product site: what the app does, what it costs, and what changed. Nuxt reads
+# it through @greatcms/reader in server/api/cms.get.ts; no page touches a file.
+
+version: 1
+
+site:
+  name: Sundial
+  locale: en
+
+regions:
+  site.identity:
+    label: Product
+    fields:
+      name: { type: text, required: true, max: 30 }
+      tagline: { type: text, max: 100 }
+      signup: { type: link, label: Sign-up button }
+
+  home.hero:
+    label: Home hero
+    fields:
+      eyebrow: { type: text, max: 50 }
+      heading: { type: text, required: true, max: 80 }
+      lede: { type: text, multiline: true, max: 260 }
+      cta: { type: link, label: Button }
+    default:
+      heading: A calendar that keeps your mornings free.
+
+  home.features:
+    label: Features
+    fields:
+      heading: { type: text, max: 70 }
+      items:
+        type: list
+        max: 6
+        of:
+          type: group
+          fields:
+            title: { type: text, required: true, max: 40 }
+            body: { type: text, multiline: true, max: 180 }
+
+  home.pricing:
+    label: Pricing
+    fields:
+      heading: { type: text, max: 70 }
+      plans:
+        type: list
+        max: 3
+        of:
+          type: group
+          fields:
+            name: { type: text, required: true, max: 24 }
+            price:
+              { type: text, required: true, max: 16, description: "As it should read, such as $8." }
+            period: { type: text, max: 24 }
+            features: { type: list, of: { type: text, max: 60 }, max: 8 }
+            featured: { type: boolean, description: Set it apart as the plan most people choose. }
+
+  home.faq:
+    label: Questions
+    fields:
+      items:
+        type: list
+        max: 10
+        of:
+          type: group
+          fields:
+            question: { type: text, required: true, max: 100 }
+            answer: { type: text, multiline: true, required: true, max: 400 }
+
+collections:
+  changelog:
+    label: Changelog
+    entryLabel: release
+    description: One file per release, newest first on the site.
+    path: content/changelog
+    format: markdown
+    body: body
+    slug: version
+    fields:
+      version:
+        { type: text, required: true, max: 12, description: "Such as 2.4. It becomes the address." }
+      title: { type: text, required: true, max: 80 }
+      date: { type: date, required: true }
+      kind:
+        type: select
+        options:
+          - { value: feature, label: New }
+          - { value: improvement, label: Improved }
+          - { value: fix, label: Fixed }
+      body: { type: richtext }

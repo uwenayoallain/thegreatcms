@@ -101,8 +101,54 @@ export class RateLimiter {
   }
 }
 
+export interface Notification {
+  /** What happened: a visitor's form arrived, or someone published. */
+  kind?: "submission" | "publish";
+  subject: string;
+  lines: string[];
+}
+
 export interface Notifier {
-  notify(message: { subject: string; lines: string[] }): Promise<void>;
+  notify(message: Notification): Promise<void>;
+}
+
+/** Every configured notifier, each told independently, so one failing never silences another. */
+export class Notifiers implements Notifier {
+  constructor(private readonly list: Notifier[]) {}
+
+  get size(): number {
+    return this.list.length;
+  }
+
+  async notify(message: Notification): Promise<void> {
+    await Promise.allSettled(this.list.map((notifier) => notifier.notify(message)));
+  }
+}
+
+/**
+ * A JSON POST to any URL. Slack and Discord incoming webhooks read `text` and `content`; anything
+ * else gets the structured fields beside them.
+ */
+export class WebhookNotifier implements Notifier {
+  constructor(
+    private readonly url: string,
+    private readonly fetchImpl: typeof globalThis.fetch = globalThis.fetch,
+  ) {}
+
+  async notify(message: Notification): Promise<void> {
+    const text = [message.subject, ...message.lines].join("\n");
+    try {
+      const response = await this.fetchImpl(this.url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, content: text, ...message }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) process.stderr.write(`webhook failed: ${response.status}\n`);
+    } catch (error) {
+      process.stderr.write(`webhook failed: ${(error as Error).message}\n`);
+    }
+  }
 }
 
 /** Email notifications via Resend. */
@@ -112,7 +158,9 @@ export class ResendNotifier implements Notifier {
     private readonly fetchImpl: typeof globalThis.fetch = globalThis.fetch,
   ) {}
 
-  async notify(message: { subject: string; lines: string[] }): Promise<void> {
+  async notify(message: Notification): Promise<void> {
+    // Email is for what visitors send; publishes are already in Git and the webhook.
+    if (message.kind === "publish") return;
     try {
       const response = await this.fetchImpl("https://api.resend.com/emails", {
         method: "POST",

@@ -1,0 +1,31 @@
+{
+  "title": "Lumen",
+  "client": "Lumen Health",
+  "year": 2026,
+  "disciplines": ["Brand & identity", "Front-end build"],
+  "summary": "An identity for a clinic network that had to feel calm at 3 a.m. and clear on a cracked phone screen.",
+  "palette": "bone",
+  "motif": "orbit",
+  "featured": true,
+  "order": 2,
+  "body": {
+    "html": "<p>Lumen runs night clinics. Its patients arrive tired, worried and often on old phones with the brightness turned down.</p><h2>A quieter brand</h2><p>We built the identity around a slow orbit, the mark breathes, it never blinks, and a type system tested at the smallest size people actually read it.</p>"
+  },
+  "results": [
+    {
+      "_type": "stat",
+      "value": "2.1×",
+      "label": "Online bookings"
+    },
+    {
+      "_type": "stat",
+      "value": "AA",
+      "label": "Contrast, everywhere"
+    },
+    {
+      "_type": "stat",
+      "value": "98",
+      "label": "Lighthouse performance"
+    }
+  ]
+}

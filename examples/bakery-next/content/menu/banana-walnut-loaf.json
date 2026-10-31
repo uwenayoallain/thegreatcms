@@ -1,0 +1,7 @@
+{
+  "name": "Banana walnut loaf",
+  "category": "pastry",
+  "price": 2500,
+  "description": "Made with the ripest bananas in the market and toasted walnuts.",
+  "dietary": ["nuts"]
+}

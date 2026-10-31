@@ -1,0 +1,31 @@
+{
+  "title": "Tidewater",
+  "client": "Kestrel Bank",
+  "year": 2026,
+  "disciplines": ["Product design", "Motion systems"],
+  "summary": "A banking app where money moves like water: every transfer shows where it came from and where it went.",
+  "palette": "tide",
+  "motif": "waves",
+  "featured": true,
+  "order": 1,
+  "body": {
+    "html": "<p>Kestrel's customers trusted the bank and distrusted the app. Transfers vanished into a spinner and reappeared as a line item, and support calls spiked every payday.</p><h2>What we changed</h2><p>We designed a motion system around one idea: money never teleports. A transfer leaves your balance, travels, and lands: and the interface shows each step at the speed it actually happens.</p><p>The same three easing curves now run through the whole app, from pull-to-refresh to the card freeze switch.</p>"
+  },
+  "results": [
+    {
+      "_type": "stat",
+      "value": "−41%",
+      "label": "Payday support calls"
+    },
+    {
+      "_type": "stat",
+      "value": "4.8",
+      "label": "App store rating"
+    },
+    {
+      "_type": "stat",
+      "value": "3",
+      "label": "Easing curves, total"
+    }
+  ]
+}

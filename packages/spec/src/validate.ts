@@ -2,6 +2,8 @@
 
 import { SpecIssue } from "./errors.js";
 import { conditionMet, type FieldDef, selectOptions } from "./fields.js";
+import { isSafeSlug } from "./paths.js";
+import { isSafeUrl } from "./urls.js";
 import {
   type BlockDef,
   type CmsSchema,
@@ -107,7 +109,12 @@ function validateField(
   issues: SpecIssue[],
   opts: ValidateOptions,
 ): void {
-  const missing = value === undefined || value === null || value === "";
+  // A multi-reference resolves to `[]`, so for one that is required, empty is missing.
+  const missing =
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (def.type === "reference" && def.multiple === true && Array.isArray(value) && !value.length);
 
   if (missing) {
     if (def.required) {
@@ -247,6 +254,8 @@ function validateField(
         link.href === ""
       ) {
         push(issues, opts, path, "expected_link", "Expected an object with an `href` string.");
+      } else if (!isSafeUrl(link.href)) {
+        unsafeUrl(issues, opts, joinPath(path, "href"));
       }
       return;
     }
@@ -262,6 +271,7 @@ function validateField(
         push(issues, opts, path, "expected_image", "Expected an object with a `src` string.");
         return;
       }
+      if (!isSafeUrl(img.src)) unsafeUrl(issues, opts, joinPath(path, "src"));
       if (typeof img.alt !== "string") {
         push(
           issues,
@@ -288,7 +298,36 @@ function validateField(
       const f = value as { src?: unknown };
       if (typeof f !== "object" || f === null || typeof f.src !== "string" || f.src === "") {
         push(issues, opts, path, "expected_file", "Expected an object with a `src` string.");
+      } else if (!isSafeUrl(f.src)) {
+        unsafeUrl(issues, opts, joinPath(path, "src"));
       }
+      return;
+    }
+
+    case "reference": {
+      if (def.multiple && !Array.isArray(value)) {
+        push(
+          issues,
+          opts,
+          path,
+          "expected_array",
+          `Expected a list of \`${def.collection}\` entry slugs.`,
+          'Write it as `["first-entry", "second-entry"]`.',
+        );
+        return;
+      }
+      const slugs: unknown[] = def.multiple ? (value as unknown[]) : [value];
+      slugs.forEach((slug, index) => {
+        if (typeof slug === "string" && isSafeSlug(slug)) return;
+        push(
+          issues,
+          opts,
+          def.multiple ? `${path}[${index}]` : path,
+          "expected_slug",
+          `Expected the slug of a \`${def.collection}\` entry, found ${shown(slug)}.`,
+          "A slug is the entry's file name without its extension, e.g. `my-first-post`.",
+        );
+      });
       return;
     }
 
@@ -506,6 +545,83 @@ function validateRegionAgainst(
   });
 
   return issues.length === 0 ? { ok: true, issues } : { ok: false, issues };
+}
+
+/** One entry a document points at, which only something that can see the collection can confirm exists. */
+export interface Reference {
+  path: string;
+  collection: string;
+  slug: string;
+}
+
+/**
+ * Every well-formed reference in a document, through groups, lists, and nested
+ * blocks (given `blocks`), with the same paths validation reports. Fields their
+ * `when` hides are skipped, as validation skips them.
+ */
+export function referencesIn(
+  fields: Record<string, FieldDef>,
+  value: unknown,
+  opts: Pick<ValidateOptions, "basePath" | "blocks"> = {},
+): Reference[] {
+  const found: Reference[] = [];
+  const walkFields = (defs: Record<string, FieldDef>, data: unknown, base: string) => {
+    if (data === null || typeof data !== "object" || Array.isArray(data)) return;
+    for (const [name, def] of Object.entries(defs)) {
+      if (!conditionMet(def, data)) continue;
+      walkField(def, (data as Record<string, unknown>)[name], joinPath(base, name));
+    }
+  };
+  const walkField = (def: FieldDef, data: unknown, path: string): void => {
+    switch (def.type) {
+      case "reference": {
+        if (def.multiple && !Array.isArray(data)) return;
+        const slugs: unknown[] = def.multiple ? (data as unknown[]) : [data];
+        slugs.forEach((slug, index) => {
+          if (typeof slug !== "string" || !isSafeSlug(slug)) return;
+          const at = def.multiple ? `${path}[${index}]` : path;
+          found.push({ path: at, collection: def.collection, slug });
+        });
+        return;
+      }
+      case "group":
+        walkFields(def.fields, data, path);
+        return;
+      case "list":
+        if (Array.isArray(data))
+          data.forEach((item, i) => walkField(def.of, item, `${path}[${i}]`));
+        return;
+      case "blocks":
+        if (!Array.isArray(data)) return;
+        data.forEach((block, index) => {
+          const type = (block as { _type?: unknown })?._type;
+          const nested = typeof type === "string" ? opts.blocks?.[type] : undefined;
+          if (nested) walkFields(nested.fields, block, `${path}[${index}]`);
+        });
+        return;
+      default:
+        return;
+    }
+  };
+  walkFields(fields, value, opts.basePath ?? "");
+  return found;
+}
+
+function shown(value: unknown): string {
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return "a list";
+  return value !== null && typeof value === "object" ? "an object" : String(value);
+}
+
+function unsafeUrl(issues: SpecIssue[], opts: ValidateOptions, path: string): void {
+  push(
+    issues,
+    opts,
+    path,
+    "unsafe_url",
+    "This address could run script in a visitor's browser.",
+    "Use a path such as `/about`, or an `https:`, `mailto:` or `tel:` address.",
+  );
 }
 
 function push(

@@ -1,0 +1,43 @@
+---
+import Art from './Art.astro';
+import type { WorkEntry } from '../cms';
+
+interface Props {
+  project: WorkEntry;
+  index: number;
+  size?: 'grid' | 'stacked';
+  /** The card's title sits one level below whatever heads the list it is in. */
+  heading?: 'h2' | 'h3';
+}
+
+const { project, index, size = 'grid', heading = 'h3' } = Astro.props;
+const Heading = heading;
+const { data, slug } = project;
+---
+
+<a class:list={['work-card', `work-card--${size}`]} href={`/work/${slug}/`} data-cursor="View" style={`--n: ${index}`}>
+  <div class="work-card__media">
+    {
+      data.cover?.src ? (
+        <img
+          class="work-card__image"
+          src={data.cover.src}
+          alt=""
+          width={data.cover.width}
+          height={data.cover.height}
+          loading="lazy"
+          style={`view-transition-name: art-${slug}`}
+        />
+      ) : (
+        <Art palette={data.palette} motif={data.motif} transition={`art-${slug}`} />
+      )
+    }
+    <span class="work-card__view" aria-hidden="true">View case <span>→</span></span>
+  </div>
+  <div class="work-card__meta">
+    <span class="work-card__index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+    <Heading class="work-card__title" style={`view-transition-name: title-${slug}`}>{data.title}</Heading>
+    <p class="work-card__client">{data.client}{data.year ? ` · ${data.year}` : ''}</p>
+    {(data.disciplines ?? []).length > 0 && <p class="work-card__tags">{(data.disciplines ?? []).join(' / ')}</p>}
+  </div>
+</a>

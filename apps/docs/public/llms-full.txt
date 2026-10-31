@@ -1,4 +1,4 @@
-# GreatCMS — complete documentation
+# GreatCMS: complete documentation
 
 This file concatenates the public docs in source order, for agents that prefer one fetch.
 
@@ -8,7 +8,7 @@ source: SPEC.md
 url: https://greatcms.dev/spec
 ---
 
-# The GreatCMS Content Standard — version 1
+# The GreatCMS Content Standard: version 1
 
 This document is the product. Everything else in this repository is an
 implementation of it.
@@ -16,7 +16,7 @@ implementation of it.
 A site is managed by GreatCMS if it contains a schema file and reads content
 from the paths described here. That is the entire integration surface. No
 plugin, no SDK, no runtime dependency, no build hook. If you can read JSON and
-YAML, you can consume a GreatCMS site — and if you can read only JSON, you can
+YAML, you can consume a GreatCMS site: and if you can read only JSON, you can
 still consume one, because the schema may be written as JSON too.
 
 Reading this document should be enough to write a consumer in any language in
@@ -29,8 +29,8 @@ under half an hour. If it is not, that is a bug in this document.
 ```
 your-site/
 ├── .cms/
-│   ├── schema.yaml       # or schema.json — the content model
-│   └── config.yaml       # or config.json — paths and publishing (optional)
+│   ├── schema.yaml       # or schema.json: the content model
+│   └── config.yaml       # or config.json: paths and publishing (optional)
 ├── content/
 │   ├── cms/              # structured regions, written by the studio
 │   │   ├── home.hero.json
@@ -47,15 +47,15 @@ Nothing else in the repository is touched by the CMS, ever.
 
 ## 2. Concepts
 
-**Region** — a named slice of a page under CMS control: `home.hero`,
+**Region**: a named slice of a page under CMS control: `home.hero`,
 `pricing.faq`. Everything not declared a region is ordinary code the CMS never
 sees. This is the hybrid model: a page can have one managed region, or be
 entirely managed, and both are the same mechanism.
 
-**Block** — a reusable field set. A _blocks region_ holds an ordered list of
+**Block**: a reusable field set. A _blocks region_ holds an ordered list of
 blocks the editor can add, remove, and reorder.
 
-**Collection** — a folder of entries with a shared shape: a blog, case studies,
+**Collection**: a folder of entries with a shared shape: a blog, case studies,
 changelog. Entries are Markdown with YAML frontmatter by default.
 
 ---
@@ -143,20 +143,21 @@ meaning of a schema without a word.
 
 Every field accepts `label`, `description`, `required`, and `when`.
 
-| Type       | Extra keys                                      | Stored value                                            |
-| ---------- | ----------------------------------------------- | ------------------------------------------------------- |
-| `text`     | `min`, `max`, `pattern`, `multiline`, `default` | string                                                  |
-| `richtext` | `allow`, `default`                              | `{ "html": "…", "_ast": … }`                            |
-| `number`   | `min`, `max`, `step`, `integer`, `default`      | number                                                  |
-| `boolean`  | `default`                                       | boolean                                                 |
-| `select`   | `options`, `multiple`, `default`                | string, or array if `multiple`                          |
-| `date`     | `time`, `default`                               | ISO 8601 string                                         |
-| `link`     | `default`                                       | `{ "href": "…", "label"?: "…", "external"?: bool }`     |
-| `image`    | `alt`, `accept`, `default`                      | `{ "src": "…", "alt": "…", "width"?: n, "height"?: n }` |
-| `file`     | `accept`, `default`                             | `{ "src": "…", "name"?: "…", "size"?: n }`              |
-| `list`     | `of`, `min`, `max`                              | array of the `of` type                                  |
-| `group`    | `fields`                                        | nested object                                           |
-| `blocks`   | `allow`, `min`, `max`, `default`                | array of block objects, each with `_type`               |
+| Type        | Extra keys                                      | Stored value                                            |
+| ----------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `text`      | `min`, `max`, `pattern`, `multiline`, `default` | string                                                  |
+| `richtext`  | `allow`, `default`                              | `{ "html": "…", "_ast": … }`                            |
+| `number`    | `min`, `max`, `step`, `integer`, `default`      | number                                                  |
+| `boolean`   | `default`                                       | boolean                                                 |
+| `select`    | `options`, `multiple`, `default`                | string, or array if `multiple`                          |
+| `date`      | `time`, `default`                               | ISO 8601 string                                         |
+| `link`      | `default`                                       | `{ "href": "…", "label"?: "…", "external"?: bool }`     |
+| `image`     | `alt`, `accept`, `default`                      | `{ "src": "…", "alt": "…", "width"?: n, "height"?: n }` |
+| `file`      | `accept`, `default`                             | `{ "src": "…", "name"?: "…", "size"?: n }`              |
+| `reference` | `collection`, `multiple`                        | entry slug, or array of slugs if `multiple`             |
+| `list`      | `of`, `min`, `max`                              | array of the `of` type                                  |
+| `group`     | `fields`                                        | nested object                                           |
+| `blocks`    | `allow`, `min`, `max`, `default`                | array of block objects, each with `_type`               |
 
 `options` for `select` is either `[a, b]` or `[{ value: a, label: A }]`.
 
@@ -199,7 +200,7 @@ sees one, and validation refuses a value the block does not declare.
 
 ### Nested blocks
 
-A `blocks` field holds the same shape a blocks region does — an ordered array
+A `blocks` field holds the same shape a blocks region does: an ordered array
 whose entries each carry a `_type` naming a block defined at the top level:
 
 ```yaml
@@ -222,11 +223,43 @@ blocks:
 }
 ```
 
-This is what lets a managed section hold a composed component — a card grid, a
-tabbed panel, a set of columns — instead of only flat fields. Nesting is
+This is what lets a managed section hold a composed component, a card grid, a
+tabbed panel, a set of columns, instead of only flat fields. Nesting is
 unbounded: a block reachable through `allow` may itself have a `blocks` field.
 A schema that nests a block inside itself is legal, and a consumer is expected
 to stop at the depth the content actually has, not to pre-expand the schema.
+
+### References
+
+A `reference` field points at entries of a collection by slug: the entry's
+file name without its extension:
+
+```yaml
+collections:
+  people:
+    path: content/people
+    fields:
+      name: { type: text, required: true }
+  blog:
+    path: content/blog
+    fields:
+      title: { type: text, required: true }
+      author: { type: reference, collection: people }
+      related: { type: reference, collection: blog, multiple: true }
+```
+
+```yaml
+author: ann-mukamana
+related: [publish-from-anywhere, why-git]
+```
+
+`collection` must name a collection the schema defines; a schema that names
+any other is invalid. The stored value is one slug, or an array of slugs with
+`multiple: true`, and a reader returns it as stored: following a reference to
+the entry is the site's job, not resolution's. A multiple reference resolves to
+`[]` when nothing is stored, and `required` on one means at least one slug.
+Whether each slug names an entry that exists cannot be decided from one
+document; that check belongs to tools that can see the whole repository.
 
 ### Rich text
 
@@ -237,6 +270,15 @@ was posted to it. The editor's structured document is preserved in `_ast`
 for lossless round-tripping. **Consumers should ignore `_ast`.** Any key
 beginning with `_` is machinery and may be ignored by consumers.
 
+### Addresses
+
+A link's `href` and an image's or file's `src` are a relative URL, a fragment,
+or an `http:`, `https:`, `mailto:` or `tel:` address. Anything else, such as
+`javascript:`, `data:` or `vbscript:`, fails validation with `unsafe_url`, so
+a site that prints the value into an attribute cannot be made to run script.
+Browsers ignore whitespace and control characters inside a scheme, so
+validation does too: `java\tscript:` is `javascript:`.
+
 ### Images and accessibility
 
 Uploads are committed alongside content, into `content.media`, and served from
@@ -244,7 +286,7 @@ Uploads are committed alongside content, into `content.media`, and served from
 and edited bytes get a new one.
 
 `alt` is required by default. A field may set `alt: decorative-allowed`, which
-is the only way an empty `alt` validates — making an inaccessible image a
+is the only way an empty `alt` validates: making an inaccessible image a
 deliberate choice rather than an oversight. `width` and `height` are recorded on
 upload so consumers can prevent layout shift.
 
@@ -304,7 +346,7 @@ The prose around the component is ordinary Markdown.
 ```
 
 The standard stores that body verbatim. It does not parse the JSX, resolve the
-imports, or care whether the components exist — that is the site's build, and
+imports, or care whether the components exist: that is the site's build, and
 it is deliberately none of the CMS's business.
 
 **Frontmatter fences.** An entry has frontmatter when its first line is exactly
@@ -333,9 +375,9 @@ the file is the whole document: `default` on a collection's fields is an
 authoring convenience for a new entry, not a read-time rule. A reader that
 filled in defaults would report fields the file does not contain.
 
-JSON files — regions and `json` collection entries — are written with two-space
+JSON files: regions and `json` collection entries: are written with two-space
 indentation, the keys of every object sorted by code point at every depth with
-`_`-prefixed keys last, and a trailing newline — so diffs stay readable and two
+`_`-prefixed keys last, and a trailing newline: so diffs stay readable and two
 tools writing the same content produce the same bytes. Code point, not locale
 collation: `B` sorts before `a` on every machine and in every language.
 
@@ -346,8 +388,9 @@ collation: `B` sorts before `a` on every machine and in every language.
 A consumer resolves a region in three steps. Getting these right is what the
 conformance kit checks.
 
-1. **Start from defaults.** Collect `default` from each field. For a blocks
-   region, the default is the region's `default` array, or `[]`.
+1. **Start from defaults.** Collect `default` from each field; a `reference`
+   field with `multiple: true` defaults to `[]`. For a blocks region, the
+   default is the region's `default` array, or `[]`.
 2. **Apply the region's `default` object** over the field-level defaults,
    merged deeply like everything else, so a region default for one key of a
    group keeps the group's other defaults.
@@ -356,7 +399,7 @@ conformance kit checks.
 Merge rules:
 
 - Objects merge **deeply**, key by key.
-- Arrays are **replaced wholesale** — merging lists item-by-item produces
+- Arrays are **replaced wholesale**: merging lists item-by-item produces
   results no author would predict.
 - Within a blocks region, each stored block is merged over its block's field
   defaults, so a field added to a block later still renders. A block whose
@@ -366,7 +409,7 @@ Merge rules:
   defaults, so a site builds correctly before the CMS has ever run.
 - **A missing schema file _is_ an error.** Defaults live in the schema, so a
   consumer that cannot find it should fail loudly rather than quietly render
-  empty regions. The schema is part of the site, committed alongside the code —
+  empty regions. The schema is part of the site, committed alongside the code:
   what a site never depends on is the _studio_: no network call, no database, no
   API key, and no running service at build or request time. Shut the studio down
   permanently and every site it managed keeps building from what is in Git.
@@ -454,7 +497,7 @@ Reserved names, stripped before storage:
 | `company`   | Honeypot. Hide it visually _and_ from assistive technology. |
 
 Everything else is stored as the submission. Spam is scored from the honeypot,
-the time between render and submit, and link density — never a CAPTCHA, which
+the time between render and submit, and link density: never a CAPTCHA, which
 taxes every legitimate visitor to inconvenience a bot that solves them anyway.
 Suspected spam is kept, not discarded, so nothing is lost silently.
 
@@ -471,7 +514,7 @@ Point your reader at the fixture site, dump each resolved region as
 `<region-id>.json` into a directory, and run `verify`. The fixture deliberately
 includes a region with no content file, a region edited before a field was
 added, a blocks region with a block missing a defaulted field, and a decorative
-image with empty alt text — the four cases naive implementations get wrong.
+image with empty alt text: the four cases naive implementations get wrong.
 
 A reference reader in Python (stdlib + PyYAML, ~120 lines) lives at
 `examples/reader-python/read.py` and passes the suite. It is the shortest honest
@@ -497,20 +540,20 @@ url: https://greatcms.dev/
 
 A Git-backed CMS for sites that shouldn't need one at runtime.
 
-You pick which parts of a page it manages — a hero here, a feature list there,
+You pick which parts of a page it manages: a hero here, a feature list there,
 an entire blog, or the whole site. Everything else stays hand-written code the
 CMS never sees. Publishing writes files to your repository; the commit triggers
 whatever deploy pipeline you already had. One studio manages many websites and
-collects the things Git can't hold — form submissions — into a single inbox.
+collects the things Git can't hold, form submissions, into a single inbox.
 
 **It is not a framework plugin.** The integration surface is a schema file and
 some JSON, so a site consumes it with an import and no dependency. `greatcms
-init` scaffolds for Astro, Next, Nuxt, SvelteKit, and Eleventy. The format
-itself stays language-agnostic — it is JSON on disk, and a Python reader passes
-the same conformance suite — but the tooling claims only what it is exercised
+init` scaffolds for Astro, Next.js, Nuxt and SvelteKit. The format
+itself stays language-agnostic, it is JSON on disk, and a Python reader passes
+the same conformance suite, but the tooling claims only what it is exercised
 against.
 
-Read [SPEC.md](./SPEC.md) — that document is the actual product.
+Read [SPEC.md](./SPEC.md): that document is the actual product.
 
 ---
 
@@ -533,13 +576,16 @@ submissions from any site land in one inbox.
 
 ```
 apps/studio/            The CMS: sign in, connect site folders, edit regions, publish
-apps/docs/              The website — landing page and docs, managed by GreatCMS itself
+apps/docs/              The website: landing page and docs, managed by GreatCMS itself
 packages/cli/           `greatcms init`, `add`, `types`, `check`, `doctor`
 packages/spec/          The standard: schema parsing, validation, resolution rules
 packages/conformance/   Fixtures + verifier that prove a tool reads it correctly
 packages/reader/        Build-time reader for any JS framework
 examples/site-astro/    A real Astro site: managed regions beside hand-written markup
-examples/business-astro/ A business starter: flexible sections and structured products
+examples/studio-astro/  A design studio site: case studies, variants, and high-end motion
+examples/bakery-next/   A bakery on Next.js: a priced menu collection, hours, a pre-order form
+examples/journal-sveltekit/ A writer's journal on SvelteKit: Markdown essays, prerendered with no JS
+examples/changelog-nuxt/ A product changelog on Nuxt: releases, pricing, prerendered with no JS
 examples/reader-python/ The same standard, implemented in ~120 lines of Python
 ```
 
@@ -559,20 +605,23 @@ STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
 # http://localhost:8787
 ```
 
-Or, while developing, `STUDIO_PASSWORD='something long' pnpm dev` runs the
-studio and the Astro example together, both rebuilding on change. `pnpm studio`
-runs the studio alone. Node 22.18 or newer; `.node-version` says so for
+Or, while developing, `pnpm dev` runs the studio and every example site,
+already connected: open http://localhost:8787, sign in with `greatcms-dev`, and
+edit any of them (Paraline, the minimal site, Hearth, The Long Light, Sundial)
+with each one rendering beside the form. The studio rebuilds on change and keeps
+you signed in across restarts. Set
+`STUDIO_PASSWORD` to use your own; `pnpm studio` runs the studio alone. Node 22.18 or newer; `.node-version` says so for
 version managers, and `.vscode/` recommends the oxc extension and wires the
 JSON Schemas to `.cms/*.yaml` for autocomplete.
 
 Point it at a folder containing a `.cms/schema.yaml` and it builds the editor
 from your schema. Point any site's
 contact form at `https://your-studio/f/{siteId}/contact` and the messages arrive
-in the inbox — set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emailed
+in the inbox: set `RESEND_API_KEY`, `NOTIFY_FROM`, and `NOTIFY_TO` to be emailed
 about them too. Or run it as a
-container — `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
+container: `apps/studio/Dockerfile`, one process, one SQLite file, one volume.
 For a server that also builds and serves the site on every publish, pair it with
-`greatcms-deploy` (`packages/deploy`); `examples/business-astro/deploy/` is the
+`greatcms-deploy` (`packages/deploy`); `examples/studio-astro/deploy/` is the
 whole arrangement as a Compose file, Caddy included.
 
 Behind a reverse proxy, set `STUDIO_TRUST_PROXY=1` so rate limiting sees the
@@ -587,19 +636,18 @@ Then look at the example site:
 
 ```bash
 pnpm --filter @greatcms/example-site-astro dev     # http://localhost:4321
-pnpm --filter @greatcms/example-business-astro dev # the business starter, on the next free port
+pnpm --filter @greatcms/example-studio-astro dev   # the studio showcase, on the next free port
 ```
 
-The home page shows a managed hero next to a hand-written section — both end up
+The home page shows a managed hero next to a hand-written section: both end up
 in the same static HTML. The about page renders from schema defaults, because
 nobody has ever edited it.
 
-The business example is the larger proof: company, owner/contact and search
-details, nested reorderable feature and process sections, products, and managed
-pages all feed a polished multi-page site. One dynamic route means adding an
-About, Services, or legal page is one new collection entry rather than another
-schema change. Its components remain site-owned, and its built pages still
-contain zero client JavaScript.
+The studio example is the larger proof: a design studio's site where every
+word, every section and every case study is managed, block variants choose
+layouts, and case-study covers are generated from fields the editor picks. Its
+motion is its own (scroll-driven CSS, cross-page view transitions, and a small
+script for the pointer), and it all stops for visitors who ask for less motion.
 
 ## Setting up a site
 
@@ -647,8 +695,8 @@ as that until a package is published.
 npx greatcms init
 ```
 
-It detects what you build with — Astro, Next, Nuxt, SvelteKit, Eleventy, or
-nothing in particular — and puts content where that generator already looks for
+It detects what you build with, Astro, Next, Nuxt, SvelteKit, Eleventy, or
+nothing in particular, and puts content where that generator already looks for
 it: `_data/cms` for Eleventy, `src/content/cms` for Astro, `content/cms` for
 Next. Then it asks what you want managed (one hero, a landing page, a complete
 small-business site, a blog, or nothing yet), writes a
@@ -697,7 +745,7 @@ in the site's renderer; editors can reuse it from then on. `add block` remains
 available for lower-level or nested content shapes.
 
 It edits the schema **as text**, so the comments explaining your site's own
-decisions survive — a parse-and-redump would throw them away. It refuses rather
+decisions survive: a parse-and-redump would throw them away. It refuses rather
 than corrupts: a duplicate name, an id the standard would reject, or a nested
 block type nobody has defined stops the command and names the one that fixes
 it. Then it prints how to read the new section in your framework's syntax.
@@ -708,8 +756,8 @@ it. Then it prints how to read the new section in your framework's syntax.
 npx greatcms types --out src/cms.d.ts
 ```
 
-Interfaces for every region, block, and collection — select options as unions,
-blocks discriminated by `_type`, nested blocks typed by what they allow — plus a
+Interfaces for every region, block, and collection: select options as unions,
+blocks discriminated by `_type`, nested blocks typed by what they allow: plus a
 module augmentation that types the reader by id:
 
 ```ts
@@ -728,7 +776,7 @@ reader takes any string, as it always did.
 ## Connecting a site
 
 A site is **a folder on this machine**. The studio reads and writes the working
-copy directly — no token, no network, no push. Publishing writes the files and
+copy directly: no token, no network, no push. Publishing writes the files and
 commits them if the folder is a Git repository. Give it your dev server's URL
 and the editor shows **your real components**, from your own build, updating as
 soon as your dev server reloads.
@@ -737,8 +785,8 @@ There is deliberately no hosted-repository backend. It existed, and it made
 every screen ask which of two worlds it was in; the local path is the one worth
 getting right first.
 
-For an Astro site, add the integration so an edit — published or still being
-typed — reloads the page:
+For an Astro site, add the integration so an edit, published or still being
+typed, reloads the page:
 
 ```js
 import greatcms from "@greatcms/reader/astro";
@@ -753,16 +801,16 @@ export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
 ```
 
 Both are dev-only, and both also hide the framework's dev toolbar **while the
-page is framed by the studio** — it belongs on your own tab, not on top of the
+page is framed by the studio**: it belongs on your own tab, not on top of the
 section you are editing. Your own tab keeps it. Pass
 `{ hideDevOverlays: false }` to keep it everywhere.
 
-The reader uses the filesystem on purpose — that is what keeps it
-framework-neutral — which also means Vite cannot know a content file is a
+The reader uses the filesystem on purpose, that is what keeps it
+framework-neutral, which also means Vite cannot know a content file is a
 dependency. Without the watcher the file changes and the page does not, which is
 worse than an error because it looks like nothing happened.
 
-The studio needs four operations from a repository — read a file, list a
+The studio needs four operations from a repository: read a file, list a
 directory, read the head commit, commit a set of files. Everything above that
 line is backend-agnostic, which is what keeps the editor, the validation, and
 the publish free of any knowledge of where the bytes are.
@@ -770,13 +818,13 @@ the publish free of any knowledge of where the bytes are.
 ## Publishing
 
 A publish writes the files and commits them, in one commit. Your existing deploy
-pipeline takes it from there — the CMS is not in that path.
+pipeline takes it from there: the CMS is not in that path.
 
 If the folder is not a Git repository, the files are simply written, which is
 the whole job.
 
 **Your own dev server is the preview.** Connect the site with its dev server
-URL and the editor frames it, rendering your real components as you type — the
+URL and the editor frames it, rendering your real components as you type: the
 unsaved edit is written to `.cms/draft/`, which the reader prefers over the
 committed file in development and never in a build. The framed page is
 dissected into its sections: point at a heading or a card and click, and its
@@ -784,7 +832,7 @@ field opens in the form; focus a field and the page scrolls to where it shows.
 
 `npx greatcms doctor` prints what a repository's setup looks like: regions,
 where each one's file lives, which are still rendering schema defaults, and any
-unsaved edit left in `.cms/draft/` — the one thing that shows in your dev server
+unsaved edit left in `.cms/draft/`: the one thing that shows in your dev server
 and nowhere else.
 
 ## Checking content in your own CI
@@ -802,7 +850,7 @@ npx greatcms check
 It exits non-zero, so it belongs in a build. It reports a required field left
 empty, a field the schema no longer has, a content file no region renders any
 more, an entry whose frontmatter will not parse, and an image pointing at a file
-nobody committed — each with the file, the field path, and what to do about it.
+nobody committed: each with the file, the field path, and what to do about it.
 `--json` gives the same report to a machine.
 
 A missing content file is never a failure. That resolves to schema defaults by
@@ -823,7 +871,7 @@ node packages/conformance/bin/greatcms-conformance.mjs verify /tmp/out
 
 **It ships nothing to the browser.** The built example sites, and this
 website, contain zero `<script>` tags, and each carries a weight budget its
-tests assert — `examples/site-astro/tests/a11y.test.ts` is the smallest.
+tests assert: `examples/site-astro/tests/a11y.test.ts` is the smallest.
 
 **It is accessible.** axe runs against every page of the example site _and_
 every screen of the studio, every form control is labelled, and errors are
@@ -834,11 +882,11 @@ one failure a static check cannot see and a reader cannot miss.
 **The visual editor is tested in a browser.** Chromium loads the studio and
 asserts what a person gets: ProseMirror mounts over the textarea, the toolbar
 applies marks and reports its own pressed state, the preview updates as you type
-without committing anything — and with JavaScript switched off, the same screen
+without committing anything: and with JavaScript switched off, the same screen
 still edits and publishes from a plain textarea.
 
-**The admin degrades to plain HTML.** Every mutation is a form POST — including
-adding, removing, and reordering blocks — so the studio is keyboard- and
+**The admin degrades to plain HTML.** Every mutation is a form POST, including
+adding, removing, and reordering blocks, so the studio is keyboard- and
 screen-reader-navigable by construction rather than by patching ARIA onto custom
 widgets. Rich text gets a visual editor built directly on **ProseMirror** (MIT,
 no commercial tier), loaded only on screens that have a richtext field. It is an
@@ -849,20 +897,20 @@ and publish.
 reaches the repository, a working copy that moved while you were editing gets a
 409 rather than an overwrite, and a commit Git refuses is reported as an error.
 
-**The studio never runs your code.** It reads your schema and writes content —
+**The studio never runs your code.** It reads your schema and writes content:
 that is the whole interaction, and it never runs your Git hooks. Previews render
 in your own dev server, which is also why one studio can manage several sites
 without carrying a toolchain for each of them.
 
 **Form submissions need nothing on the site.** A plain HTML `<form>` posting to
-the studio is the whole integration — no JavaScript, no third-party form
+the studio is the whole integration: no JavaScript, no third-party form
 service, no per-site backend. Spam is scored with a honeypot, submission timing,
 and a rate limit rather than a CAPTCHA, which is an accessibility tax paid by
 every legitimate visitor to inconvenience a bot that solves them anyway.
 
 **The awkward cases are covered.** The conformance fixture includes a region
 with no content file, a region edited before a field was added to the schema, a
-block missing a defaulted field, and a decorative image with empty alt text —
+block missing a defaulted field, and a decorative image with empty alt text:
 the four things naive implementations get wrong.
 
 ## Toolchain
@@ -894,7 +942,7 @@ image a deliberate act rather than an oversight.
 
 **A missing content file is never an error.** It resolves to schema defaults, so
 a site is correct before the CMS has ever been opened. A missing _schema_ file
-is an error — failing loudly beats quietly rendering empty regions.
+is an error: failing loudly beats quietly rendering empty regions.
 
 **Publishing is one commit.** Every file a publish touches is written before
 anything is staged, so a region and the images it references land together or
@@ -903,7 +951,7 @@ not at all. Half-applied content is how a branch stops building.
 ## The website
 
 `apps/docs` is the project's site: a landing page and the documentation. Its
-landing copy — the headline, the four claims, the closing note — is **managed by
+landing copy, the headline, the four claims, the closing note, is **managed by
 GreatCMS**, stored as JSON in this repository and edited in the studio like any
 other site. The docs are a Markdown collection, like any blog. The layout
 around all of it is ordinary Astro the CMS has never seen.
@@ -941,7 +989,7 @@ is an installable skill with the commands, file shapes and pitfalls
 (`npx skills add greatcms/greatcms@greatcms`); `greatcms init` leaves a note in
 the site's own `AGENTS.md`; and `greatcms check --json` and `greatcms doctor
 --json` answer in a form a script can act on. [AGENTS.md](./AGENTS.md) covers
-working _on_ GreatCMS — the invariants that are design decisions rather than
+working _on_ GreatCMS: the invariants that are design decisions rather than
 implementation details.
 
 ## Licence
@@ -965,9 +1013,9 @@ url: https://greatcms.dev/docs/getting-started
 npx greatcms init
 ```
 
-It detects what you build with — Astro, Next, Nuxt, SvelteKit, or Eleventy — and
-puts content where that generator already looks for it. Eleventy gets
-`_data/cms`, Astro gets `src/content/cms`, Next gets `content/cms`. It prints the
+It detects what you build with (Astro, Next.js, Nuxt or SvelteKit) and puts
+content where that framework already looks for it: Astro gets
+`src/content/cms`, the others `content/cms`. It prints the
 small reader integration for that framework, so schema defaults render before a
 content file has ever been written.
 
@@ -990,8 +1038,7 @@ section looks.
 Render the pages collection through one dynamic route in your framework. An
 editor can then add an About, Services, or legal page as a normal collection
 entry; `showInNavigation` and `navigationOrder` make the menu update from the
-same data. See `examples/business-astro/src/pages/[slug].astro` for the complete
-Astro version.
+same data. `greatcms init --template business` writes this collection for you.
 
 ## Add another kind of section
 
@@ -1009,8 +1056,10 @@ or adding another route.
 
 ## Read a region
 
-A region resolves to plain data. In Astro, read it through the schema-aware
-reader so a brand-new region renders its defaults before its JSON file exists:
+A region resolves to plain data. Read it through the schema-aware reader, so a
+brand-new region renders its defaults before its JSON file exists. It is the
+same call in every framework; only where it runs differs. In Astro, in a page's
+frontmatter:
 
 ```js
 import { createReader } from "@greatcms/reader";
@@ -1018,18 +1067,28 @@ const cms = createReader();
 const hero = cms.region("home.hero");
 ```
 
-In Eleventy, with no import at all, because `_data` is global data:
+In Next.js, in a Server Component, so the file is read on the server and never
+fetched by the browser:
 
-```njk
-<h1>{{ cms["home.hero"].heading }}</h1>
+```tsx
+import { createReader } from "@greatcms/reader";
+
+export default function Home() {
+  const hero = createReader().region("home.hero");
+  return <h1>{hero.heading}</h1>;
+}
 ```
+
+In SvelteKit the same call goes in a `+page.server.js` load function, and in
+Nuxt in a server route the page fetches. [The examples](/docs/examples/) run
+all four.
 
 The same reader infers types when you run `greatcms types`.
 
 ## Connect it
 
 Run the studio and add the site. Point it at **a folder on this machine** and it
-reads and writes that working copy directly — no token, no network. Give it your
+reads and writes that working copy directly: no token, no network. Give it your
 dev server's URL and the editor shows your real components beside the form.
 
 The studio reads your schema and builds the editor from it. It never runs any
@@ -1044,7 +1103,7 @@ npx greatcms doctor
 Prints every region, the file it resolves to, and which are still rendering
 schema defaults.
 
-To check the content itself — in a build, or before you push:
+To check the content itself: in a build, or before you push:
 
 ```sh
 npx greatcms check
@@ -1055,7 +1114,7 @@ exits non-zero if anything would not render: a required field left empty, a
 field the schema no longer has, a file no region renders, an image pointing at
 something nobody committed. `--json` reports the same to a machine.
 
-A region with no content file is not a failure — it renders schema defaults,
+A region with no content file is not a failure: it renders schema defaults,
 which is the point.
 
 
@@ -1150,15 +1209,41 @@ string.
 
 ```sh
 npx greatcms check
-# content: OK (3 regions, 6 entries, 1 media reference)
+# content: OK (3 regions, 6 entries, 1 media reference, 4 internal links)
 ```
 
 Validates every content file and collection entry against the schema and exits
-non-zero if anything would not render: a required field left empty, a field
-the schema no longer has, a file no region renders any more, frontmatter that
-will not parse, an image pointing at a file nobody committed. Each report names
-the file, the field path, and what to do. `--json` gives the same report to a
-machine.
+non-zero if anything would not render, or would render broken:
+
+- a required field left empty, a field the schema no longer has, a file no
+  region renders any more, frontmatter that will not parse;
+- an image or file pointing at an upload nobody committed, whether it sits in
+  an image field, a link, a rich-text `<img>`, or a Markdown `![]()`;
+- an internal link to an entry that does not exist.
+
+Each report names the file, the field path, and what to do.
+
+Internal links are link fields, rich-text `<a href>`, and Markdown links whose
+target starts with `/`. `check` drops the `#fragment`, the `?query`, a trailing
+`.html` and a trailing slash, then reads the path back through
+`preview.paths` in `.cms/config.yaml`: with `updates: "/updates/{slug}"`,
+`/updates/launch` is broken unless `content/updates/launch.md` exists, and with
+`pages: { home: "/", "*": "/{slug}" }`, `/` needs a `home` page. A path that
+matches no pattern, like `/assets/report.pdf`, is a route the site writes
+itself and is left alone, as is the index a pattern sits under (`/updates`).
+Without `preview.paths`, links are counted but not checked.
+
+Some things are worth fixing but never break a build. `check` reports them as
+warnings, lists them apart from problems, and still exits zero:
+
+- an upload in `content.media` that no region, entry, unpublished draft or
+  schema default refers to (dotfiles such as `.gitkeep` are ignored). `check`
+  only reads content, so a file the site's own code imports shows up here too;
+- a rich-text link with no text, which a screen reader announces as its URL;
+- headings in one rich-text field that skip a level, such as `h2` then `h4`.
+
+`--json` gives the same report to a machine: `ok` is false only when `issues`
+is non-empty, and warnings come in their own `warnings` array.
 
 A region with no content file is never a failure. It renders schema defaults,
 and `check` says so.
@@ -1168,6 +1253,27 @@ and `check` says so.
 Prints every region, the file it resolves to, which ones are still rendering
 schema defaults, and any unsaved edit left in `.cms/draft/`: the one thing that
 shows in your dev server and nowhere else.
+
+## `greatcms describe`
+
+The content model in one screen, for whoever is about to write content by
+hand: a person, or a coding agent. Every region with its file, every block
+with its variants, every collection with its entry path, the slugs that exist
+and the page each becomes; and each field as one line with its type, limits,
+condition, default and the schema's own description:
+
+```
+region home.hero → content/cms/home.hero.json
+  eyebrow: text (≤ 60 chars)
+  lines: list<text> (1–4 items)  # The headline, one line per item
+  primary!: link
+block selected-work  _variant: grid | stacked (first is the default)
+  heading!: text (≤ 60 chars)
+collection work → content/work/<slug>.json  page /work/{slug}/
+  entries: atlas-rail, fernhouse, lumen, oculi, tidewater
+```
+
+`!` marks a required field. `--json` gives the same outline as data.
 
 
 ---
@@ -1181,7 +1287,7 @@ url: https://greatcms.dev/docs/the-hybrid-model
 > Why a region is opt-in, and what happens before anyone edits anything.
 
 Most of a page is code. A headline, a pricing table, and a rotating set of
-feature cards are not — those change on a marketing schedule rather than a
+feature cards are not: those change on a marketing schedule rather than a
 release schedule, and they are the reason people install a CMS at all.
 
 GreatCMS manages only what you list. Everything else is ordinary code the studio
@@ -1195,7 +1301,7 @@ doubles as the file name, so `home.hero` is stored at
 
 A **blocks region** holds an ordered list an editor can add to and reorder, from
 a set of block types you allow. A **collection** is a folder of entries sharing
-a shape — a blog, case studies, a changelog — stored as Markdown with
+a shape, a blog, case studies, a changelog, stored as Markdown with
 frontmatter, which is what every static site generator already expects.
 
 ## Defaults are not a fallback, they are the starting state
@@ -1310,17 +1416,20 @@ For a server that also builds and serves the site, see
 
 ## Environment
 
-| Variable               | Meaning                                                                                                     |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `STUDIO_PASSWORD`      | Required. Changing it signs every open session out.                                                         |
-| `STUDIO_SECRET`        | Signs session cookies. Generated on start if unset, which means sessions reset on restart.                  |
-| `STUDIO_DB`            | Path to the SQLite file. Defaults to `data/studio.sqlite`.                                                  |
-| `PORT`                 | Defaults to `8787`.                                                                                         |
-| `STUDIO_SITES`         | Sites to manage from the first start, as JSON; see [Self-hosting](/docs/self-hosting/).                     |
-| `STUDIO_URL`           | Where browsers reach the studio, so a proxy's `forward_auth` can send visitors here to sign in.             |
-| `STUDIO_COOKIE_DOMAIN` | Parent domain the sign-in is shared across, e.g. for `preview.`; see [Self-hosting](/docs/self-hosting/).   |
-| `STUDIO_TRUST_PROXY`   | `1` behind a reverse proxy you control, `cloudflare` behind Cloudflare. Unset when reachable directly.      |
-| `RESEND_API_KEY`       | With `NOTIFY_FROM` and `NOTIFY_TO`, emails each form submission. Without them, submissions are only stored. |
+| Variable                 | Meaning                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `STUDIO_PASSWORD`        | Required. Changing it signs every open session out.                                                              |
+| `STUDIO_SECRET`          | Signs session cookies. Generated on start if unset, which means sessions reset on restart.                       |
+| `STUDIO_DB`              | Path to the SQLite file. Defaults to `data/studio.sqlite`.                                                       |
+| `PORT`                   | Defaults to `8787`.                                                                                              |
+| `STUDIO_SITES`           | Sites to manage from the first start, as JSON; see [Self-hosting](/docs/self-hosting/).                          |
+| `STUDIO_URL`             | Where browsers reach the studio, so a proxy's `forward_auth` can send visitors here to sign in.                  |
+| `STUDIO_COOKIE_DOMAIN`   | Parent domain the preview's sign-in cookie covers, e.g. for `preview.`; see [Self-hosting](/docs/self-hosting/). |
+| `STUDIO_TRUST_PROXY`     | `1` behind a reverse proxy you control, `cloudflare` behind Cloudflare. Unset when reachable directly.           |
+| `RESEND_API_KEY`         | With `NOTIFY_FROM` and `NOTIFY_TO`, emails each form submission. Without them, submissions are only stored.      |
+| `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON. Slack and Discord incoming webhooks work as they are.          |
+| `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
+| `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -1335,6 +1444,41 @@ studio reads `.cms/schema.yaml` from that working copy and builds the editor
 from it. There is no token and no network call. Give it your dev server's URL
 and the editor frames your real site beside the form; see
 [Previewing](/docs/previewing/).
+
+## People
+
+The owner signs in with `STUDIO_PASSWORD` and leaves the email empty. From
+**Editors** in the sidebar the owner adds people by name, email and a password
+of at least twelve characters. Each signs in as themselves, and each publish
+is committed under their name and address, so `git log` says who changed what.
+
+Sites and people stay the owner's: an editor cannot connect, reconfigure or
+disconnect a site, or manage editors. An editor reads the body of an MDX
+entry but cannot change it: MDX is code the site's build runs, so whatever an
+editor posts for it, the stored source is kept. Removing someone signs them out on their
+next request. When two people have the same content open, each sees the
+other's name; if both publish, the second is refused rather than overwriting
+the first.
+
+## Working on content
+
+- **Search.** The box at the top of a site's sidebar finds words in every
+  region and entry, unpublished drafts included, and opens the field that holds
+  them. Press `/` to jump to it.
+- **History.** Every region and entry has a History link listing the commits
+  that changed it. Restoring a version opens it in the editor as an unsaved
+  edit, so you see it in the preview and publish it back as one new commit.
+- **Publish later.** Beside Publish, pick a time and Schedule. The form is
+  kept as submitted and published at that time through the ordinary publish,
+  as the person who scheduled it. If the content was changed by someone else
+  in the meantime it is not overwritten; the site page lists what is waiting,
+  what went out and what did not, and anything waiting can be cancelled.
+- **Unsaved edits that went stale.** A draft remembers the commit it began
+  from. If the same content was published since, the editor says so and a
+  publish of the old draft is refused.
+- **Images already on the site** are offered in every image field, so one
+  upload can be used again. Reference fields offer the entries they can point at.
+- **Ctrl or Cmd with Enter** publishes.
 
 ## What it will not do
 
@@ -1420,12 +1564,40 @@ change between restarts, because the id is part of the form address every
 contact form posts to. `STUDIO_SITES` does that:
 
 ```sh
-STUDIO_SITES='[{"id":"my-site","path":"/srv/sites/my-site","devUrl":"https://preview.example.com","pushAfterPublish":false}]'
+STUDIO_SITES='[{"id":"my-site","path":"/srv/sites/my-site","devUrl":"https://preview.example.com","deployRoot":"/srv/www","pushAfterPublish":false}]'
 ```
+
+`deployRoot` is the builder's `DEPLOY_ROOT` as the studio sees it; mount the
+same volume into both. With it, the site page shows what is live, a build that
+failed with its log, and the releases kept on disk. **Put this back live**
+asks the builder to swap to one of them by writing its commit into a
+`rollback` file there; the studio still runs nothing of the site's. The
+rolled-back release stays live until the next publish, which goes out as usual.
 
 On start the studio adds any site it does not have and brings the rest in line
 with the list. An id that already points at a different folder is refused
 rather than silently moved.
+
+## Images
+
+Both servers are published as images on every release, so a server needs no
+GreatCMS checkout:
+
+```
+ghcr.io/uwenayoallain/greatcms-studio
+ghcr.io/uwenayoallain/greatcms-deploy      # also runs greatcms-preview
+```
+
+Each is about 70 MB: Node on Alpine, git, and the program. The studio's server
+is one bundled file with no `node_modules`.
+
+## Sharing the preview
+
+The link icon above the editor's preview makes a link anyone can open for
+seven days, unpublished edits included, without a studio account. It works
+through the same `forward_auth` check: the link carries a signed token, the
+studio trades it for a cookie that opens that site's preview and nothing else,
+and changing `STUDIO_PASSWORD` revokes every link at once.
 
 ## Live preview on the server
 
@@ -1448,8 +1620,10 @@ preview.example.com {
 }
 ```
 
-For the preview to see the same sign-in, the session cookie is set for the
-parent domain, and the studio has to know its own address for the redirect:
+The studio's own session cookie never leaves the studio's host, because the
+preview runs the site's code and would otherwise receive it. Signing in also
+sets a second cookie for the parent domain that opens the preview and nothing
+else. For that, the studio has to know the domain and its own address:
 
 | Variable               | Meaning                                                        |
 | ---------------------- | -------------------------------------------------------------- |
@@ -1464,6 +1638,24 @@ Astro's `vite.server.allowedHosts`.
 
 The preview is optional: without it the editor still publishes, and the
 builder shows the result a few seconds later.
+
+The studio says when a dev server is not running: on the sites list, on the
+site's page, and over the editor's preview, instead of framing an error page.
+It checks by connecting to the dev server, so it needs an address it can reach
+itself. When browsers reach the preview somewhere else, through the proxy
+above, give the site a `probeUrl` in `STUDIO_SITES` naming the dev server
+directly:
+
+```json
+[
+  {
+    "id": "irona",
+    "path": "/srv/sites/irona",
+    "devUrl": "https://irona-preview.example.com",
+    "probeUrl": "http://preview:4321"
+  }
+]
+```
 
 ### Only while someone is editing
 
@@ -1487,9 +1679,47 @@ draft still shows as you type. The example stack runs it this way, and a
 site that nobody edits all day costs a few megabytes of the proxy and nothing
 else.
 
+## Behind a Cloudflare Tunnel
+
+A studio on a machine with no public address, or with no ports you want open,
+can be reached through a Cloudflare Tunnel instead of a reverse proxy.
+`apps/studio/tunnel/` runs the studio beside `cloudflared`, and the studio's
+port is never published, so the tunnel is the only way in:
+
+```sh
+cd apps/studio/tunnel
+cp .env.example .env    # the tunnel token, STUDIO_HOST, a password, the sites
+docker compose up -d --build
+```
+
+Create the tunnel in Cloudflare and give it one public hostname,
+`studio.example.com`, pointing at `http://studio:8787`. Cloudflare terminates
+TLS and tells the studio so, which keeps its cookies `Secure`; the compose file
+sets `STUDIO_TRUST_PROXY=cloudflare`, so rate limiting sees each visitor's own
+address. `SITES_DIR` is mounted at the same path inside the container, so the
+paths in `STUDIO_SITES` are the ones on the host.
+
+The preview a site's `devUrl` names is framed by the editor's browser, not by
+the server, so a `localhost` address works only on the machine running the dev
+server. The same compose file also runs the previews for editors anywhere:
+
+- `previews` runs every site's dev server, inside the compose network only.
+- `caddy` sits in front of them and asks the studio's `/auth/check` about each
+  visitor, so a preview opens for someone signed in to the studio and for
+  nobody else.
+- Set `PREVIEW_DOMAIN=example.com`, and site `my-site` previews at
+  `my-site-preview.example.com`. Give the tunnel one public hostname per
+  preview, pointing at `http://caddy:80`.
+
+Each site in `STUDIO_SITES` then names both addresses: `devUrl` is
+`https://my-site-preview.example.com`, for browsers, and `probeUrl` is
+`http://previews:4322`, where the studio checks that the dev server is running.
+Signing in sets the preview cookie for `PREVIEW_DOMAIN` too, and the cookie
+opens the previews and nothing else.
+
 ## A complete example
 
-`examples/business-astro/deploy/` holds a `compose.yaml` and `Caddyfile` that
+`examples/studio-astro/deploy/` holds a `compose.yaml` and `Caddyfile` that
 run all of this on one machine from one setting. `DOMAIN=example.com` in
 `.env` gives the site at the apex and `www`, the studio at `studio.example.com`
 and the preview at `preview.example.com`, with Caddy on 80 and 443 fetching
@@ -1514,7 +1744,7 @@ url: https://greatcms.dev/docs/previewing
 
 Point a local site at your dev server's URL and the editor shows your real
 components beside the form. Publishing writes the files, your dev server
-reloads, and the pane updates — usually within a couple of seconds.
+reloads, and the pane updates: usually within a couple of seconds.
 
 For a Vite-based site this needs one plugin:
 
@@ -1543,7 +1773,7 @@ one can never be committed. And publishing clears the draft it came from, so the
 site stops showing an edit that has already landed.
 
 Without JavaScript nothing is written as you type, and the editor still
-publishes — the frame simply shows the site as last published.
+publishes: the frame simply shows the site as last published.
 
 ## Pointing at the page
 
@@ -1601,7 +1831,7 @@ throws the draft away and puts your dev server back to what is published. It
 is a plain form post, so it works with JavaScript switched off.
 
 Anything still unsaved is listed on the site's page in the studio, and
-`npx greatcms doctor` names it from the terminal — a draft you forgot is
+`npx greatcms doctor` names it from the terminal: a draft you forgot is
 otherwise visible only in dev, which is exactly where you would stop noticing
 it.
 
@@ -1672,7 +1902,7 @@ No JavaScript is involved. Adding a site to the inbox is a row in a table.
 
 ## Spam
 
-Scored from the honeypot, the gap between render and submit, and link density —
+Scored from the honeypot, the gap between render and submit, and link density:
 never a CAPTCHA, which taxes every legitimate visitor to inconvenience a bot
 that solves them anyway. Suspected spam is stored and hidden rather than
 discarded, so nothing is lost silently.
@@ -1704,7 +1934,7 @@ Accessibility here is structural where it can be, and a test where it cannot.
 ## Enforced by the format
 
 `alt` is required on every image field by default. A field may declare
-`alt: decorative-allowed`, which is the only way an empty alt validates — making
+`alt: decorative-allowed`, which is the only way an empty alt validates: making
 an inaccessible image a deliberate authoring act rather than an oversight.
 Invalid content is refused before it reaches your repository.
 
@@ -1714,7 +1944,7 @@ alongside it, so pages do not reflow while images load.
 ## Enforced by tests
 
 The studio ships **zero JavaScript**. Every screen is server-rendered and every
-mutation is a form POST — including adding, removing, and reordering blocks in a
+mutation is a form POST: including adding, removing, and reordering blocks in a
 block list. That is what makes the editor keyboard-operable and
 screen-reader-legible by construction, rather than by patching ARIA onto
 hand-built widgets.
@@ -1737,7 +1967,7 @@ url: https://greatcms.dev/docs/any-language
 
 A site is managed by GreatCMS if it contains a schema file and reads content
 from the paths the standard describes. That is the entire integration surface.
-Hugo, Jekyll, Laravel, or a hand-rolled Go generator consume it exactly as
+Hugo, Laravel, or a hand-rolled Go generator consume it exactly as
 Astro does, because none of them need anything but YAML and JSON.
 
 The JavaScript packages are a convenience, not a requirement.
@@ -1849,6 +2079,7 @@ Two commands produce machine-readable output for an agent to act on:
 ```sh
 npx greatcms check --json     # every content file against the schema; exit code for CI
 npx greatcms doctor --json    # regions, collections, what is still at defaults, unsaved drafts
+npx greatcms describe         # every field you may write, its type and limits, and where its file goes
 ```
 
 Errors from every command carry their remedy on a `fix:` line, in the exact
@@ -1869,7 +2100,7 @@ url: https://greatcms.dev/docs/examples
 
 # The examples
 
-> Two Astro sites and a Python reader, each built to prove one thing.
+> Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
 
 Every example in the repository is also a test. They build in CI, run axe with
 zero violations allowed, and assert that their output contains no script tag.
@@ -1891,24 +2122,80 @@ The about page is the interesting one: there is no `about.intro.json` in the
 repository, so it renders the defaults declared in the schema. The page was
 correct before the studio had ever been opened.
 
-## A complete small business
+## A studio site with real motion
 
 ```sh
-pnpm --filter @greatcms/example-business-astro dev
+pnpm --filter @greatcms/example-studio-astro dev
 ```
 
-`examples/business-astro` is what `greatcms init --template business` grows
-into: a fictional seed cooperative with company, contact, and search details;
-a home page of reorderable sections (feature grids, an ordered process,
-statistics, a story with an image, a product showcase, FAQs, a call to action);
-a JSON collection of products, each with its own page; and a collection of
-managed pages rendered through one dynamic route.
+`examples/studio-astro` is Paraline, a fictional design and motion studio, and
+the showcase: the kind of site people assume needs a heavyweight CMS and a
+JavaScript framework. Every word on it is managed: a studio identity, a hero
+whose headline lines and rotating words are lists, a home page of reorderable
+sections (client strip, selected work with two variants, a statement, services,
+a process, numbers, a quote, a call to action), a contact page, and a JSON
+collection of case studies whose covers are generated from a palette and a
+motif chosen in the editor.
 
-That last part is the point. Adding an About or a privacy policy is one new
-collection entry: the page, its menu item, and its footer link appear together,
-and the schema is untouched. The components are site-owned, so the CMS supplies
-content shapes and never a look. Its tests build the site with real images in
-place and check that width, height, and alt text all survive to the HTML.
+The motion is the site's own. Scroll-driven CSS does the reading-along
+statement, the stacked services, the pinned sideways process, the counting
+numbers and the case-study covers that morph into their page through
+cross-document view transitions. A small script (under 8 KB compressed, using
+Motion) adds what CSS cannot know, such as where the pointer is, and stands in
+for scroll timelines where a browser lacks them. Everything stops for visitors
+who ask for less motion, and the tests check that no animation starts outside
+that preference.
+
+`deploy/` beside it is the complete self-hosted stack for a site like this.
+
+## A bakery on Next.js
+
+```sh
+pnpm --filter @greatcms/example-bakery-next dev
+```
+
+`examples/bakery-next` is Hearth, a neighbourhood bakery, on Next.js 16 with
+the App Router. Server Components call the reader in `lib/cms.ts`, so content
+is read on the server while the page renders and never reaches the browser as
+a request. `output: "export"` writes every page as HTML, so any static host,
+or `greatcms-deploy`, serves the folder as it is. The site has a notice bar an
+editor can switch on for a holiday, opening hours as a list of groups, and a
+`menu` collection with categories, prices and dietary tags, set like a printed
+card. The pre-order form is a checkbox group that posts to the studio's inbox,
+which keeps every box that was ticked.
+
+`next dev` renders on every request, so the studio's drafts appear on the next
+load. It does not watch content files, so the layout marks the page
+`data-greatcms-unwatched` and the studio reloads the preview after each draft.
+The preview script is added only under `next dev`. The tests check that an
+exported page carries none of it, and keep the JavaScript Next.js brings under
+a budget.
+
+## A journal on SvelteKit
+
+```sh
+pnpm --filter @greatcms/example-journal-sveltekit dev
+```
+
+`examples/journal-sveltekit` is The Long Light, a writer's essays: a Markdown
+collection with a date, a dek and tags, set in Newsreader and prerendered as
+plain HTML. `csr = false` keeps SvelteKit's runtime off every page, the 404 is
+a real prerendered route rather than the SPA fallback, and the reader's Vite
+plugin reloads the page as the studio writes drafts. Its newsletter region has
+no content file at all and renders the schema's defaults.
+
+## A product changelog on Nuxt
+
+```sh
+pnpm --filter @greatcms/example-changelog-nuxt dev
+```
+
+`examples/changelog-nuxt` is Sundial, a product landing page and changelog on
+Nuxt 4. A Nitro server route calls the reader in `server/api/cms.get.ts`, and
+`nuxt generate` writes every page as static HTML with `noScripts: true` on
+production routes so no client bundle ships. Releases are Markdown files with a
+version, date and kind, and the beta waitlist form posts straight to the
+studio's inbox.
 
 ## This site
 

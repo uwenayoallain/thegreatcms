@@ -1,4 +1,4 @@
-/** Drives the CLI against a real repository on disk — real git, real files, real draft branch. */
+/** Drives the CLI against a real repository on disk: real git, real files, real draft branch. */
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
@@ -86,7 +86,7 @@ describe("command help", () => {
       const before = git(["status", "--short"]);
 
       expect(await cli([command, "--help"])).toBe(0);
-      expect(out.join("")).toContain("greatcms — local tools for a Git-backed site");
+      expect(out.join("")).toContain("greatcms: local tools for a Git-backed site");
       expect(err).toEqual([]);
       expect(git(["status", "--short"])).toBe(before);
     },
@@ -159,6 +159,24 @@ describe("greatcms check", () => {
       expect(err.join("")).toContain("required");
     } finally {
       git(["checkout", "--", "content/cms/home.hero.json"]);
+    }
+  });
+
+  it("passes with a warning, on stdout, when an upload is unused", async () => {
+    mkdirSync(join(repo, "public/media"), { recursive: true });
+    writeFileSync(join(repo, "public/media/stray.png"), "bytes");
+    try {
+      expect(await cli(["check"])).toBe(0);
+      expect(out.join("")).toContain("public/media/stray.png");
+      expect(out.join("")).toContain("content: OK, 1 warning");
+      expect(err.join("")).toBe("");
+
+      expect(await cli(["check", "--json"])).toBe(0);
+      const report = JSON.parse(out.join("")) as { ok: boolean; warnings: { code: string }[] };
+      expect(report.ok).toBe(true);
+      expect(report.warnings.map((warning) => warning.code)).toEqual(["unused_media"]);
+    } finally {
+      rmSync(join(repo, "public"), { recursive: true, force: true });
     }
   });
 
@@ -293,7 +311,8 @@ describe("greatcms init", () => {
     expect(await initIn(fresh, ["doctor"])).toBe(0);
     const text = out.join("");
     expect(text).toContain("home.hero");
-    expect(text).toContain("Collections: blog");
+    expect(text).toContain("Collections (1)");
+    expect(text).toContain("  blog");
   });
 
   it("adds a reusable section to the sole page region in one command", async () => {

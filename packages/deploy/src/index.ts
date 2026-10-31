@@ -7,11 +7,13 @@ export { PreviewRunner, createPreviewServer, previewMain, waitingPage } from "./
 export type { PreviewOptions, PreviewState } from "./preview.js";
 export type { DeployOptions, Outcome, Release, Status } from "./deploy.js";
 
-const HELP = `greatcms-deploy — build a site on every new commit and swap it live.
+const HELP = `greatcms-deploy: build a site on every new commit and swap it live.
 
   greatcms-deploy            watch forever (the normal way to run it)
   greatcms-deploy once       build the branch tip if it is not live, then exit
   greatcms-deploy status     print status.json
+  greatcms-deploy releases   list the releases kept on disk, newest first
+  greatcms-deploy rollback <sha>   put an earlier release back live until the next commit
 
 Environment:
   DEPLOY_SOURCE    repository: a path on this machine, or a URL git can clone   (required)
@@ -24,6 +26,8 @@ Environment:
   DEPLOY_TIMEOUT   seconds a build may take                                     (default: 900)
 
 Serve DEPLOY_ROOT/current with any web server. A failed build leaves the previous release live.
+Writing a commit sha into DEPLOY_ROOT/rollback asks the watcher to roll back to it; the studio does
+this when it can reach DEPLOY_ROOT.
 `;
 
 export function optionsFromEnv(env: NodeJS.ProcessEnv): DeployOptions {
@@ -65,6 +69,15 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     return 0;
   }
   const deployer = new Deployer(options);
+  if (command === "rollback") {
+    const ok = await deployer.rollback(argv[1] ?? "");
+    if (!ok) process.stderr.write("No such release. `greatcms-deploy releases` lists them.\n");
+    return ok ? 0 : 1;
+  }
+  if (command === "releases") {
+    process.stdout.write(`${deployer.releases().join("\n")}\n`);
+    return 0;
+  }
   if (command === "once") {
     const result = await deployer.once();
     return result.outcome === "failed" ? 1 : 0;
@@ -88,7 +101,8 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, stop);
     const check = () =>
       deployer
-        .once()
+        .takeRequest()
+        .then(() => deployer.once())
         .catch((error: Error) => options.log(`check failed: ${error.message.split("\n")[0]}`))
         .then(() => {
           timer = setTimeout(check, interval);

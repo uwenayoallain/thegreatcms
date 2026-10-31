@@ -1,12 +1,12 @@
-/** @greatcms/spec — the GreatCMS content standard. */
+/** @greatcms/spec: the GreatCMS content standard. */
 
 export { SpecError, SpecIssue, IssueBag, type SpecIssueInit } from "./errors.js";
 
 export {
   FIELD_TYPES,
-  FieldDefSchema,
   conditionMet,
   selectOptions,
+  type SelectOption,
   type FieldCondition,
   type FieldDef,
   type FieldType,
@@ -19,12 +19,12 @@ export {
 export {
   SPEC_VERSION,
   REGION_ID_RE,
-  SchemaFileSchema,
   parseSchema,
   unknownSchemaKeys,
   isBlocksRegion,
   blockVariants,
   fieldsOf,
+  eachField,
   type BlockDef,
   type BlocksRegion,
   type CmsSchema,
@@ -34,13 +34,7 @@ export {
   type SingleRegion,
 } from "./schema.js";
 
-export {
-  ConfigFileSchema,
-  DEFAULT_CONFIG,
-  parseConfig,
-  previewPath,
-  type CmsConfig,
-} from "./config.js";
+export { DEFAULT_CONFIG, parseConfig, previewPath, type CmsConfig } from "./config.js";
 
 export {
   collectionEntryPath,
@@ -57,9 +51,13 @@ export {
   slugify,
 } from "./paths.js";
 
+export { isSafeUrl } from "./urls.js";
+
 export {
   validateFields,
   validateRegion,
+  referencesIn,
+  type Reference,
   type ValidateOptions,
   type ValidationResult,
 } from "./validate.js";

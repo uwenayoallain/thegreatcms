@@ -26,9 +26,29 @@ export interface FileChange {
   delete?: boolean;
 }
 
+export interface HistoryEntry {
+  sha: string;
+  author: string;
+  /** ISO 8601, as git wrote it. */
+  date: string;
+  subject: string;
+}
+
+/** A commit with the files it changed, for a site's recent activity. */
+export interface Change extends HistoryEntry {
+  files: Array<{ path: string; removed: boolean }>;
+}
+
+export interface Author {
+  name: string;
+  email: string;
+}
+
 export interface CommitRequest {
   message: string;
   files: FileChange[];
+  /** The person behind the change; without one, git's own configured identity is used. */
+  author?: Author;
   /** The commit the editor started from. */
   expectedHeadSha?: string;
 }
@@ -62,6 +82,13 @@ export class ConflictError extends Error {
   }
 }
 
+/** Beside the drafts, out of the reader's way: `.cms/draft/.base/<path>` holds the commit a draft began at. */
+const BASES = ".base";
+const baseFile = (path: string) => `${DRAFT_DIR}/${BASES}/${path}`;
+
+/** Angle brackets and newlines would let a name rewrite the author line git builds from it. */
+const clean = (value: string) => value.replace(/[<>\n\r]/g, "").trim();
+
 function short(sha: string): string {
   return sha.slice(0, 7);
 }
@@ -90,13 +117,10 @@ export class LocalRepositoryError extends Error {
 export class LocalRepository implements Repository {
   constructor(private readonly root: string) {}
 
+  /** A committed link could point anywhere on this machine, so a file is read only if it really lies inside. */
   async getFile(path: string): Promise<{ content: string; sha: string } | null> {
-    try {
-      const content = await readFile(this.absolute(path), "utf8");
-      return { content, sha: `local:${path}` };
-    } catch {
-      return null;
-    }
+    const bytes = await this.getBytes(path);
+    return bytes ? { content: Buffer.from(bytes).toString("utf8"), sha: `local:${path}` } : null;
   }
 
   /** A file's bytes, or null when it is missing or, once links are followed, outside `within`. */
@@ -190,7 +214,10 @@ export class LocalRepository implements Repository {
       .filter(Boolean);
     // "Nothing to commit" is a success: what is on disk already matches.
     if (staged.length === 0) return { commitSha: await this.getHead(), url };
-    await this.git(["commit", "--no-verify", "-m", request.message, "--", ...staged]);
+    const author = request.author
+      ? ["--author", `${clean(request.author.name)} <${clean(request.author.email)}>`]
+      : [];
+    await this.git(["commit", "--no-verify", ...author, "-m", request.message, "--", ...staged]);
     return { commitSha: await this.getHead(), url };
   }
 
@@ -203,10 +230,19 @@ export class LocalRepository implements Repository {
     const head = await this.getHead();
     if (head === "working-copy") return;
     const paths = request.files.map((file) => file.path);
+    if (!isCommitId(expected)) throw new ConflictError(expected, head);
     // A non-zero exit is a difference, or a commit this repository no longer has.
     if (
       head !== expected &&
-      (await this.tryGit(["diff", "--quiet", expected, head, "--", ...paths])) === null
+      (await this.tryGit([
+        "diff",
+        "--quiet",
+        "--end-of-options",
+        expected,
+        head,
+        "--",
+        ...paths,
+      ])) === null
     ) {
       throw new ConflictError(expected, head);
     }
@@ -272,18 +308,93 @@ export class LocalRepository implements Repository {
     }
   }
 
-  /** Writes an unsaved edit where the site's dev server will read it. */
-  async writeDraft(path: string, content: string): Promise<void> {
+  /** Writes an unsaved edit where the site's dev server will read it, with the commit it started from. */
+  async writeDraft(path: string, content: string, base?: string): Promise<void> {
     const target = await this.writable(draftFilePath(path));
     await writeFile(await this.writable(`${DRAFT_DIR}/.gitignore`), "*\n");
     const temp = `${target}.${randomUUID()}.tmp`;
     await writeFile(temp, content, { flag: "wx" });
     await rename(temp, target);
+    if (base) await writeFile(await this.writable(baseFile(path)), `${base}\n`);
   }
 
   /** Drops a draft once its content is published, or when it is discarded. */
   async clearDraft(path: string): Promise<void> {
     await rm(await this.writable(draftFilePath(path)), { force: true });
+    await rm(await this.writable(baseFile(path)), { force: true });
+  }
+
+  /** Commits that touched a file, newest first; empty outside a Git repository. */
+  async history(path: string, limit = 30): Promise<HistoryEntry[]> {
+    const out = await this.tryGit([
+      "log",
+      `-n${limit}`,
+      "--format=%H%x1f%an%x1f%aI%x1f%s",
+      "--follow",
+      "--",
+      path,
+    ]);
+    if (!out) return [];
+    return out
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [sha = "", author = "", date = "", subject = ""] = line.split("\x1f");
+        return { sha, author, date, subject };
+      });
+  }
+
+  /** Recent commits under some folders, each with the files it touched; empty outside Git. */
+  async changes(paths: string[], limit = 200): Promise<Change[]> {
+    if (paths.length === 0) return [];
+    for (const path of paths) this.absolute(path);
+    const out = await this.tryGit([
+      "log",
+      `-n${limit}`,
+      "--format=%x1e%H%x1f%an%x1f%aI%x1f%s",
+      "--name-status",
+      "--no-renames",
+      "--relative",
+      "--",
+      ...paths,
+    ]);
+    if (!out) return [];
+    return out
+      .split("\x1e")
+      .filter((record) => record.trim())
+      .map((record) => {
+        const [head = "", ...lines] = record.split("\n");
+        const [sha = "", author = "", date = "", subject = ""] = head.split("\x1f");
+        const files = lines.flatMap((line) => {
+          const [status, path] = line.split("\t");
+          return status && path ? [{ path, removed: status === "D" }] : [];
+        });
+        return { sha, author, date, subject, files };
+      });
+  }
+
+  /** A file as it was at a commit, or null when it did not exist there. */
+  async fileAt(sha: string, path: string): Promise<string | null> {
+    if (!isCommitId(sha)) return null;
+    this.absolute(path);
+    return this.tryGit(["show", "--end-of-options", `${sha}:${path}`]);
+  }
+
+  /** The commit an unsaved edit started from, or null when it was not recorded. */
+  async readDraftBase(path: string): Promise<string | null> {
+    // The file sits in the managed repository, so it is data until it looks like a commit.
+    const base = (await this.getFile(baseFile(path)))?.content.trim();
+    return base && isCommitId(base) ? base : null;
+  }
+
+  /** Whether a content file was committed to after `base`: a draft from then would overwrite it. */
+  async changedSince(base: string, path: string): Promise<boolean> {
+    const head = await this.getHead();
+    if (head === "working-copy" || head === base) return false;
+    if (!isCommitId(base)) return true;
+    return (
+      (await this.tryGit(["diff", "--quiet", "--end-of-options", base, head, "--", path])) === null
+    );
   }
 
   async hasDraft(path: string): Promise<boolean> {
@@ -307,7 +418,7 @@ export class LocalRepository implements Repository {
       const found = await Promise.all(
         entries.map(async (entry) => {
           const path = `${dir}/${entry.name}`;
-          if (entry.isDirectory()) return walk(path);
+          if (entry.isDirectory()) return entry.name === BASES ? [] : walk(path);
           return entry.name === ".gitignore" ? [] : [path.slice(DRAFT_DIR.length + 1)];
         }),
       );
@@ -376,4 +487,9 @@ export class LocalRepository implements Repository {
     }
     return target;
   }
+}
+
+/** A full or abbreviated commit id, and nothing git could read as an option or a range. */
+export function isCommitId(value: string): boolean {
+  return /^[0-9a-f]{7,64}$/.test(value);
 }

@@ -1,0 +1,177 @@
+---
+import WorkCard from './WorkCard.astro';
+import { figure, projects } from '../lib/cms';
+import type { HomeSectionsRegion } from '../cms';
+
+interface Props {
+  section: HomeSectionsRegion['blocks'][number];
+  index: number;
+}
+
+const { section, index } = Astro.props;
+const headingId = `section-${index}`;
+const words = (text: string) => text.trim().split(/\s+/);
+---
+
+{
+  section._type === 'clients' && (
+    <section class="clients" aria-label={section.heading ?? 'Clients'}>
+      {section.heading && <p class="eyebrow clients__heading">{section.heading}</p>}
+      <div class="marquee">
+        {[0, 1].map((copy) => (
+          <ul class="marquee__track" aria-hidden={copy === 1 ? 'true' : undefined}>
+            {(section.items ?? []).map((client) => (
+              <li>{client.name}</li>
+            ))}
+          </ul>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+{
+  section._type === 'selected-work' && (
+    <section class:list={['work', `work--${section._variant}`]} aria-labelledby={headingId}>
+      <div class="section-head">
+        <h2 id={headingId} class="reveal-title">{section.heading}</h2>
+        {section.introduction && <p class="section-head__intro">{section.introduction}</p>}
+      </div>
+      <div class="work__grid">
+        {projects()
+          .filter((project) => project.data.featured)
+          .map((project, i) => (
+            <WorkCard project={project} index={i} size={section._variant} />
+          ))}
+      </div>
+      {section.link?.href && (
+        <p class="work__more">
+          <a class="pill" href={section.link.href} data-magnetic>
+            {section.link.label ?? 'All projects'} <span aria-hidden="true">→</span>
+          </a>
+        </p>
+      )}
+    </section>
+  )
+}
+
+{
+  section._type === 'statement' && (
+    <section class="statement" aria-labelledby={headingId}>
+      <div class="statement__pin">
+        {section.eyebrow && <p class="eyebrow">{section.eyebrow}</p>}
+        <h2 id={headingId} class="statement__text" style={`--n: ${words(section.text).length}`}>
+          {words(section.text).map((word, i) => (
+            <>
+              <span class="statement__word" style={`--i: ${i}`}>{word}</span>{' '}
+            </>
+          ))}
+        </h2>
+      </div>
+    </section>
+  )
+}
+
+{
+  section._type === 'services' && (
+    <section class="services" id="services" aria-labelledby={headingId}>
+      <div class="section-head">
+        <h2 id={headingId} class="reveal-title">{section.heading}</h2>
+      </div>
+      <ol class="services__stack" role="list">
+        {(section.items ?? []).map((service, i) => (
+          <li class="service" style={`--i: ${i}`}>
+            <span class="service__index" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+            <div class="service__body">
+              <h3>{service.title}</h3>
+              <p>{service.summary}</p>
+            </div>
+            {(service.deliverables ?? []).length > 0 && (
+              <ul class="service__list">
+                {(service.deliverables ?? []).map((item) => (
+                  <li>{item}</li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+{
+  section._type === 'process' && (
+    <section class="process" aria-labelledby={headingId} style={`--steps: ${(section.steps ?? []).length}`}>
+      <div class="process__pin">
+        <h2 id={headingId} class="process__title">{section.heading}</h2>
+        <ol class="process__row" role="list">
+          {(section.steps ?? []).map((step, i) => (
+            <li class="step">
+              <span class="step__index" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+            </li>
+          ))}
+        </ol>
+        <div class="process__bar" aria-hidden="true"><span /></div>
+      </div>
+    </section>
+  )
+}
+
+{
+  section._type === 'numbers' && (
+    <section class="numbers" aria-label="In numbers">
+      <dl class="numbers__grid">
+        {(section.items ?? []).map((item) => {
+          const parts = figure(item.value);
+          return (
+            <div class="number">
+              <dt>{item.label}</dt>
+              <dd>
+                {parts ? (
+                  <span class="count" style={`--to: ${parts.number}`} data-count={parts.number} data-pad={parts.digits}>
+                    {parts.before}
+                    <span class="count__value">{String(parts.number).padStart(parts.digits, '0')}</span>
+                    <span class="count__digits" aria-hidden="true" />
+                    {parts.after}
+                  </span>
+                ) : (
+                  item.value
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
+  )
+}
+
+{
+  section._type === 'quote' && (
+    <figure class="quote">
+      <blockquote>
+        <p>“{section.quote}”</p>
+      </blockquote>
+      <figcaption>
+        <strong>{section.name}</strong>
+        {section.role && <span>{section.role}</span>}
+      </figcaption>
+    </figure>
+  )
+}
+
+{
+  section._type === 'cta' && (
+    <section class="cta" aria-labelledby={headingId}>
+      <h2 id={headingId} class="cta__title">{section.heading}</h2>
+      {section.body && <p class="cta__body">{section.body}</p>}
+      <a class="cta__button" href={section.link.href} data-magnetic data-cursor="Go">
+        <span>{section.link.label ?? 'Get in touch'}</span>
+        <span class="cta__arrow" aria-hidden="true">→</span>
+      </a>
+    </section>
+  )
+}

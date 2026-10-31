@@ -1,0 +1,7 @@
+{
+  "name": "Espresso",
+  "category": "coffee",
+  "price": 1500,
+  "description": "A washed bourbon from Huye. Chocolate, red fruit, a long finish.",
+  "dietary": ["vegan"]
+}

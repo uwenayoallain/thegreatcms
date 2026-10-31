@@ -1,72 +1,114 @@
-/** `.cms/config.yaml` — where content lives in this repo and how publishing behaves. */
+/** `.cms/config.yaml`: where content lives in this repo and how publishing behaves. */
 
 import { parse as parseYaml } from "yaml";
-import { z } from "zod";
 import { IssueBag } from "./errors.js";
 import { SPEC_VERSION } from "./schema.js";
+import {
+  type Parser,
+  type Problem,
+  type Property,
+  type Shape,
+  INVALID,
+  describe,
+  fail,
+  object,
+  optional,
+  record,
+  required,
+  string,
+  withDefault,
+} from "./shape.js";
 
-const relPath = z
-  .string()
-  .min(1)
-  .refine((p) => !p.startsWith("/") && !p.includes(".."), {
-    message: "Must be a repo-relative path that does not escape the repository.",
-  });
-
-/** A YAML key with nothing but comments under it parses as `null`. */
-const optionalSection = <T extends z.ZodTypeAny>(schema: T) =>
-  z.preprocess((value) => value ?? undefined, schema);
-
-export const ConfigFileSchema = z.object({
-  version: z.number().int().positive(),
-  content: optionalSection(
-    z
-      .object({
-        /** Directory for structured region JSON. */
-        regions: relPath.default("content/cms"),
-        /** Directory uploads are committed into. */
-        media: relPath.default("public/media"),
-      })
-      .default({ regions: "content/cms", media: "public/media" }),
-  ),
+export interface CmsConfig {
+  version: number;
+  content: {
+    /** Directory for structured region JSON. */
+    regions: string;
+    /** Directory uploads are committed into. */
+    media: string;
+  };
   /** URL prefix the site serves `content.media` from. */
-  mediaUrlPrefix: z.string().default("/media"),
-  publish: optionalSection(
-    z
-      .object({
-        // branch, draftBranchPrefix and dispatchEvent are no longer read; older configs still parse.
-        branch: z.string().default("main"),
-        draftBranchPrefix: z.string().default("cms/draft"),
-        commitMessage: z.string().default("content: update {summary}"),
-        /** Fire a repository_dispatch after publishing, for CI that needs a nudge. */
-        dispatchEvent: z.string().nullable().optional(),
-      })
-      .default({
-        branch: "main",
-        draftBranchPrefix: "cms/draft",
-        commitMessage: "content: update {summary}",
-      }),
-  ),
-  preview: optionalSection(
-    z
-      .object({
-        // urlTemplate is no longer read; older configs still parse.
-        urlTemplate: z.string().nullable().optional(),
-        /**
-         * Where an entry is seen on the site, per collection: a path with `{slug}`,
-         * or a map of slug to path with `"*"` as the fallback, e.g.
-         * `pages: { home: "/", "*": "/{slug}" }`. The studio's preview opens it.
-         */
-        paths: z
-          .record(z.string(), z.union([z.string(), z.record(z.string(), z.string())]))
-          .optional(),
-      })
-      .optional(),
-  ),
+  mediaUrlPrefix: string;
+  publish: {
+    // branch, draftBranchPrefix and dispatchEvent are no longer read; older configs still parse.
+    branch: string;
+    draftBranchPrefix: string;
+    commitMessage: string;
+    dispatchEvent?: string | null;
+  };
+  preview?: {
+    // urlTemplate is no longer read; older configs still parse.
+    urlTemplate?: string | null;
+    /**
+     * Where an entry is seen on the site, per collection: a path with `{slug}`,
+     * or a map of slug to path with `"*"` as the fallback, e.g.
+     * `pages: { home: "/", "*": "/{slug}" }`. The studio's preview opens it.
+     */
+    paths?: Record<string, string | Record<string, string>>;
+  };
+}
+
+const relPath = string({
+  pattern: /^(?!\/)(?!.*\.\.).+$/,
+  expected: "a path inside the repository",
+  fix: "Use a repo-relative path without `..`, e.g. `content/cms`.",
 });
 
-export type CmsConfig = z.infer<typeof ConfigFileSchema>;
+const nullableString: Parser<string | null> = (value, at, problems) =>
+  value === null ? null : string()(value, at, problems);
 
-export const DEFAULT_CONFIG: CmsConfig = ConfigFileSchema.parse({ version: SPEC_VERSION });
+/** A section with nothing but comments under it means its defaults. */
+function section(shape: Shape, fallback?: () => Record<string, unknown>): Property {
+  return { parse: object(shape), default: fallback, nullIsAbsent: true };
+}
+
+const publishDefaults = () => ({
+  branch: "main",
+  draftBranchPrefix: "cms/draft",
+  commitMessage: "content: update {summary}",
+});
+
+const configFile = object({
+  version: required(
+    (value, at, problems) =>
+      typeof value === "number" && Number.isInteger(value) && value > 0
+        ? value
+        : fail(problems, at, `Expected a version number, found ${describe(value)}.`),
+    `Start the file with \`version: ${SPEC_VERSION}\`.`,
+  ),
+  content: section(
+    {
+      regions: withDefault(relPath, () => "content/cms"),
+      media: withDefault(relPath, () => "public/media"),
+    },
+    () => ({ regions: "content/cms", media: "public/media" }),
+  ),
+  mediaUrlPrefix: withDefault(string(), () => "/media"),
+  publish: section(
+    {
+      branch: withDefault(string(), () => "main"),
+      draftBranchPrefix: withDefault(string(), () => "cms/draft"),
+      commitMessage: withDefault(string(), () => "content: update {summary}"),
+      dispatchEvent: optional(nullableString),
+    },
+    publishDefaults,
+  ),
+  preview: section({
+    urlTemplate: optional(nullableString),
+    paths: optional(
+      record((value, at, problems) =>
+        typeof value === "string" ? value : record(string())(value, at, problems),
+      ),
+    ),
+  }),
+});
+
+function readConfigFile(raw: unknown, problems: Problem[]): CmsConfig | typeof INVALID {
+  const parsed = configFile(raw, "", problems);
+  return parsed === INVALID ? INVALID : (parsed as unknown as CmsConfig);
+}
+
+export const DEFAULT_CONFIG: CmsConfig = readConfigFile({ version: SPEC_VERSION }, []) as CmsConfig;
 
 export function parseConfig(source: string, file = ".cms/config.yaml"): CmsConfig {
   const bag = new IssueBag(file);
@@ -78,26 +120,23 @@ export function parseConfig(source: string, file = ".cms/config.yaml"): CmsConfi
     bag.add({
       code: "invalid_yaml",
       message: `File is not valid YAML: ${(err as Error).message}`,
-      fix: "Check indentation — YAML requires spaces, never tabs.",
+      fix: "Check indentation: YAML requires spaces, never tabs.",
     });
     bag.throwIfAny("Could not read config");
     /* c8 ignore next */
     throw err;
   }
 
-  const parsed = ConfigFileSchema.safeParse(raw);
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      bag.add({
-        code: "invalid_config",
-        path: issue.path.join(".") || undefined,
-        message: issue.message,
-      });
+  const problems: Problem[] = [];
+  const config = readConfigFile(raw, problems);
+  if (config === INVALID) {
+    for (const problem of problems) {
+      bag.add({ code: "invalid_config", ...problem, path: problem.path || undefined });
     }
     bag.throwIfAny("Config is not valid");
+    /* c8 ignore next */
+    throw new Error("unreachable");
   }
-
-  const config = parsed.data as CmsConfig;
   if (config.version !== SPEC_VERSION) {
     bag.add({
       code: "unsupported_version",

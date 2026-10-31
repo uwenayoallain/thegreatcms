@@ -18,3 +18,4 @@ apps/studio/public/*.js
 .claude/settings.local.json
 .claude/launch.json
 *.tgz
+apps/studio/data/

@@ -20,7 +20,7 @@ const next = pages[index + 1];
 const { html, headings } = await renderMarkdown(page.body);
 ---
 
-<Base title={`${page.title} — GreatCMS`} description={page.summary}>
+<Base title={`${page.title} · GreatCMS`} description={page.summary}>
   <div class="docs">
     <DocsNav current={page.slug} />
 
@@ -63,5 +63,6 @@ const { html, headings } = await renderMarkdown(page.body);
         <a href={`/docs/${page.slug}.md`}>This page as Markdown</a>
       </p>
     </article>
+    <OnThisPage headings={headings} rail />
   </div>
 </Base>

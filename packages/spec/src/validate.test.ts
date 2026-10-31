@@ -50,6 +50,39 @@ describe("validateFields", () => {
     expect(result.ok).toBe(true);
   });
 
+  it.each([
+    "javascript:alert(1)",
+    "JaVaScRiPt:alert(1)",
+    "java\tscript:alert(1)",
+    " javascript:x",
+    "data:text/html,<script>x</script>",
+    "vbscript:x",
+  ])("refuses a link or image address that could run script: %j", (href) => {
+    const result = validateFields(fields, {
+      heading: "Hi",
+      seo: { title: "x" },
+      cta: { href },
+      image: { src: href, alt: "A cat" },
+    });
+    expect(result.issues.map((i) => `${i.path}:${i.code}`)).toEqual([
+      "image.src:unsafe_url",
+      "cta.href:unsafe_url",
+    ]);
+  });
+
+  it.each([
+    "/about",
+    "#top",
+    "about",
+    "https://example.com",
+    "mailto:a@b.c",
+    "tel:+250788",
+    "?q=1",
+  ])("accepts an ordinary address: %j", (href) => {
+    const result = validateFields(fields, { heading: "Hi", seo: { title: "x" }, cta: { href } });
+    expect(result.ok).toBe(true);
+  });
+
   it("reports a missing required field", () => {
     const result = validateFields(fields, { seo: { title: "x" } });
     expect(result.ok).toBe(false);

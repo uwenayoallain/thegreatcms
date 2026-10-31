@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/spec",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The GreatCMS content standard in TypeScript: schema, config, content parsing, validation and resolution, with no I/O.",
   "keywords": [
     "astro",
@@ -42,17 +42,16 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown && node scripts/gen-json-schema.mjs",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "yaml": "^2.9.0",
-    "zod": "^3.25.76"
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "vitest": "^4.1.11",
-    "zod-to-json-schema": "^3.25.2"
+    "ajv": "^8.20.0",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"

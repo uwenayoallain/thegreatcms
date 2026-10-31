@@ -1,4 +1,4 @@
-/** The visual editor — ProseMirror directly, no wrapper. */
+/** The visual editor: ProseMirror directly, no wrapper. */
 
 import { baseKeymap, setBlockType, toggleMark, wrapIn } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { STYLESHEET } from "./views/layout.js";
 
 export interface Asset {
-  body: string;
+  body: string | Uint8Array<ArrayBuffer>;
   version: string;
   type: string;
 }
@@ -17,9 +17,12 @@ export const ICONS: Record<string, string> = {
   "favicon.svg": "image/svg+xml",
   "apple-touch-icon.png": "image/png",
 };
+/** Display type, the website's own, self-hosted so the studio needs nothing from another origin. */
+const FONTS = new Set(["space-grotesk-500.woff2", "space-grotesk-700.woff2"]);
 const cache = new Map<string, Asset | null>();
 
-const hash = (content: string) => createHash("sha256").update(content).digest("hex").slice(0, 12);
+const hash = (content: string | Uint8Array<ArrayBuffer>) =>
+  createHash("sha256").update(content).digest("hex").slice(0, 12);
 
 /** Resolved next to the built server bundle, and beside the source in dev. */
 function readBundle(file: string): string | null {
@@ -50,12 +53,18 @@ export function asset(file: string): Asset | null {
   if (file === "studio.css") {
     return { body: STYLESHEET, version: hash(STYLESHEET), type: "text/css" };
   }
-  if (!CLIENT_BUNDLES.has(file)) return null;
+  if (!CLIENT_BUNDLES.has(file) && !FONTS.has(file)) return null;
 
   const cached = cache.get(file);
   if (cached !== undefined) return cached;
-  const body = readBundle(file);
-  const found = body === null ? null : { body, version: hash(body), type: "text/javascript" };
+  let found: Asset | null = null;
+  if (FONTS.has(file)) {
+    const bytes = readPublic(`fonts/${file}`);
+    if (bytes) found = { body: new Uint8Array(bytes), version: hash(file), type: "font/woff2" };
+  } else {
+    const body = readBundle(file);
+    if (body !== null) found = { body, version: hash(body), type: "text/javascript" };
+  }
   cache.set(file, found);
   return found;
 }

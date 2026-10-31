@@ -41,6 +41,7 @@ Two commands produce machine-readable output for an agent to act on:
 ```sh
 npx greatcms check --json     # every content file against the schema; exit code for CI
 npx greatcms doctor --json    # regions, collections, what is still at defaults, unsaved drafts
+npx greatcms describe         # every field you may write, its type and limits, and where its file goes
 ```
 
 Errors from every command carry their remedy on a `fix:` line, in the exact

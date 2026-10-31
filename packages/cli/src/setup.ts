@@ -1,4 +1,5 @@
 /* eslint-disable no-await-in-loop -- Prompts and transactional writes depend on the previous step. */
+import { ui } from "./ui.js";
 import {
   lstat,
   mkdir,
@@ -694,14 +695,14 @@ export async function setupProject(options: {
       );
   }
   if (!changes.length) {
-    stdout("Nothing to change.\n");
+    stdout(`${ui().ok("Nothing to change.")}\n`);
     return 0;
   }
   prompt.note(
-    `Review changes in ${root}:\n${changes.map((c) => `  ${c.before === null ? "create" : "update"} ${c.path}`).join("\n")}\nExisting pages, framework config, content, and lockfiles will not be changed. No dependencies will be installed.`,
+    `${ui().step("Review")}\n${ui().note(root)}\n${changes.map((c) => `  ${c.before === null ? ui().accent("create") : ui().muted("update")} ${c.path}`).join("\n")}\n\n${ui().note("Existing pages, framework config, content, and lockfiles will not be changed. No dependencies will be installed.")}`,
   );
   if (!(await prompt.confirm("Apply this setup?", true))) {
-    stdout("Cancelled. Nothing was written.\n");
+    stdout(`${ui().warn("Cancelled. Nothing was written.")}\n`);
     return 0;
   }
   for (const change of changes) {
@@ -729,8 +730,19 @@ export async function setupProject(options: {
     }
     throw new CliError(`Setup could not finish: ${(error as Error).message}`);
   }
+  const u = ui();
+  const installed = changes.some((c) => c.path === "package.json");
+  const next = [
+    installed
+      ? `cd ${JSON.stringify(root)} and run ${u.accent(`${scan.manager} install`)}, then ${u.accent(`${scan.manager} run cms:check`)}.`
+      : `Run ${u.accent("greatcms check")} to validate your content.`,
+    "Connect this folder in your local studio to edit it.",
+    readerReady
+      ? "Import cms from .cms/reader.mjs in build or server code, and render your regions and collections in your existing pages."
+      : "Read your content with @greatcms/reader in your site's build or server code.",
+  ];
   stdout(
-    `CMS ready in ${root}.\n${changes.some((c) => c.path === "package.json") ? `Next: cd ${JSON.stringify(root)} and run ${scan.manager} install, then ${scan.manager} run cms:check.\n` : "Run greatcms check to validate your content.\n"}Connect this folder in your local studio to edit it.\n${readerReady ? "Import cms from .cms/reader.mjs in build/server code and render your regions or collections in your existing pages." : "Read your content with @greatcms/reader in your site's build/server code."}\nNo website pages or studio server were generated. Run greatcms setup again to add more content models or select another workspace project.\n`,
+    `\n${u.ok(u.bold(`CMS ready in ${root}.`))}\n\n${u.step("Next")}\n${next.map((line, index) => `  ${index + 1}. ${line}`).join("\n")}\n\n${u.note("No website pages or studio server were generated. Run greatcms setup again to add more content models or pick another project in the workspace.")}\n`,
   );
   return 0;
 }

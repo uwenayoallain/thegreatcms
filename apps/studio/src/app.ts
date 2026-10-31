@@ -1,35 +1,66 @@
 /** The studio's HTTP surface. */
 
-import { stat } from "node:fs/promises";
+import { applyBlockAction, applyNestedBlockAction, nestedParentBlock } from "./block-edits.js";
+import { readLive, requestRollback } from "./deploys.js";
+import {
+  DEV_URL_ERROR,
+  formEntries,
+  isDirectory,
+  isHttpUrl,
+  isSafeRedirect,
+  readLimited,
+  submissionId,
+  submittingOrigin,
+} from "./http.js";
+import {
+  committedPreviews,
+  ExpiredMediaError,
+  pendingPreviews,
+  referencedMedia,
+  retainedMedia,
+} from "./uploads.js";
 import { regionsElsewhere } from "./elsewhere.js";
+import { searchSite } from "./search.js";
+import { studioTimeZone, zonedToEpoch } from "./schedule.js";
 import {
   isBlocksRegion,
   isSafeSlug,
+  REGION_ID_RE,
+  regionFilePath,
   type CollectionDef,
   type CmsConfig,
-  type CmsSchema,
-  type FieldDef,
-  type RegionDef,
   type RegionDocument,
   validateFields,
   previewPath,
   resolveRegion,
   validateRegion,
 } from "@greatcms/spec";
-import { Hono } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { html } from "hono/html";
 import { compress } from "hono/compress";
 import {
   checkPassword,
+  clearPreviewCookie,
   clearSessionCookie,
+  createPreviewCookie,
   createSessionCookie,
+  editorStamp,
+  hashPassword,
   isSameOrigin,
+  randomSecret,
+  createShareToken,
+  readPreviewSession,
   readSession,
+  readShareCookie,
+  readShareToken,
+  type Session,
   sessionKey,
+  shareCookie,
+  verifyPassword,
 } from "./auth.js";
 import type { Site, Store } from "./db.js";
-import { decodeBlocks, decodeForm, fieldName, MEDIA_ROOT, parsePath } from "./form.js";
-import { ALLOWED_TYPES, prepareUpload, UploadError, type UploadResult } from "./media.js";
+import { decodeBlocks, decodeForm } from "./form.js";
+import { ALLOWED_TYPES, UploadError, type UploadResult } from "./media.js";
 import {
   assessSpam,
   contentFields,
@@ -39,23 +70,27 @@ import {
   toCsv,
 } from "./submissions.js";
 import { SiteClient, type SiteContext } from "./sites.js";
-import { ConflictError, type FileChange } from "./repo.js";
+import { type Author, ConflictError } from "./repo.js";
+import { type Viewer, withViewer } from "./views/viewer.js";
+import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { errorsByPath } from "./views/fields.js";
-import { page } from "./views/layout.js";
+import { page, type PageOptions } from "./views/layout.js";
 import { asset, icon, ICONS } from "./assets.js";
-import {
-  collectionPage,
-  editEntryPage,
-  editRegionPage,
-  inboxPage,
-  newSitePage,
-  signInPage,
-  sitePage,
-  sitesPage,
-} from "./views/pages.js";
+import { editorsPage, sharePage, signInPage } from "./views/account-pages.js";
+import { collectionPage, editEntryPage } from "./views/collection-pages.js";
+import { inboxPage } from "./views/inbox-page.js";
+import { editRegionPage } from "./views/region-page.js";
+import { sitePage } from "./views/site-page.js";
+import { newSitePage, sitesPage } from "./views/sites-pages.js";
+import { siteTile } from "./views/pixel.js";
+import { findSiteIcon } from "./site-icon.js";
+import { Liveness } from "./liveness.js";
+import { historyPage, searchPage } from "./views/tool-pages.js";
 
 export interface AppOptions {
   store: Store;
+  /** The zone "publish later" times are typed in; defaults to STUDIO_TIMEZONE or the server's. */
+  timeZone?: string;
   password: string;
   secret: string;
   /** Injected in tests so routes can be driven without touching the network. */
@@ -80,6 +115,8 @@ export interface AppOptions {
    * can let the same sign-in through to `preview.example.com`. Unset: this host only.
    */
   cookieDomain?: string;
+  /** Where this server reaches a site's dev server, by site id, when browsers reach it elsewhere. */
+  probeUrls?: ReadonlyMap<string, string>;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
@@ -100,15 +137,13 @@ const MEDIA_TYPES: Record<string, string> = {
 };
 const MAX_SUBMISSION_FIELDS = 64;
 
-type Variables = { actor: string };
+type Variables = { actor: string; viewer: Viewer; session: string };
 
 export function createApp(options: AppOptions) {
   const { store, password, secret } = options;
   const app = new Hono<{ Variables: Variables }>();
-  // Pages are small; the editor bundle is not, and a remote studio is often on a slow link.
-  app.use("*", compress());
-
   const limiter = options.rateLimiter ?? new RateLimiter();
+  const liveness = new Liveness(options.probeUrls);
   // Per-address limits stop one sender; these stop many senders filling the inbox and the mail quota.
   const siteSubmissions = options.siteSubmissionLimiter ?? new RateLimiter(1000, 24 * 60 * 60_000);
   const notifications = options.notificationLimiter ?? new RateLimiter(60, 60 * 60_000);
@@ -134,6 +169,7 @@ export function createApp(options: AppOptions) {
 
   /** Where visitors' browsers reach this studio, for the form address a site should use. */
   const publicOrigin = (c: { req: { header(name: string): string | undefined; url: string } }) => {
+    if (options.publicUrl) return options.publicUrl;
     const host = options.trustProxy ? c.req.header("x-forwarded-host") : undefined;
     if (!host) return new URL(c.req.url).origin;
     return `${c.req.header("x-forwarded-proto") === "https" ? "https" : "http"}://${host}`;
@@ -184,13 +220,18 @@ export function createApp(options: AppOptions) {
     c.res.headers.set("x-content-type-options", "nosniff");
     // `same-origin`, not `no-referrer`. With no-referrer Chrome sends
     // `Origin: null` on a same-origin form post, which the CSRF check above
-    // refuses — every form in this app would break for anyone without
+    // refuses: every form in this app would break for anyone without
     // JavaScript. This keeps the referrer inside the studio and sends none to
     // anywhere else, which is the part that was actually worth having.
     c.res.headers.set("referrer-policy", "same-origin");
     // A studio is never a search result, and never a shared browser's history.
     c.res.headers.set("cache-control", "no-store");
+    // Once a browser has reached the studio over TLS, it never sends a password over plain HTTP.
+    if (isSecure(c)) c.res.headers.set("strict-transport-security", "max-age=31536000");
   });
+  // After the headers above: registered before them, compress drops them on the Node server.
+  // Pages are small; the editor bundle is not, and a remote studio is often on a slow link.
+  app.use("*", compress());
 
   /** The public submission endpoint. */
   app.post("/f/:siteId/:form", async (c) => {
@@ -221,7 +262,10 @@ export function createApp(options: AppOptions) {
       if (count > MAX_SUBMISSION_FIELDS) {
         return c.text("That submission has too many fields.", 413);
       }
-      fields[name.slice(0, 64)] = value.slice(0, 10_000);
+      const key = name.slice(0, 64);
+      const text = value.slice(0, 10_000);
+      // A checkbox group sends one name several times; every ticked box is kept.
+      fields[key] = key in fields ? `${fields[key]}, ${text}`.slice(0, 10_000) : text;
     }
 
     const budget = siteSubmissions.check(siteId);
@@ -244,6 +288,7 @@ export function createApp(options: AppOptions) {
     if (options.notifier && spam.score < SPAM_THRESHOLD && notifications.check(siteId).allowed) {
       // Not awaited: the visitor should not wait on an email provider.
       void options.notifier.notify({
+        kind: "submission",
         subject: `${site.name}: new ${form} submission`,
         lines: Object.entries(data).map(([key, value]) => `${key}: ${value}`),
       });
@@ -259,22 +304,63 @@ export function createApp(options: AppOptions) {
     return c.html(thanksPage(), 200);
   });
 
+  /** Who a signed session belongs to now: null once an editor is removed or their password changes. */
+  const viewerOf = (session: Session | null): Viewer | null => {
+    if (!session) return null;
+    if (session.actor === "studio") return { name: "studio", owner: true };
+    const editor = store.getEditor(Number(session.actor.slice("editor:".length)));
+    if (!editor || session.stamp !== editorStamp(signingKey, editor.passwordHash)) return null;
+    return { name: editor.name, email: editor.email, owner: false };
+  };
+  const stampFor = (actor: string) => {
+    if (actor === "studio") return "-";
+    const editor = store.getEditor(Number(actor.slice("editor:".length)));
+    return editor ? editorStamp(signingKey, editor.passwordHash) : "-";
+  };
+  /** The studio's own session, plus the preview's cookie when the preview lives on a sibling host. */
+  const signIn = (c: Context, actor: string) => {
+    const secure = isSecure(c);
+    const stamp = stampFor(actor);
+    c.header("Set-Cookie", createSessionCookie(signingKey, { actor, stamp, secure }));
+    if (options.cookieDomain) {
+      c.header(
+        "Set-Cookie",
+        createPreviewCookie(signingKey, { actor, stamp, secure, domain: options.cookieDomain }),
+        { append: true },
+      );
+    }
+  };
+  const signOut = (c: Context) => {
+    c.header("Set-Cookie", clearSessionCookie(isSecure(c)));
+    if (options.cookieDomain) {
+      c.header("Set-Cookie", clearPreviewCookie(isSecure(c), options.cookieDomain), {
+        append: true,
+      });
+    }
+  };
+
+  // Before sign-in, so the sign-in page is drawn in the theme the visitor chose too.
+  app.use("*", (c, next) => withTheme(themeOf(c.req.header("cookie")), next));
+
   app.use("*", async (c, next) => {
+    // The decoded path, exactly as the router matches it.
+    const path = c.req.path;
     // Managed sites post submissions from their own domains, so this one route is exempt.
-    if (new URL(c.req.url).pathname.startsWith("/f/")) return next();
+    if (path.startsWith("/f/")) return next();
 
     if (c.req.method !== "GET" && !isSameOrigin(c.req.raw)) {
       return c.text("Cross-origin form posts are refused.", 403);
     }
 
     const url = new URL(c.req.url);
-    const path = url.pathname;
     // The sign-in page needs the stylesheet, and the assets are this app's own code, not data.
     if (
       path === "/sign-in" ||
+      path === "/theme" ||
       path === "/auth/check" ||
+      path === "/share" ||
       path.startsWith("/assets/") ||
-      ICONS[path.slice(1)]
+      Object.hasOwn(ICONS, path.slice(1))
     ) {
       return next();
     }
@@ -286,9 +372,54 @@ export function createApp(options: AppOptions) {
       const wanted = path === "/" ? "" : `?next=${encodeURIComponent(path + url.search)}`;
       return c.redirect(`/sign-in${wanted}`, 303);
     }
-    c.set("actor", session.actor);
-    return next();
+    const who = viewerOf(session);
+    if (!who) {
+      // Removed, or their password changed, since signing in: the cookie is signed, but no longer theirs.
+      signOut(c);
+      return c.redirect("/sign-in", 303);
+    }
+    c.set("actor", who.name);
+    c.set("viewer", who);
+    c.set("session", session.actor);
+    return withViewer(who, next);
   });
+
+  /** A plain form post, so the switch works before any script has loaded, or without one. */
+  app.post("/theme", async (c) => {
+    const form = await c.req.formData();
+    const chosen = String(form.get("theme") ?? "");
+    const value = (THEMES as readonly string[]).includes(chosen) ? chosen : "system";
+    c.header(
+      "set-cookie",
+      `${THEME_COOKIE}=${value}; Path=/; SameSite=Lax; Max-Age=31536000${isSecure(c) ? "; Secure" : ""}`,
+    );
+    // Back to the screen the switch was on: a path on this studio, never anywhere else.
+    let back = "/";
+    try {
+      const from = new URL(c.req.header("referer") ?? "");
+      if (from.host === new URL(c.req.url).host) back = from.pathname + from.search;
+    } catch {
+      // No referrer: the sites list is as good a place as any.
+    }
+    return c.redirect(isSafeRedirect(back) ? back : "/", 303);
+  });
+
+  // Sites and people are the owner's to change; editors change content. Attached to the
+  // routes through the router, so no spelling of a path reaches one without passing here.
+  const ownerOnly: MiddlewareHandler = async (c, next) => {
+    if (c.get("viewer")?.owner) return next();
+    return c.html(errorPage("Only the owner can do that", "Ask whoever runs this studio."), 403);
+  };
+  for (const route of [
+    "/sites",
+    "/sites/new",
+    "/sites/:id/settings",
+    "/sites/:id/delete",
+    "/editors",
+    "/editors/*",
+  ]) {
+    app.use(route, ownerOnly);
+  }
 
   /**
    * Where to send someone after signing in: a page of this studio, or a sibling host
@@ -324,9 +455,45 @@ export function createApp(options: AppOptions) {
    * otherwise a redirect to sign in that comes back to the page it wanted. Caddy's
    * `forward_auth` sends the original request's host and path in these headers.
    */
+  /** A share token is good for the preview host of the site it names, and no other. */
+  const shareFits = (token: string | undefined, host: string | undefined) => {
+    const siteId = readShareToken(token, signingKey);
+    const site = siteId ? store.getSite(siteId) : null;
+    if (!site?.devUrl || !host) return false;
+    try {
+      return new URL(site.devUrl).host === host;
+    } catch {
+      return false;
+    }
+  };
+
   app.get("/auth/check", (c) => {
-    if (readSession(c.req.header("cookie"), signingKey)) return c.body(null, 204);
+    const cookies = c.req.header("cookie");
+    if (
+      viewerOf(readPreviewSession(cookies, signingKey)) ||
+      viewerOf(readSession(cookies, signingKey))
+    ) {
+      return c.body(null, 204);
+    }
     const host = c.req.header("x-forwarded-host");
+    if (shareFits(readShareCookie(c.req.header("cookie")), host)) return c.body(null, 204);
+    // A share link: trade the token for a cookie at the studio, which can set one for the whole domain.
+    const uri = c.req.header("x-forwarded-uri") ?? "/";
+    const token =
+      new URL(uri, "http://preview.invalid").searchParams.get("greatcms-share") ?? undefined;
+    if (token && options.publicUrl && shareFits(token, host)) {
+      const clean = new URL(uri, "http://preview.invalid");
+      clean.searchParams.delete("greatcms-share");
+      const back = allowedNext(
+        `${c.req.header("x-forwarded-proto") === "http" ? "http" : "https"}://${host}${clean.pathname}${clean.search}`,
+      );
+      if (back) {
+        return c.redirect(
+          `${options.publicUrl}/share?token=${encodeURIComponent(token)}&next=${encodeURIComponent(back)}`,
+          302,
+        );
+      }
+    }
     const wanted =
       host && options.publicUrl
         ? allowedNext(
@@ -335,6 +502,34 @@ export function createApp(options: AppOptions) {
         : null;
     if (!wanted) return c.text("Sign in to the studio first.", 401);
     return c.redirect(`${options.publicUrl}/sign-in?next=${encodeURIComponent(wanted)}`, 302);
+  });
+
+  app.get("/share", (c) => {
+    const token = c.req.query("token");
+    const next = allowedNext(c.req.query("next"));
+    const siteId = readShareToken(token, signingKey);
+    if (!token || !siteId || !next || next.startsWith("/")) {
+      return c.html(
+        errorPage("Preview link", "This preview link has expired or is not valid."),
+        403,
+      );
+    }
+    c.header("Set-Cookie", shareCookie(token, isSecure(c), options.cookieDomain));
+    return c.redirect(next, 302);
+  });
+
+  app.post("/sites/:id/share", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    if (!site.devUrl)
+      return c.html(errorPage(site.name, "Add the site's preview address first."), 422);
+    const path = String((await c.req.formData()).get("path") ?? "/");
+    const preview = new URL(site.devUrl);
+    let url = new URL(path.startsWith("/") ? path : "/", preview);
+    // `//elsewhere` is a path to another host: the token would travel with it.
+    if (url.origin !== preview.origin) url = new URL("/", preview);
+    url.searchParams.set("greatcms-share", createShareToken(signingKey, site.id));
+    return c.html(sharePage({ site, url: url.href }));
   });
 
   app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png}", (c) => {
@@ -351,17 +546,96 @@ export function createApp(options: AppOptions) {
     const found = asset(c.req.param("file"));
     if (!found) return c.notFound();
 
-    const pinned = c.req.query("v") === found.version;
+    // A font's name changes whenever its bytes do, so it is pinned without a version in the URL.
+    const pinned = c.req.query("v") === found.version || found.type.startsWith("font/");
     return c.body(found.body, 200, {
-      "content-type": `${found.type}; charset=utf-8`,
+      "content-type": typeof found.body === "string" ? `${found.type}; charset=utf-8` : found.type,
       "cache-control": pinned ? "public, max-age=31536000, immutable" : "public, max-age=300",
       etag: `"${found.version}"`,
     });
   });
 
-  app.get("/sign-in", (c) =>
-    c.html(signInPage({ next: allowedNext(c.req.query("next")) ?? undefined })),
-  );
+  const hasEditors = () => store.listEditors().length > 0;
+
+  /** Records that the signed-in person has this content open, and says who else does. */
+  const here = (c: { get(key: "viewer"): Viewer }, siteId: string, path: string) => {
+    const who = c.get("viewer");
+    return store.presence({ siteId, path, actor: who.email ?? "owner", name: who.name });
+  };
+
+  app.get("/sign-in", (c) => {
+    const next = allowedNext(c.req.query("next")) ?? undefined;
+    // Signed in here already, sent from the preview: renew its cookie rather than ask again.
+    const session = readSession(c.req.header("cookie"), signingKey);
+    if (next && viewerOf(session)) {
+      signIn(c, session!.actor);
+      return c.redirect(next, 303);
+    }
+    return c.html(signInPage({ next, editors: hasEditors() }));
+  });
+
+  app.get("/editors", (c) => c.html(editorsPage({ editors: store.listEditors() })));
+
+  app.post("/editors", async (c) => {
+    const form = await c.req.formData();
+    const name = String(form.get("name") ?? "").trim();
+    const email = String(form.get("email") ?? "").trim();
+    const chosen = String(form.get("password") ?? "");
+    const problem = !name
+      ? "Give the editor a name; it is what their commits will say."
+      : !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)
+        ? "That email address does not look complete."
+        : chosen.length < 12
+          ? "Use a password of at least 12 characters."
+          : store.findEditor(email)
+            ? "Someone with that email can already sign in."
+            : null;
+    if (problem) {
+      return c.html(
+        editorsPage({
+          editors: store.listEditors(),
+          flash: { kind: "error", message: problem },
+          values: { name, email },
+        }),
+        422,
+      );
+    }
+    store.addEditor({ name, email, passwordHash: hashPassword(chosen) });
+    return c.html(
+      editorsPage({
+        editors: store.listEditors(),
+        flash: { kind: "success", message: `${name} can sign in with ${email}.` },
+      }),
+    );
+  });
+
+  app.post("/editors/:id/password", async (c) => {
+    const editor = store.getEditor(Number(c.req.param("id")));
+    if (!editor) return c.notFound();
+    const chosen = String((await c.req.formData()).get("password") ?? "");
+    if (chosen.length < 12) {
+      return c.html(
+        editorsPage({
+          editors: store.listEditors(),
+          flash: { kind: "error", message: "Use a password of at least 12 characters." },
+        }),
+        422,
+      );
+    }
+    store.setEditorPassword(editor.id, hashPassword(chosen));
+    return c.html(
+      editorsPage({
+        editors: store.listEditors(),
+        flash: { kind: "success", message: `${editor.name}'s password is changed.` },
+      }),
+    );
+  });
+
+  app.post("/editors/:id/delete", (c) => {
+    const editor = store.getEditor(Number(c.req.param("id")));
+    if (editor) store.removeEditor(editor.id);
+    return c.redirect("/editors", 303);
+  });
 
   app.post("/sign-in", async (c) => {
     // One password guards everything here, so guessing has to cost something.
@@ -383,28 +657,41 @@ export function createApp(options: AppOptions) {
       headers: { "content-type": c.req.header("content-type") ?? "" },
     }).formData();
     const supplied = String(form.get("password") ?? "");
+    const email = String(form.get("email") ?? "").trim();
     const next = allowedNext(form.get("next")) ?? undefined;
-    if (!checkPassword(supplied, password)) {
+    let actor: string | null = null;
+    if (email) {
+      const editor = store.findEditor(email);
+      // Hash even for an unknown address, so the answer takes as long either way.
+      const ok = verifyPassword(supplied, editor?.passwordHash ?? DUMMY_HASH);
+      if (editor && ok) actor = `editor:${editor.id}`;
+    } else if (checkPassword(supplied, password)) {
+      actor = "studio";
+    }
+    if (!actor) {
       // Deliberately vague, and the same shape whether or not a password was supplied: there is nothing to learn from it.
-      return c.html(signInPage({ error: "That password did not work.", next }), 401);
+      return c.html(
+        signInPage({ error: "That did not work.", next, email, editors: hasEditors() }),
+        401,
+      );
     }
 
     signInLimiter.clear(`sign-in:${address}`);
-    c.header(
-      "Set-Cookie",
-      createSessionCookie(signingKey, { secure: isSecure(c), domain: options.cookieDomain }),
-    );
+    signIn(c, actor);
     const sites = store.listSites();
     const only = sites.length === 1 ? `/sites/${sites[0]!.id}` : "/";
     return c.redirect(next ?? only, 303);
   });
 
   app.post("/sign-out", (c) => {
-    c.header("Set-Cookie", clearSessionCookie(isSecure(c), options.cookieDomain));
+    signOut(c);
     return c.redirect("/sign-in", 303);
   });
 
-  app.get("/", (c) => c.html(sitesPage(store.listSites(), store.countUnread())));
+  app.get("/", async (c) => {
+    const sites = store.listSites();
+    return c.html(sitesPage(sites, store.countUnread(), undefined, await liveness.all(sites)));
+  });
 
   app.get("/inbox", (c) => {
     const siteId = c.req.query("site") || undefined;
@@ -458,7 +745,7 @@ export function createApp(options: AppOptions) {
     if (values.devUrl && !isHttpUrl(values.devUrl)) {
       return c.html(
         newSitePage({
-          error: "Nothing was connected — check the dev server URL.",
+          error: "Nothing was connected: check the dev server URL.",
           fieldErrors: { devUrl: DEV_URL_ERROR },
           values,
         }),
@@ -469,7 +756,7 @@ export function createApp(options: AppOptions) {
     if (values.path && !(await isDirectory(values.path))) {
       return c.html(
         newSitePage({
-          error: "Nothing was connected — check the folder path.",
+          error: "Nothing was connected: check the folder path.",
           fieldErrors: { path: "There is no folder at this path on this machine." },
           values,
         }),
@@ -488,6 +775,7 @@ export function createApp(options: AppOptions) {
       id: crypto.randomUUID(),
       ...values,
       pushAfterPublish: false,
+      deployRoot: "",
       createdAt: new Date().toISOString(),
     };
 
@@ -502,10 +790,15 @@ export function createApp(options: AppOptions) {
     return c.redirect(`/sites/${candidate.id}`, 303);
   });
 
-  app.get("/sites/:id/settings", (c) => {
+  app.get("/sites/:id/settings", async (c) => {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
-    return c.html(newSitePage({ editing: site }));
+    // A schema that no longer parses is exactly when settings matter: the page still opens.
+    const schema = await new SiteClient(site)
+      .context()
+      .then((context) => context.schema)
+      .catch(() => undefined);
+    return c.html(newSitePage({ editing: site, schema }));
   });
 
   app.post("/sites/:id/settings", async (c) => {
@@ -516,13 +809,25 @@ export function createApp(options: AppOptions) {
       name: String(form.get("name") ?? "").trim(),
       path: site.path,
       devUrl: String(form.get("devUrl") ?? "").trim(),
+      deployRoot: String(form.get("deployRoot") ?? "").trim(),
     };
+    if (values.deployRoot && !values.deployRoot.startsWith("/")) {
+      return c.html(
+        newSitePage({
+          editing: site,
+          values,
+          error: "Nothing was saved: check the builder folder.",
+          fieldErrors: { deployRoot: "Give the absolute path, such as /srv/www." },
+        }),
+        422,
+      );
+    }
     if (values.devUrl && !isHttpUrl(values.devUrl)) {
       return c.html(
         newSitePage({
           editing: site,
           values,
-          error: "Nothing was saved — check the dev server URL.",
+          error: "Nothing was saved: check the dev server URL.",
           fieldErrors: { devUrl: DEV_URL_ERROR },
         }),
         422,
@@ -535,8 +840,91 @@ export function createApp(options: AppOptions) {
       name: values.name,
       devUrl: values.devUrl,
       pushAfterPublish: form.get("pushAfterPublish") === "on",
+      deployRoot: values.deployRoot,
     });
     return c.redirect(`/sites/${site.id}`, 303);
+  });
+
+  /**
+   * "Publish later": the form is kept as submitted, and replayed through the ordinary publish
+   * when it falls due, so validation, the conflict check and authorship are the same as now.
+   */
+  const timeZone = options.timeZone ?? studioTimeZone();
+  for (const base of ["/sites/:id/regions/:regionId", "/sites/:id/collections/:name/:slug"]) {
+    app.post(base, async (c, next) => {
+      const form = await c.req.formData();
+      if (form.get("action") !== "schedule") return next();
+      const site = store.getSite(c.req.param("id") ?? "");
+      const target = contentOf(c);
+      if (!site || !target || target.collection?.slug === "new") return c.notFound();
+      const back = `/sites/${site.id}/${target.back}`;
+      const dueAt = zonedToEpoch(String(form.get("publishAt") ?? ""), timeZone);
+      const refuse = (message: string) =>
+        c.html(
+          page(
+            { title: "Not scheduled", flash: { kind: "error", message } },
+            html`<p><a class="button secondary" href="${back}">Back to the editor</a></p>`,
+          ),
+          422,
+        );
+      if (dueAt === null || dueAt < Date.now() + 60_000) {
+        return refuse("Pick a time at least a minute from now.");
+      }
+      const entries: Array<[string, string]> = [];
+      for (const [key, value] of form.entries()) {
+        if (typeof value !== "string") {
+          if (value.size > 0) {
+            return refuse("New images cannot wait: publish them now, or schedule without them.");
+          }
+          continue;
+        }
+        if (key !== "action" && key !== "publishAt") entries.push([key, value]);
+      }
+      const who = c.get("viewer");
+      store.schedule({
+        siteId: site.id,
+        target: target.back,
+        label: target.regionId ?? `${target.collection!.name}/${target.collection!.slug}`,
+        form: entries,
+        dueAt,
+        actor: c.get("session"),
+        author: authorOf(who) ?? null,
+      });
+      return c.redirect(`/sites/${site.id}#scheduled`, 303);
+    });
+  }
+
+  app.post("/sites/:id/scheduled/:job/cancel", (c) => {
+    const job = store.getScheduled(Number(c.req.param("job")));
+    if (!job || job.siteId !== c.req.param("id")) return c.notFound();
+    store.settleScheduled(job.id, "cancelled", `cancelled by ${c.get("actor")}`);
+    return c.redirect(`/sites/${job.siteId}#scheduled`, 303);
+  });
+
+  app.get("/sites/:id/search", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const query = (c.req.query("q") ?? "").slice(0, 120);
+    const client = new SiteClient(site);
+    const context = await client.context();
+    return c.html(
+      searchPage({
+        site,
+        schema: context.schema,
+        query,
+        hits: await searchSite(client, context, site.id, query),
+      }),
+    );
+  });
+
+  app.post("/sites/:id/rollback", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const sha = String((await c.req.formData()).get("sha") ?? "");
+    if (!(await requestRollback(site.deployRoot, sha))) {
+      return c.html(errorPage(site.name, "There is no release of that commit to go back to."), 404);
+    }
+    return c.redirect(`/sites/${site.id}#live`, 303);
   });
 
   app.get("/sites/:id/pending-media/:token/:index", (c) => {
@@ -578,24 +966,60 @@ export function createApp(options: AppOptions) {
     return c.body(new Uint8Array(bytes));
   });
 
+  app.get("/sites/:id/icon", async (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    const tile = siteTile(site.name, (await findSiteIcon(site.path)) ?? undefined);
+    c.header("Content-Type", "image/svg+xml");
+    // The sidebar shows it on every screen; a favicon changing shows within minutes.
+    c.header("Cache-Control", "private, max-age=300");
+    c.header("X-Content-Type-Options", "nosniff");
+    // A site's own SVG is inside it: opened directly, nothing in it may run in the studio's origin.
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox",
+    );
+    return c.body(tile);
+  });
+
+  /** Everything the site page shows, read in parallel; the flash says why it is being shown again. */
+  async function renderSitePage(
+    c: Context<{ Variables: Variables }>,
+    site: Site,
+    flash?: PageOptions["flash"],
+  ) {
+    const client = new SiteClient(site);
+    const context = await client.context();
+    const names = Object.keys(context.schema.collections);
+    const [drafts, sync, live, running, activity, counts] = await Promise.all([
+      client.listLiveDrafts(context),
+      client.syncState(),
+      readLive(site.deployRoot),
+      liveness.running(site),
+      client.activity(context),
+      Promise.all(names.map((name) => client.entryCount(context, name))),
+    ]);
+    return sitePage({
+      site,
+      schema: context.schema,
+      flash,
+      drafts,
+      formsEndpoint: `${publicOrigin(c)}/f/${encodeURIComponent(site.id)}`,
+      sync,
+      live,
+      scheduled: { jobs: store.listScheduled(site.id), timeZone },
+      running,
+      activity,
+      counts: Object.fromEntries(names.map((name, index) => [name, counts[index] ?? 0])),
+    });
+  }
+
   app.get("/sites/:id", async (c) => {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
 
     try {
-      const client = new SiteClient(site);
-      const context = await client.context();
-      return c.html(
-        sitePage(
-          site,
-          context.schema,
-          store.recentPublishes(site.id),
-          undefined,
-          await client.listLiveDrafts(context),
-          `${publicOrigin(c)}/f/${encodeURIComponent(site.id)}`,
-          await client.syncState(),
-        ),
-      );
+      return c.html(await renderSitePage(c, site));
     } catch (error) {
       return c.html(errorPage(site.name, describeError(error)), 502);
     }
@@ -604,24 +1028,11 @@ export function createApp(options: AppOptions) {
   app.post("/sites/:id/push", async (c) => {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
-    const client = new SiteClient(site);
-    const pushed = await client.push();
+    const pushed = await new SiteClient(site).push();
     if (pushed.ok) return c.redirect(`/sites/${site.id}`, 303);
 
     try {
-      const context = await client.context();
-      return c.html(
-        sitePage(
-          site,
-          context.schema,
-          store.recentPublishes(site.id),
-          { kind: "error", message: pushed.reason },
-          await client.listLiveDrafts(context),
-          `${publicOrigin(c)}/f/${encodeURIComponent(site.id)}`,
-          await client.syncState(),
-        ),
-        502,
-      );
+      return c.html(await renderSitePage(c, site, { kind: "error", message: pushed.reason }), 502);
     } catch (error) {
       return c.html(errorPage(site.name, describeError(error)), 502);
     }
@@ -644,7 +1055,12 @@ export function createApp(options: AppOptions) {
       const collection = context.schema.collections[name];
       if (!collection) return c.notFound();
 
-      const entries = await client.listEntries(context, name);
+      const [entries, drafts, activity] = await Promise.all([
+        client.listEntries(context, name),
+        client.listLiveDrafts(context),
+        client.activity(context, 0),
+      ]);
+      const drafted = new Set(drafts.map((draft) => draft.target));
       return c.html(
         collectionPage({
           site,
@@ -661,6 +1077,8 @@ export function createApp(options: AppOptions) {
                 entry.slug,
             ),
             summary: (entry.data.summary ?? entry.data.description) as string | undefined,
+            draft: drafted.has(`collections/${name}/${encodeURIComponent(entry.slug)}`),
+            edited: activity.edited.get(`collections/${name}/${encodeURIComponent(entry.slug)}`),
           })),
         }),
       );
@@ -687,11 +1105,16 @@ export function createApp(options: AppOptions) {
       const draft = entry
         ? await client.readLiveDraft({ context, collection: { name, slug: entry.slug } })
         : null;
+      const base =
+        draft && entry
+          ? await client.liveDraftBase({ context, collection: { name, slug: entry.slug } })
+          : null;
       const data = draft ?? entry?.data;
 
       return c.html(
         editEntryPage({
           site,
+          running: await liveness.running(site),
           schema: context.schema,
           name,
           label: collection.label ?? name,
@@ -704,10 +1127,14 @@ export function createApp(options: AppOptions) {
           blocks: context.schema.blocks,
           document: client.entryDocument(context, name, data ? { ...entry!, data } : null),
           draft: draft !== null,
+          staleDraft: base?.stale,
+          others: entry ? here(c, site.id, `collections/${name}/${entry.slug}`) : [],
           previewUrl: entryPreview(site, context.config, name, entry?.slug ?? null),
           errors: new Map(),
-          headSha: context.headSha,
+          headSha: base?.base ?? context.headSha,
           mediaPreviews: committedPreviews(site.id, context.config, data),
+          media: await client.mediaChoices(context),
+          entries: await client.referenceChoices(context),
           elsewhere: await regionsElsewhere(client, context, site.id),
         }),
       );
@@ -729,7 +1156,13 @@ export function createApp(options: AppOptions) {
       const entry = await client.readEntry(context, name, slug);
       if (!entry) return c.notFound();
 
-      await client.deleteEntry({ context, name, slug, actor: c.get("actor") });
+      await client.deleteEntry({
+        context,
+        name,
+        slug,
+        actor: c.get("actor"),
+        author: authorOf(c.get("viewer")),
+      });
       return c.redirect(`/sites/${site.id}/collections/${name}`, 303);
     } catch (error) {
       return c.html(errorPage(site.name, describeError(error)), 502);
@@ -767,6 +1200,7 @@ export function createApp(options: AppOptions) {
     type EntryView = Omit<Parameters<typeof editEntryPage>[0], keyof typeof fixed>;
     const fixed = {
       site,
+      running: await liveness.running(site),
       schema: context.schema,
       name,
       label: collection.label ?? name,
@@ -821,11 +1255,13 @@ export function createApp(options: AppOptions) {
       );
     }
 
-    const document = decodeForm(
-      entries,
-      collection.fields,
-      blockFieldsOf(context),
-      mdxBody(collection),
+    const document = await keepMdxSource(
+      c.get("viewer"),
+      client,
+      context,
+      name,
+      requested,
+      decodeForm(entries, collection.fields, blockFieldsOf(context), mdxBody(collection)),
     );
 
     if (action.startsWith("nested:")) {
@@ -858,7 +1294,7 @@ export function createApp(options: AppOptions) {
           headSha,
           flash: {
             kind: "error",
-            message: "Nothing was published — this entry is not valid yet.",
+            message: "Nothing was published: this entry is not valid yet.",
             detail: validation.issues.map((issue) => issue.toString()),
           },
         }),
@@ -883,7 +1319,7 @@ export function createApp(options: AppOptions) {
             headSha,
             flash: {
               kind: "error",
-              message: `Nothing was published — “${slug}” is already taken.`,
+              message: `Nothing was published: “${slug}” is already taken.`,
             },
           }),
           409,
@@ -898,6 +1334,7 @@ export function createApp(options: AppOptions) {
         slug,
         document,
         actor,
+        author: authorOf(c.get("viewer")),
         expectedHeadSha: requested === "new" ? undefined : headSha || undefined,
         media: referencedMedia(media, document),
       });
@@ -913,6 +1350,11 @@ export function createApp(options: AppOptions) {
         commitSha: result.commitSha,
         commitUrl: result.url,
         actor,
+      });
+      void options.notifier?.notify({
+        kind: "publish",
+        subject: `${site.name}: ${actor} published ${name}/${slug}`,
+        lines: [`commit ${result.commitSha.slice(0, 7)}`],
       });
 
       return c.html(
@@ -954,7 +1396,13 @@ export function createApp(options: AppOptions) {
       ? { blocks: decodeBlocks(entries, (type) => context.schema.blocks[type]?.fields) }
       : decodeForm(entries, region.fields, blockFieldsOf(context));
 
-    const written = await client.writeLiveDraft({ context, regionId, document });
+    here(c, site.id, `regions/${regionId}`);
+    const written = await client.writeLiveDraft({
+      context,
+      regionId,
+      document,
+      base: baseOf(entries),
+    });
     return c.body(null, written ? 204 : 409);
   });
 
@@ -993,19 +1441,68 @@ export function createApp(options: AppOptions) {
     const collection = context.schema.collections[name];
     if (!collection || slug === "new") return c.notFound();
 
-    const document = decodeForm(
-      await formEntries(c.req.raw),
-      collection.fields,
-      blockFieldsOf(context),
-      mdxBody(collection),
+    const entries = await formEntries(c.req.raw);
+    const document = await keepMdxSource(
+      c.get("viewer"),
+      client,
+      context,
+      name,
+      slug,
+      decodeForm(entries, collection.fields, blockFieldsOf(context), mdxBody(collection)),
     );
+    here(c, site.id, `collections/${name}/${slug}`);
     const written = await client.writeLiveDraft({
       context,
       collection: { name, slug },
       document,
+      base: baseOf(entries),
     });
     return c.body(null, written ? 204 : 409);
   });
+
+  for (const base of ["/sites/:id/regions/:regionId", "/sites/:id/collections/:name/:slug"]) {
+    app.get(`${base}/history`, async (c) => {
+      const site = store.getSite(c.req.param("id") ?? "");
+      const target = contentOf(c);
+      if (!site || !target) return c.notFound();
+      const client = new SiteClient(site);
+      const context = await client.context();
+      const label = target.regionId
+        ? (context.schema.regions[target.regionId]?.label ?? target.regionId)
+        : `${context.schema.collections[target.collection!.name]?.label ?? target.collection!.name}: ${target.collection!.slug}`;
+      if (
+        target.regionId
+          ? !context.schema.regions[target.regionId]
+          : !context.schema.collections[target.collection!.name]
+      ) {
+        return c.notFound();
+      }
+      return c.html(
+        historyPage({
+          site,
+          schema: context.schema,
+          label,
+          back: `/sites/${site.id}/${target.back}`,
+          entries: await client.contentHistory({ context, ...target }),
+        }),
+      );
+    });
+
+    app.post(`${base}/history/:sha/restore`, async (c) => {
+      const site = store.getSite(c.req.param("id") ?? "");
+      const target = contentOf(c);
+      if (!site || !target) return c.notFound();
+      const client = new SiteClient(site);
+      const context = await client.context();
+      const restored = await client.restoreToDraft({
+        context,
+        ...target,
+        sha: c.req.param("sha") ?? "",
+      });
+      if (!restored) return c.html(errorPage(site.name, "That version could not be read."), 404);
+      return c.redirect(`/sites/${site.id}/${target.back}`, 303);
+    });
+  }
 
   app.get("/sites/:id/regions/:regionId", async (c) => {
     const site = store.getSite(c.req.param("id"));
@@ -1022,18 +1519,25 @@ export function createApp(options: AppOptions) {
       const document = draft
         ? (resolveRegion(context.schema, regionId, draft) ?? {})
         : await client.resolvedRegion(context, regionId);
+      const base = draft ? await client.liveDraftBase({ context, regionId }) : null;
       return c.html(
         editRegionPage({
           site,
+          running: await liveness.running(site),
           schema: context.schema,
           regionId,
           region,
+          file: regionFilePath(context.config, regionId),
           document,
           draft: draft !== null,
+          staleDraft: base?.stale,
+          others: here(c, site.id, `regions/${regionId}`),
           previewUrl: site.devUrl ?? undefined,
           errors: new Map(),
-          headSha: context.headSha,
+          headSha: base?.base ?? context.headSha,
           mediaPreviews: committedPreviews(site.id, context.config, document),
+          media: await client.mediaChoices(context),
+          entries: await client.referenceChoices(context),
           elsewhere: await regionsElsewhere(client, context, site.id, regionId),
         }),
       );
@@ -1073,12 +1577,15 @@ export function createApp(options: AppOptions) {
       Parameters<typeof editRegionPage>[0],
       "site" | "schema" | "regionId" | "region"
     >;
+    const running = await liveness.running(site);
     const renderRegion = (view: RegionView) =>
       editRegionPage({
         site,
+        running,
         schema: context.schema,
         regionId,
         region,
+        file: regionFilePath(context.config, regionId),
         previewUrl: site.devUrl ?? undefined,
         ...view,
         pendingMedia: pendingToken,
@@ -1171,7 +1678,7 @@ export function createApp(options: AppOptions) {
           headSha,
           flash: {
             kind: "error",
-            message: "Nothing was published — this content is not valid yet.",
+            message: "Nothing was published: this content is not valid yet.",
             detail: validation.issues.map((issue) => issue.toString()),
           },
         }),
@@ -1185,6 +1692,7 @@ export function createApp(options: AppOptions) {
         regionId,
         document,
         actor,
+        author: authorOf(c.get("viewer")),
         expectedHeadSha: headSha || undefined,
         media: referencedMedia(media, document),
       });
@@ -1198,6 +1706,11 @@ export function createApp(options: AppOptions) {
         commitSha: result.commitSha,
         commitUrl: result.url,
         actor,
+      });
+      void options.notifier?.notify({
+        kind: "publish",
+        subject: `${site.name}: ${actor} published ${regionId}`,
+        lines: [`commit ${result.commitSha.slice(0, 7)}`],
       });
       return c.html(
         renderRegion({
@@ -1224,234 +1737,60 @@ export function createApp(options: AppOptions) {
 
   app.notFound((c) => c.html(errorPage("Not found", "That page does not exist."), 404));
 
-  return app;
-}
-
-interface BlockActionResult {
-  changed: boolean;
-  open?: number;
-}
-
-function applyBlockAction(
-  action: string,
-  blocks: Array<Record<string, unknown>>,
-  addType: string,
-  allowed: string[],
-): BlockActionResult {
-  const [verb, rawIndex] = action.split(":");
-  const index = Number(rawIndex);
-
-  if (verb === "add" || action === "add") {
-    if (!allowed.includes(addType)) return { changed: false };
-    blocks.push({ _type: addType });
-    return { changed: true, open: blocks.length - 1 };
-  }
-  if (!Number.isInteger(index) || index < 0 || index >= blocks.length) {
-    return { changed: false };
-  }
-
-  if (verb === "remove") {
-    blocks.splice(index, 1);
-    return { changed: true };
-  }
-  const target = verb === "up" ? index - 1 : index + 1;
-  if (target < 0 || target >= blocks.length) return { changed: false };
-  const [moved] = blocks.splice(index, 1);
-  if (moved) blocks.splice(target, 0, moved);
-  return moved ? { changed: true, open: target } : { changed: false };
-}
-
-/** Applies the same add/remove/reorder controls to a blocks field at any depth. */
-function applyNestedBlockAction(
-  schema: CmsSchema,
-  root: RegionDef | CollectionDef,
-  document: RegionDocument,
-  action: string,
-  form: FormData,
-): { changed: boolean; open?: string } {
-  const [, verb, encodedPath, rawIndex] = action.split(":");
-  if (!verb || !encodedPath || !["add", "remove", "up", "down"].includes(verb)) {
-    return { changed: false };
-  }
-
-  const path = encodedPath.split(".");
-  const target = nestedBlockList(schema, root, document, path);
-  if (!target) return { changed: false };
-
-  const addType = String(form.get(fieldName(path, "nestedAdd")) ?? "");
-  if (verb === "add" && !target.allowed.includes(addType)) return { changed: false };
-  const updated = applyBlockAction(
-    rawIndex === undefined ? verb : `${verb}:${rawIndex}`,
-    target.blocks,
-    addType,
-    target.allowed,
-  );
-  return {
-    changed: updated.changed,
-    open: updated.open === undefined ? encodedPath : `${encodedPath}.${updated.open}`,
-  };
-}
-
-function nestedParentBlock(action: string): number | undefined {
-  const encodedPath = action.split(":")[2];
-  const [root, rawIndex] = encodedPath?.split(".") ?? [];
-  const index = Number(rawIndex);
-  return root === "blocks" && Number.isInteger(index) && index >= 0 ? index : undefined;
-}
-
-function nestedBlockList(
-  schema: CmsSchema,
-  root: RegionDef | CollectionDef,
-  document: RegionDocument,
-  path: string[],
-): { blocks: Array<Record<string, unknown>>; allowed: string[] } | null {
-  let node = document as Record<string, unknown>;
-  let fields: Record<string, FieldDef>;
-  let offset = 0;
-
-  if ("type" in root && root.type === "blocks") {
-    if (path[0] !== "blocks") return null;
-    const item = indexedBlock(node.blocks, path[1]);
-    if (!item) return null;
-    const definition = schema.blocks[String(item._type ?? "")];
-    if (!definition) return null;
-    node = item;
-    fields = definition.fields;
-    offset = 2;
-  } else {
-    fields = root.fields;
-  }
-
-  while (offset < path.length) {
-    const name = path[offset];
-    if (!name) return null;
-    const definition = fields[name];
-    if (!definition) return null;
-
-    if (offset === path.length - 1) {
-      if (definition.type !== "blocks") return null;
-      const current = node[name];
-      const blocks = Array.isArray(current) ? (current as Array<Record<string, unknown>>) : [];
-      if (!Array.isArray(current)) node[name] = blocks;
-      return { blocks, allowed: definition.allow };
+  /** Publishes whatever has fallen due, each replayed as its author through the publish route. */
+  const runDueSchedules = async (now = Date.now()) => {
+    for (const job of store.dueScheduled(now)) {
+      if (!store.claimScheduled(job.id)) continue;
+      const body = new URLSearchParams(job.form);
+      body.set("action", "publish");
+      const cookie = createSessionCookie(signingKey, {
+        actor: job.actor,
+        stamp: stampFor(job.actor),
+      }).split(";")[0] as string;
+      // oxlint-disable-next-line no-await-in-loop -- one publish at a time, in the order they fell due
+      const response = await app.request(`/sites/${job.siteId}/${job.target}`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      const outcome =
+        response.status === 200
+          ? null
+          : response.status === 409
+            ? "The content changed after it was scheduled, so it was not overwritten."
+            : response.status === 422
+              ? "It no longer passes validation; open it and publish by hand."
+              : response.status === 303
+                ? "The person who scheduled it can no longer sign in."
+                : `The publish failed (${response.status}).`;
+      store.settleScheduled(job.id, outcome ? "failed" : "published", outcome ?? undefined);
     }
-
-    if (definition.type === "group") {
-      const child = objectValue(node[name]);
-      node[name] = child;
-      node = child;
-      fields = definition.fields;
-      offset += 1;
-      continue;
-    }
-
-    if (definition.type !== "blocks") return null;
-    const item = indexedBlock(node[name], path[offset + 1]);
-    if (!item) return null;
-    const block = schema.blocks[String(item._type ?? "")];
-    if (!block) return null;
-    node = item;
-    fields = block.fields;
-    offset += 2;
-  }
-
-  return null;
-}
-
-function indexedBlock(
-  value: unknown,
-  rawIndex: string | undefined,
-): Record<string, unknown> | null {
-  if (!Array.isArray(value) || !rawIndex || !/^\d+$/.test(rawIndex)) return null;
-  const item = value[Number(rawIndex)];
-  return typeof item === "object" && item !== null && !Array.isArray(item)
-    ? (item as Record<string, unknown>)
-    : null;
-}
-
-function objectValue(
-  value: unknown,
-  fallback: Record<string, unknown> = {},
-): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : fallback;
-}
-
-async function prepareMediaUploads(
-  form: FormData,
-  entries: Array<[string, string]>,
-  config: CmsConfig,
-): Promise<UploadResult[]> {
-  const files = [...form.entries()].flatMap(([key, value]) => {
-    if (typeof value === "string" || value.size === 0) return [];
-    const path = parsePath(key, MEDIA_ROOT);
-    return path ? [{ path, file: value }] : [];
-  });
-
-  const prepared = await Promise.all(
-    files.map(async ({ path, file }) => ({
-      path,
-      upload: prepareUpload(config, {
-        fileName: file.name,
-        type: file.type,
-        bytes: new Uint8Array(await file.arrayBuffer()),
-      }),
-    })),
-  );
-
-  return prepared.map(({ path, upload }) => {
-    const field = fieldName(path);
-    entries.push([`${field}[src]`, upload.src]);
-    if (upload.width) entries.push([`${field}[width]`, String(upload.width)]);
-    if (upload.height) entries.push([`${field}[height]`, String(upload.height)]);
-    return upload;
-  });
-}
-
-/** The images an edit was carrying are gone: expired, or the site was reconnected. */
-class ExpiredMediaError extends UploadError {}
-
-async function retainedMedia(
-  store: Store,
-  siteId: string,
-  scope: string,
-  form: FormData,
-  entries: Array<[string, string]>,
-  config: CmsConfig,
-) {
-  const previous = String(form.get("pendingMedia") ?? "");
-  let kept: UploadResult[] = [];
-  try {
-    kept = previous ? store.pendingMedia(siteId, scope, previous) : [];
-  } catch (error) {
-    if (error instanceof UploadError) throw new ExpiredMediaError(error.message, error.fix);
-    throw error;
-  }
-  const added = await prepareMediaUploads(form, entries, config);
-  const files = [...new Map([...kept, ...added].map((file) => [file.path, file])).values()];
-  const token = added.length
-    ? store.savePendingMedia(siteId, scope, files, previous || undefined)
-    : previous;
-  return { token, files };
-}
-
-function referencedMedia(files: UploadResult[], document: Record<string, unknown>): FileChange[] {
-  const sources = new Set<string>();
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== "object") return;
-    if ("src" in value && typeof value.src === "string") sources.add(value.src);
-    for (const child of Object.values(value)) visit(child);
   };
-  visit(document);
-  return files
-    .filter((file) => sources.has(file.src))
-    .map(({ path, base64 }) => ({ path, base64 }));
+
+  return Object.assign(app, { runDueSchedules });
 }
 
 /** The field an MDX entry keeps as source: its JSX is not HTML, and sanitizing would delete it. */
 function mdxBody(collection: CollectionDef): string | undefined {
   return collection.format === "mdx" ? collection.body : undefined;
+}
+
+/**
+ * MDX is code the site's build runs, so only the owner changes it: whatever an editor posts for
+ * the body, the stored source is what is kept.
+ */
+async function keepMdxSource(
+  who: Viewer | undefined,
+  client: SiteClient,
+  context: SiteContext,
+  name: string,
+  slug: string,
+  document: RegionDocument,
+): Promise<RegionDocument> {
+  const body = mdxBody(client.collection(context, name));
+  if (!body || who?.owner) return document;
+  const stored = slug === "new" ? null : await client.readEntry(context, name, slug);
+  return { ...document, [body]: stored?.data[body] };
 }
 
 /** What the editor is told after a publish, pushing it first when the site asks for that. */
@@ -1476,124 +1815,6 @@ async function publishedFlash(
       };
 }
 
-/** Committed images by `src`, pointed at the studio: the site's own URL means nothing on this origin. */
-function committedPreviews(
-  siteId: string,
-  config: CmsConfig,
-  document: unknown,
-): Record<string, string> {
-  const prefix = `${config.mediaUrlPrefix.replace(/\/+$/, "")}/`;
-  const previews: Record<string, string> = {};
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== "object") return;
-    const src = (value as { src?: unknown }).src;
-    if (
-      typeof src === "string" &&
-      src.startsWith(prefix) &&
-      !src.slice(prefix.length).includes("/")
-    ) {
-      previews[src] =
-        `/sites/${encodeURIComponent(siteId)}/media/${encodeURIComponent(src.slice(prefix.length))}`;
-    }
-    for (const child of Object.values(value)) visit(child);
-  };
-  visit(document);
-  return previews;
-}
-
-function pendingPreviews(
-  siteId: string,
-  scope: string,
-  token: string,
-  files: UploadResult[],
-): Record<string, string> {
-  return token
-    ? Object.fromEntries(
-        files.map((file, index) => [
-          file.src,
-          `/sites/${encodeURIComponent(siteId)}/pending-media/${encodeURIComponent(token)}/${index}?scope=${encodeURIComponent(scope)}`,
-        ]),
-      )
-    : {};
-}
-
-const DEV_URL_ERROR = "Use an address that starts with http:// or https://.";
-
-async function isDirectory(path: string): Promise<boolean> {
-  return stat(path).then(
-    (info) => info.isDirectory(),
-    () => false,
-  );
-}
-
-/** A URL a browser will fetch, rather than one it will execute. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-/** Only same-site paths: an open redirect would make this a phishing tool. */
-export function isSafeRedirect(target: string): boolean {
-  // Browsers read `/\host` and `/<tab>/host` as `//host`, so the raw string is not enough.
-  if (!target.startsWith("/") || [...target].some(isUnsafeInPath)) return false;
-  const base = "http://studio.invalid";
-  try {
-    return new URL(target, base).origin === base;
-  } catch {
-    return false;
-  }
-}
-
-/** A body read up to `limit` bytes, or null past it, whatever content-length claimed. */
-async function readLimited(
-  request: Request,
-  limit: number,
-): Promise<Uint8Array<ArrayBuffer> | null> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > limit) return null;
-  if (!request.body) return new Uint8Array();
-
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  // Leaving the loop early cancels the stream, so an oversized body stops being read.
-  for await (const chunk of request.body as unknown as AsyncIterable<Uint8Array>) {
-    size += chunk.byteLength;
-    if (size > limit) return null;
-    chunks.push(chunk);
-  }
-  return new Uint8Array(Buffer.concat(chunks));
-}
-
-function isUnsafeInPath(character: string): boolean {
-  const code = character.codePointAt(0) ?? 0;
-  return character === "\\" || code < 0x20 || code === 0x7f;
-}
-
-/**
- * The site a visitor submitted from. Redirecting there is not an open redirect: the
- * visitor was already on that page, and only the page itself chose to post here.
- */
-function submittingOrigin(request: Request): string | null {
-  for (const value of [request.headers.get("origin"), request.headers.get("referer")]) {
-    if (!value || value === "null") continue;
-    try {
-      const url = new URL(value);
-      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
-    } catch {
-      // Not a URL, so not an origin to trust.
-    }
-  }
-  return null;
-}
-
-function submissionId(raw: string): number | null {
-  return /^\d{1,15}$/.test(raw) ? Number(raw) : null;
-}
-
 function thanksPage(): string {
   return page(
     { title: "Message received" },
@@ -1606,12 +1827,30 @@ function blockFieldsOf(context: SiteContext) {
   return (type: string) => context.schema.blocks[type]?.fields;
 }
 
-/** Form fields as string pairs; uploads are not part of an unsaved draft. */
-async function formEntries(request: Request): Promise<Array<[string, string]>> {
-  const form = await request.formData();
-  return [...form.entries()].map(
-    ([key, value]) => [key, typeof value === "string" ? value : ""] as [string, string],
-  );
+/** A region or an entry, from the URL, for the screens that work on either. */
+function contentOf(c: { req: { param(name: string): string | undefined } }) {
+  const regionId = c.req.param("regionId");
+  // Shapes the schema allows, so a stored `back` can only ever lead to an editor.
+  if (regionId)
+    return REGION_ID_RE.test(regionId) ? { regionId, back: `regions/${regionId}` } : null;
+  const name = c.req.param("name") ?? "";
+  const slug = c.req.param("slug") ?? "";
+  if (!/^[a-z0-9][a-z0-9_-]*$/.test(name) || !isSafeSlug(slug)) return null;
+  return { collection: { name, slug }, back: `collections/${name}/${encodeURIComponent(slug)}` };
+}
+
+/** Compared against when an unknown email signs in, so the reply takes the same time. */
+const DUMMY_HASH = hashPassword(randomSecret());
+
+/** The owner commits as git's configured identity; an editor commits as themselves. */
+function authorOf(who: Viewer): Author | undefined {
+  return who.owner || !who.email ? undefined : { name: who.name, email: who.email };
+}
+
+/** The commit the form was loaded at, which a draft remembers as where it began. */
+function baseOf(entries: Array<[string, string]>): string | undefined {
+  const sha = entries.find(([key]) => key === "headSha")?.[1];
+  return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
 }
 
 function describeError(error: unknown): string {

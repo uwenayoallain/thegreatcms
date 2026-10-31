@@ -6,7 +6,7 @@ order: 65
 
 A site is managed by GreatCMS if it contains a schema file and reads content
 from the paths the standard describes. That is the entire integration surface.
-Hugo, Jekyll, Laravel, or a hand-rolled Go generator consume it exactly as
+Hugo, Laravel, or a hand-rolled Go generator consume it exactly as
 Astro does, because none of them need anything but YAML and JSON.
 
 The JavaScript packages are a convenience, not a requirement.

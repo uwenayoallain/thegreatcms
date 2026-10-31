@@ -4,18 +4,27 @@ import type { Heading } from "../lib/markdown";
 interface Props {
   headings: Heading[];
   depth?: number;
+  /** The copy beside the article on wide screens; only one of the two is ever displayed. */
+  rail?: boolean;
 }
 
 // Only worth a list when there is something to jump past.
-const { headings, depth = 2 } = Astro.props;
+const { headings, depth = 2, rail = false } = Astro.props;
+const id = rail ? "on-this-page-rail" : "on-this-page";
 const items = headings.filter((heading) => heading.depth === depth);
+// Headings that carry their own numbers, as the standard's do, are not numbered a second time.
+const numbered = items.every((heading) => /^\d/.test(heading.text));
 ---
 
 {
   items.length >= 3 && (
-    <nav class="on-this-page" aria-labelledby="on-this-page">
-      <p class="stamp" id="on-this-page">On this page</p>
-      <ol>
+    <nav
+      class:list={["on-this-page", { rail }]}
+      aria-labelledby={rail ? undefined : id}
+      aria-label={rail ? "Page contents" : undefined}
+    >
+      <p class="stamp" id={id}>On this page</p>
+      <ol class:list={{ "own-numbers": numbered }}>
         {items.map((heading) => (
           <li>
             <a href={`#${heading.id}`}>{heading.text}</a>

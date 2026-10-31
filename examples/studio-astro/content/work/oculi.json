@@ -1,0 +1,21 @@
+{
+  "title": "Oculi",
+  "client": "Oculi",
+  "year": 2024,
+  "disciplines": ["Product design"],
+  "summary": "A dashboard for eye surgeons that shows one number when it matters and everything else when asked.",
+  "palette": "ember",
+  "motif": "orbit",
+  "featured": false,
+  "order": 5,
+  "body": {
+    "html": "<p>Surgeons glanced at Oculi's old dashboard between steps of an operation and saw forty numbers. We redesigned it around a single focused reading, with the rest one deliberate gesture away.</p>"
+  },
+  "results": [
+    {
+      "_type": "stat",
+      "value": "40 → 1",
+      "label": "Numbers at a glance"
+    }
+  ]
+}

@@ -1,9 +1,28 @@
-/** `.cms/schema.yaml` — the file that tells the studio what a site's content looks like. */
+/** `.cms/schema.yaml`: the file that tells the studio what a site's content looks like. */
 
 import { parse as parseYaml } from "yaml";
-import { z } from "zod";
 import { IssueBag, SpecIssue } from "./errors.js";
-import { type FieldDef, FieldDefSchema, selectOption } from "./fields.js";
+import { type FieldDef, type SelectOption, parseFields, selectOption } from "./fields.js";
+import {
+  type Parser,
+  type Problem,
+  INVALID,
+  count,
+  describe,
+  fail,
+  isRecord,
+  keyPath,
+  list,
+  mapping,
+  object,
+  oneOf,
+  optional,
+  positiveCount,
+  record,
+  required,
+  string,
+  withDefault,
+} from "./shape.js";
 
 export const SPEC_VERSION = 1;
 
@@ -11,70 +30,139 @@ export const SPEC_VERSION = 1;
 export const REGION_ID_RE = /^[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)*$/;
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
-const regionId = z.string().regex(REGION_ID_RE);
-
-const BlockDefSchema = z.object({
-  label: z.string().optional(),
-  description: z.string().optional(),
+export interface BlockDef {
+  label?: string;
+  description?: string;
   /** Named looks of one block; an instance picks one as `_variant`, the first when it says nothing. */
-  variants: z.array(selectOption).min(1).optional(),
-  fields: z.record(FieldDefSchema),
-});
+  variants?: SelectOption[];
+  fields: Record<string, FieldDef>;
+}
 
-const SingleRegionSchema = z.object({
-  type: z.literal("single").optional(),
-  label: z.string().optional(),
-  description: z.string().optional(),
-  fields: z.record(FieldDefSchema),
-  default: z.record(z.unknown()).optional(),
-});
+export interface SingleRegion {
+  type?: "single";
+  label?: string;
+  description?: string;
+  fields: Record<string, FieldDef>;
+  default?: Record<string, unknown>;
+}
 
-const BlocksRegionSchema = z.object({
-  type: z.literal("blocks"),
-  label: z.string().optional(),
-  description: z.string().optional(),
-  allow: z.array(z.string()).min(1),
-  min: z.number().int().nonnegative().optional(),
-  max: z.number().int().positive().optional(),
-  default: z.array(z.record(z.unknown())).optional(),
-});
+export interface BlocksRegion {
+  type: "blocks";
+  label?: string;
+  description?: string;
+  allow: string[];
+  min?: number;
+  max?: number;
+  default?: Array<Record<string, unknown>>;
+}
 
-const CollectionSchema = z.object({
-  label: z.string().optional(),
-  /** Singular noun used for actions such as "Add product". */
-  entryLabel: z.string().optional(),
-  description: z.string().optional(),
-  path: z.string().min(1),
-  format: z.enum(["markdown", "mdx", "json"]).default("markdown"),
-  /** Field whose value becomes the prose body. Ignored for `json`. */
-  body: z.string().optional(),
-  /** Field used to derive the file name. Defaults to `title`, then the entry id. */
-  slug: z.string().optional(),
-  fields: z.record(FieldDefSchema),
-});
-
-export const SchemaFileSchema = z.object({
-  version: z.number().int().positive(),
-  site: z
-    .object({
-      name: z.string().optional(),
-      /** BCP 47 tag for the content's language, e.g. `rw` or `fr-RW`; editors get spellcheck and direction for it. */
-      locale: z
-        .string()
-        .regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/)
-        .optional(),
-    })
-    .optional(),
-  blocks: z.record(BlockDefSchema).optional(),
-  regions: z.record(z.union([BlocksRegionSchema, SingleRegionSchema])).optional(),
-  collections: z.record(CollectionSchema).optional(),
-});
-
-export type BlockDef = z.infer<typeof BlockDefSchema>;
-export type SingleRegion = z.infer<typeof SingleRegionSchema> & { type?: "single" };
-export type BlocksRegion = z.infer<typeof BlocksRegionSchema>;
 export type RegionDef = SingleRegion | BlocksRegion;
-export type CollectionDef = z.infer<typeof CollectionSchema>;
+
+export interface CollectionDef {
+  label?: string;
+  /** Singular noun used for actions such as "Add product". */
+  entryLabel?: string;
+  description?: string;
+  path: string;
+  format: "markdown" | "mdx" | "json";
+  /** Field whose value becomes the prose body. Ignored for `json`. */
+  body?: string;
+  /** Field used to derive the file name. Defaults to `title`, then the entry id. */
+  slug?: string;
+  fields: Record<string, FieldDef>;
+}
+
+const FIELDS_FIX = "Add `fields:` with at least one field, e.g. `heading: { type: text }`.";
+
+const blockDef = object({
+  label: optional(string()),
+  description: optional(string()),
+  variants: optional(
+    list(selectOption, { nonEmpty: true, fix: "List at least one variant, or remove `variants`." }),
+  ),
+  fields: required(parseFields, FIELDS_FIX),
+});
+
+const singleRegion = object({
+  type: optional(oneOf(["single", "blocks"])),
+  label: optional(string()),
+  description: optional(string()),
+  fields: required(parseFields, FIELDS_FIX),
+  default: optional(mapping),
+});
+
+const blocksRegion = object({
+  type: required(oneOf(["blocks"])),
+  label: optional(string()),
+  description: optional(string()),
+  allow: required(
+    list(string(), { nonEmpty: true, fix: "Name at least one block defined under `blocks:`." }),
+    "Name the blocks it may hold, e.g. `allow: [hero, text]`.",
+  ),
+  min: optional(count),
+  max: optional(positiveCount),
+  default: optional(list(mapping)),
+});
+
+/** `type: blocks` makes a block list; anything else is a region of fields. */
+const regionDef: Parser<RegionDef> = (value, at, problems) => {
+  const parse = isRecord(value) && value.type === "blocks" ? blocksRegion : singleRegion;
+  const parsed = parse(value, at, problems);
+  return parsed === INVALID ? INVALID : (parsed as unknown as RegionDef);
+};
+
+const collectionDef = object({
+  label: optional(string()),
+  entryLabel: optional(string()),
+  description: optional(string()),
+  path: required(
+    string({ nonEmpty: true }),
+    "Say which folder holds its entries, e.g. `path: content/blog`.",
+  ),
+  format: withDefault(oneOf(["markdown", "mdx", "json"]), () => "markdown"),
+  body: optional(string()),
+  slug: optional(string()),
+  fields: required(parseFields, FIELDS_FIX),
+});
+
+const schemaFile = object({
+  version: required(
+    (value, at, problems) =>
+      typeof value === "number" && Number.isInteger(value) && value > 0
+        ? value
+        : fail(problems, at, `Expected a version number, found ${describe(value)}.`),
+    `Start the file with \`version: ${SPEC_VERSION}\`.`,
+  ),
+  site: optional(
+    object({
+      name: optional(string()),
+      /** BCP 47 tag for the content's language, e.g. `rw` or `fr-RW`; editors get spellcheck and direction for it. */
+      locale: optional(
+        string({
+          pattern: /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/,
+          expected: "a BCP 47 language tag",
+          fix: "Use a tag such as `en`, `rw` or `fr-RW`.",
+        }),
+      ),
+    }),
+  ),
+  blocks: optional(record(blockDef)),
+  regions: optional(record(regionDef)),
+  collections: optional(record(collectionDef)),
+});
+
+interface SchemaFile {
+  version: number;
+  site?: { name?: string; locale?: string };
+  blocks?: Record<string, BlockDef>;
+  regions?: Record<string, RegionDef>;
+  collections?: Record<string, CollectionDef>;
+}
+
+function readSchemaFile(raw: unknown, problems: Problem[]): SchemaFile | typeof INVALID {
+  const parsed = schemaFile(raw, "", problems);
+  return parsed === INVALID ? INVALID : (parsed as unknown as SchemaFile);
+}
 
 export interface CmsSchema {
   version: number;
@@ -123,7 +211,7 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     bag.add({
       code: "invalid_yaml",
       message: `File is not valid YAML: ${(err as Error).message}`,
-      fix: "Check indentation — YAML requires spaces, never tabs.",
+      fix: "Check indentation: YAML requires spaces, never tabs.",
     });
     bag.throwIfAny("Could not read schema");
     /* c8 ignore next */
@@ -139,20 +227,16 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     bag.throwIfAny("Could not read schema");
   }
 
-  const parsed = SchemaFileSchema.safeParse(raw);
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      bag.add({
-        code: "invalid_schema",
-        path: issue.path.join(".") || undefined,
-        message: issue.message,
-        fix: fixHintFor(issue),
-      });
+  const problems: Problem[] = [];
+  const data = readSchemaFile(raw, problems);
+  if (data === INVALID) {
+    for (const problem of problems) {
+      bag.add({ code: "invalid_schema", ...problem, path: problem.path || undefined });
     }
     bag.throwIfAny("Schema is not valid");
+    /* c8 ignore next */
+    throw new Error("unreachable");
   }
-
-  const data = parsed.data as z.infer<typeof SchemaFileSchema>;
 
   if (data.version !== SPEC_VERSION) {
     bag.add({
@@ -165,7 +249,7 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
 
   // Lookups by name must never land on Object.prototype: a region called `constructor` is unknown.
   const blocks = withoutPrototype(data.blocks ?? {});
-  const regions = withoutPrototype((data.regions ?? {}) as Record<string, RegionDef>);
+  const regions = withoutPrototype(data.regions ?? {});
   const collections = withoutPrototype(data.collections ?? {});
 
   for (const name of Object.keys(blocks)) {
@@ -180,7 +264,7 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
   }
 
   for (const [id, region] of Object.entries(regions)) {
-    if (!regionId.safeParse(id).success) {
+    if (!REGION_ID_RE.test(id)) {
       bag.add({
         code: "invalid_region_id",
         path: `regions.${id}`,
@@ -245,11 +329,35 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     }
   }
 
+  const collectionNames = Object.keys(collections);
+  const checkReferences = (fields: Record<string, FieldDef>, at: string) =>
+    eachField(fields, at, (def, path) => {
+      if (def.type !== "reference" || def.collection in collections) return;
+      bag.add({
+        code: "unknown_collection",
+        path: `${path}.collection`,
+        message: `Field refers to collection "${def.collection}", which is not defined.`,
+        fix:
+          collectionNames.length > 0
+            ? `Point \`collection\` at one of: ${collectionNames.join(", ")}; or add a \`collections.${def.collection}\` definition.`
+            : `Add a \`collections.${def.collection}\` definition for the entries it points at.`,
+      });
+    });
+  for (const [name, block] of Object.entries(blocks)) {
+    checkReferences(block.fields, `blocks.${name}.fields`);
+  }
+  for (const [id, region] of Object.entries(regions)) {
+    if (!isBlocksRegion(region)) checkReferences(region.fields, `regions.${id}.fields`);
+  }
+  for (const [name, collection] of Object.entries(collections)) {
+    checkReferences(collection.fields, `collections.${name}.fields`);
+  }
+
   if (Object.keys(regions).length === 0 && Object.keys(collections).length === 0) {
     bag.add({
       code: "nothing_managed",
       message: "Schema defines no regions and no collections.",
-      fix: "Add a region — the smallest useful CMS is one managed hero section.",
+      fix: "Add a region: the smallest useful CMS is one managed hero section.",
     });
   }
 
@@ -270,8 +378,8 @@ export function unknownSchemaKeys(source: string, opts: ParseSchemaOptions = {})
   } catch {
     return [];
   }
-  const parsed = SchemaFileSchema.safeParse(raw);
-  if (!parsed.success) return [];
+  const parsed = readSchemaFile(raw, []);
+  if (parsed === INVALID) return [];
   const issues: SpecIssue[] = [];
   const walk = (given: unknown, kept: unknown, path: string) => {
     if (Array.isArray(given) && Array.isArray(kept)) {
@@ -296,27 +404,25 @@ export function unknownSchemaKeys(source: string, opts: ParseSchemaOptions = {})
       }
     }
   };
-  walk(raw, parsed.data, "");
+  walk(raw, parsed, "");
   return issues;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function withoutPrototype<T>(entries: Record<string, T>): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, entries);
 }
 
-function withoutPrototype<T>(record: Record<string, T>): Record<string, T> {
-  return Object.assign(Object.create(null) as Record<string, T>, record);
+/** Every field definition, depth first, including those inside groups and lists. */
+export function eachField(
+  fields: Record<string, FieldDef>,
+  at: string,
+  visit: (def: FieldDef, path: string) => void,
+): void {
+  for (const [name, def] of Object.entries(fields)) visitField(def, keyPath(at, name), visit);
 }
 
-function fixHintFor(issue: z.ZodIssue): string | undefined {
-  if (issue.code === "invalid_union_discriminator" || issue.code === "invalid_literal") {
-    return "Check the `type:` value — see the field type list in the spec docs.";
-  }
-  if (issue.code === "unrecognized_keys") {
-    return "Remove the unknown key, or check it for a typo.";
-  }
-  if (issue.code === "invalid_type" && issue.received === "undefined") {
-    return "This key is required.";
-  }
-  return undefined;
+function visitField(def: FieldDef, path: string, visit: (def: FieldDef, path: string) => void) {
+  visit(def, path);
+  if (def.type === "group") eachField(def.fields, `${path}.fields`, visit);
+  if (def.type === "list") visitField(def.of, `${path}.of`, visit);
 }
