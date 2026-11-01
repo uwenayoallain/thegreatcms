@@ -45,6 +45,13 @@ pnpm install && pnpm build
 STUDIO_PASSWORD='something long' pnpm studio   # http://localhost:8787
 ```
 
+Or run the published image, with the folder that holds your sites mounted:
+
+```sh
+docker run -p 8787:8787 -e STUDIO_PASSWORD='something long' \
+  -v greatcms-data:/data -v ~/sites:/sites ghcr.io/uwenayoallain/greatcms-studio
+```
+
 Connect your site's folder, give it your dev server's URL, and the editor shows
 your real components beside the form as you type.
 
@@ -77,8 +84,9 @@ your real components beside the form as you type.
 | [`@greatcms/conformance`](https://www.npmjs.com/package/@greatcms/conformance) | Fixtures and a verifier for readers in any language               |
 | [`@greatcms/deploy`](https://www.npmjs.com/package/@greatcms/deploy)           | Builds and serves a site on every publish, beside the studio      |
 
-The studio itself lives in [`apps/studio`](./apps/studio) and runs from this
-repository or its [Dockerfile](./apps/studio/Dockerfile).
+The studio lives in [`apps/studio`](./apps/studio). It and the builder are
+published as container images: `ghcr.io/uwenayoallain/greatcms-studio` and
+`ghcr.io/uwenayoallain/greatcms-deploy`.
 
 ## AI assistance
 

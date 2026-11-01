@@ -13,8 +13,18 @@ STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
 # GreatCMS studio on http://localhost:8787
 ```
 
-Or as a container: `apps/studio/Dockerfile` builds one image with one volume
-for the database. `STUDIO_PASSWORD` is required and deliberately has no default.
+Or as a container, from the published image. Mount the folder that holds your
+sites, since the studio edits them in place, and a volume for its database:
+
+```sh
+docker run -p 8787:8787 -e STUDIO_PASSWORD='something long' \
+  -v greatcms-data:/data -v ~/sites:/sites \
+  ghcr.io/uwenayoallain/greatcms-studio
+```
+
+Then connect `/sites/my-site` in the studio. `apps/studio/Dockerfile` builds
+the same image from a checkout. `STUDIO_PASSWORD` is required and deliberately
+has no default.
 For a server that also builds and serves the site, see
 [Self-hosting](/docs/self-hosting/).
 
