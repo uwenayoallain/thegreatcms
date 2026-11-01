@@ -1,5 +1,7 @@
 # Hearth: a bakery on Next.js
 
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
+
 A neighbourhood bakery's whole site, on Next.js 16 with the App Router. The
 notice bar, hero, story, opening hours and menu are all content files in this
 folder. Server Components read them through `@greatcms/reader`, and

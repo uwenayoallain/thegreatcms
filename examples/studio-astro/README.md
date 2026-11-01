@@ -1,5 +1,7 @@
 # Paraline: a studio site with real motion
 
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
+
 A fictional design and motion studio, built to show what a GreatCMS site can
 look like when the design is ambitious. Every word, section and case study is
 content in this folder; the look and the motion belong to the site.

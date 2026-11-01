@@ -33,8 +33,8 @@ const summary = [
   "It manages only the regions of a page you opt in; everything else stays hand-written code.",
   "Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.",
   "",
-  "It is not a framework plugin. The integration surface is a schema file and some JSON, so Astro,",
-  "Next.js, Nuxt, SvelteKit, Astro, Hugo, Laravel, or a hand-rolled Go generator all consume it identically.",
+  "It is not a framework plugin. The integration surface is a schema file and some JSON: the tooling",
+  "scaffolds Astro, Next.js, Nuxt, SvelteKit and Eleventy, and any language that reads JSON can consume it.",
   "If you are an agent wiring a site up to it, read the standard below and write files: there is no",
   "SDK to install and no runtime to call.",
 ].join("\n");

@@ -1,5 +1,7 @@
 # The Long Light: a writer's journal on SvelteKit
 
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
+
 Essays as Markdown files with frontmatter, the format every static site
 generator already reads, published by SvelteKit as plain HTML. The studio edits
 them like any collection; the reader turns them into pages at prerender time.

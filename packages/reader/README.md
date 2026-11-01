@@ -1,6 +1,6 @@
-> Built with an AI coding assistant and reviewed by a human. Treat it as you would any new dependency.
-
 # @greatcms/reader
+
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
 
 Reads GreatCMS content at build time: synchronous `node:fs` reads, schema
 defaults for anything a file does not say, and nothing in the request path of
@@ -39,4 +39,4 @@ They reload the page when content changes, hide the framework's dev toolbar
 while the page is framed by the studio, and carry the inspector that lets the
 studio point at what it is editing. A built page carries none of it.
 
-Documentation: https://greatcms.dev/docs/ · Source: https://github.com/uwenayoallain/thegreatcms
+Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/getting-started.md · Source: https://github.com/uwenayoallain/thegreatcms

@@ -1,6 +1,6 @@
-> Built with an AI coding assistant and reviewed by a human. Treat it as you would any new dependency.
-
 # @greatcms/deploy
+
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
 
 Two small servers for self-hosting a GreatCMS site next to its studio.
 
@@ -26,4 +26,4 @@ executes code from a repository it manages. Run either with `--help` for the
 environment variables. A Dockerfile and a complete compose example are in the
 repository.
 
-Documentation: https://greatcms.dev/docs/self-hosting/ · Source: https://github.com/uwenayoallain/thegreatcms
+Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/self-hosting.md · Source: https://github.com/uwenayoallain/thegreatcms

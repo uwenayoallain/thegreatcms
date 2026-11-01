@@ -1,6 +1,6 @@
-> Built with an AI coding assistant and reviewed by a human. Treat it as you would any new dependency.
-
 # @greatcms/cli
+
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
 
 `greatcms`: local tools for a Git-backed site.
 
@@ -18,4 +18,4 @@ npx greatcms doctor [--json] # what the setup looks like, and any unsaved draft
 coding agents into AGENTS.md. `add` edits the schema as text, keeping your
 comments. `check` and `types --check` are the two commands CI should run.
 
-Documentation: https://greatcms.dev/docs/the-command-line/ · Source: https://github.com/uwenayoallain/thegreatcms
+Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/the-command-line.md · Source: https://github.com/uwenayoallain/thegreatcms

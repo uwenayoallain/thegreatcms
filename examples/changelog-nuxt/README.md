@@ -1,5 +1,7 @@
 # Sundial: a product changelog on Nuxt
 
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
+
 A product site and changelog on Nuxt 4. The identity, hero, features, pricing,
 FAQ and releases are all content files in this folder. A Nitro server route
 reads them through `@greatcms/reader`, and `nuxt generate` writes every page as

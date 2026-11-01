@@ -1,6 +1,6 @@
-> Built with an AI coding assistant and reviewed by a human. Treat it as you would any new dependency.
-
 # @greatcms/conformance
+
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
 
 What "reads the GreatCMS standard correctly" means, as a fixture site and the
 documents any reader must resolve it to. The fixture deliberately holds the
@@ -19,4 +19,4 @@ A reader writes one JSON file per region to a folder, plus
 `verify` compares them with `expected/`. The repository's Python reader
 passes it, which is how the format stays language-agnostic.
 
-Documentation: https://greatcms.dev/docs/any-language/ · Source: https://github.com/uwenayoallain/thegreatcms
+Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/any-language.md · Source: https://github.com/uwenayoallain/thegreatcms

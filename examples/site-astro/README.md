@@ -1,5 +1,7 @@
 # Astro example
 
+[![AI assisted](https://img.shields.io/badge/AI%20assisted-yes-8a63d2)](https://github.com/uwenayoallain/thegreatcms#ai-assistance "Built with an AI coding assistant and reviewed by a human")
+
 The smallest honest demonstration of a GreatCMS site: one managed hero, one
 managed block list, one Markdown collection, one region nobody has ever edited,
 and a contact form that posts to the studio.
