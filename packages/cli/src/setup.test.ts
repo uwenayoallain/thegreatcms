@@ -151,7 +151,7 @@ describe("interactive setup", () => {
     await setupProject({ root, prompt, stdout: () => {} });
     expect(notes.join("\n")).toContain("Package manager: pnpm");
     const pkg = JSON.parse(await readFile(join(root, "apps/store/package.json"), "utf8"));
-    expect(pkg.devDependencies["@greatcms/reader"]).toMatch(/^link:/);
+    expect(pkg.dependencies["@greatcms/reader"]).toMatch(/^link:/);
   });
 
   it("is a no-op when setup is repeated without adding content", async () => {

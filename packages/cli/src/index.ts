@@ -42,10 +42,12 @@ import {
   nextSteps,
   planInit,
   TEMPLATES,
+  type Connection,
   type InitAnswers,
   type TemplateId,
   mergeAgentsNote,
 } from "./init.js";
+import { packageManager, wirePreview, withReader } from "./wire.js";
 import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } from "./prompt.js";
 import { CliError, type FilePort, type GitPort } from "./ports.js";
 import { setupProject } from "./setup.js";
@@ -369,8 +371,49 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
   // The agent that works in this repository next should not have to discover any of this.
   await files.write("AGENTS.md", mergeAgentsNote(await files.read("AGENTS.md"), plan.agentsNote));
 
-  stdout(nextSteps(answers, plan));
+  stdout(nextSteps(answers, plan, await connect(root, framework, prompt, flags)));
   return 0;
+}
+
+/**
+ * Adds the reader to package.json and the live preview to the framework's own
+ * config, after asking. Every edit is one additive line; a file that is not a
+ * shape we recognise is left alone and listed for a person instead.
+ */
+async function connect(
+  root: string,
+  framework: Framework,
+  prompt: PromptPort,
+  flags: Flags,
+): Promise<Connection> {
+  const files = nodeFiles(root);
+  const packageSource = await files.read("package.json");
+  const manager = packageManager(
+    await listRoot(root),
+    packageSource ? (JSON.parse(packageSource) as { packageManager?: unknown }) : undefined,
+  );
+  if (flags.boolean("no-wire")) return { edited: [], manual: [], manager, packageEdited: false };
+  const packageContent = packageSource ? withReader(packageSource) : null;
+  const wiring = await wirePreview(framework.id, (path) => files.read(path));
+  const edits = [
+    ...(packageContent ? [{ path: "package.json", content: packageContent }] : []),
+    ...wiring.edits,
+  ];
+  if (
+    edits.length &&
+    !(await prompt.confirm(
+      `Add the reader and the live preview? (edits ${edits.map((edit) => edit.path).join(", ")})`,
+      true,
+    ))
+  )
+    return { edited: [], manual: wiring.manual, manager, packageEdited: false };
+  await Promise.all(edits.map((edit) => files.write(edit.path, edit.content)));
+  return {
+    edited: wiring.edits.map((edit) => edit.path),
+    manual: wiring.manual,
+    manager,
+    packageEdited: packageContent !== null,
+  };
 }
 
 /**
@@ -871,7 +914,7 @@ interface Flags {
 }
 
 /** Switches never take a value, so `--yes hero.banner` leaves the name where it was typed. */
-const SWITCHES = new Set(["yes", "force", "check", "json", "help"]);
+const SWITCHES = new Set(["yes", "force", "check", "json", "help", "no-wire"]);
 const OPTIONS = new Set([
   "name",
   "framework",
@@ -949,6 +992,7 @@ const HELP = `greatcms: local tools for a Git-backed site
     --template <id>              hero | landing | business | blog | blank
     --dir <path>                 where content files live
     --force                      overwrite an existing setup
+    --no-wire                    leave package.json and framework config alone
 
   greatcms add region <id>       add a managed section to an existing schema
   greatcms add section <name>    define a reusable page section and make it

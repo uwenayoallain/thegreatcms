@@ -1,4 +1,4 @@
-import { greatcmsWatch } from "@greatcms/reader/vite";
+import { greatcmsWatch } from "@greatcms/reader/sveltekit";
 import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
@@ -14,8 +14,8 @@ export default defineConfig({
       prerender: { handleHttpError: "fail" },
     }),
     // Reloads the page when content changes, the studio's unsaved drafts included. Dev only.
-    // SvelteKit never runs Vite's HTML hook; `hooks.server.js` adds the preview script instead.
-    greatcmsWatch({ root: new URL(".", import.meta.url).pathname, hideDevOverlays: false }),
+    // `hooks.server.js` adds the preview script, since SvelteKit renders its own HTML.
+    greatcmsWatch({ root: new URL(".", import.meta.url).pathname }),
   ],
   server: { allowedHosts: previewHost ? [previewHost] : undefined },
   // Loaded by Node rather than transformed by Vite, so rebuilding the reader in the workspace

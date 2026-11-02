@@ -1,10 +1,10 @@
 /** The page shell: the notice bar, the masthead and the footer, all from `site.identity`. */
 
-import { PREVIEW_SCRIPT } from "@greatcms/reader/vite";
+import { GreatcmsPreview } from "@greatcms/reader/next";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
-import { content, previewing } from "#lib/cms";
+import { content } from "#lib/cms";
 import { Nav } from "./nav";
 import { Lines } from "./parts";
 import "./site.css";
@@ -36,21 +36,10 @@ export function generateMetadata(): Metadata {
 export default function Layout({ children }: { children: ReactNode }) {
   const { identity, visit } = content();
   return (
-    // `next dev` does not watch content files, so the studio reloads the preview after each draft.
-    <html
-      lang="en"
-      className={serif.variable}
-      {...(previewing ? { "data-greatcms-unwatched": "" } : {})}
-    >
+    <html lang="en" className={serif.variable}>
       <head>
-        {previewing ? (
-          // The studio's preview chrome, in development only: a built page carries none of it.
-          <script
-            type="module"
-            data-greatcms-preview
-            dangerouslySetInnerHTML={{ __html: PREVIEW_SCRIPT }}
-          />
-        ) : null}
+        {/* The studio's preview script under `next dev`; a built page carries none of it. */}
+        <GreatcmsPreview />
       </head>
       <body>
         <a className="skip-link" href="#main">

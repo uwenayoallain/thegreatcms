@@ -252,7 +252,11 @@ function renderBlocks(
               }
             </div>
           </details>
-          <div class="tools" aria-label="Reorder or remove ${definition?.label ?? type}">
+          <div
+            class="tools"
+            role="group"
+            aria-label="Reorder or remove ${definition?.label ?? type}"
+          >
             <button
               type="submit"
               name="action"

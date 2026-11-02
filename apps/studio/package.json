@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/studio",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "The GreatCMS studio: manage many Git-backed sites from one place.",
   "type": "module",
@@ -30,6 +30,7 @@
   "devDependencies": {
     "@greatcms/conformance": "workspace:*",
     "axe-core": "^4.13.0",
+    "html-validate": "~11.17.0",
     "jsdom": "^30.0.1",
     "playwright": "^1.62.1",
     "vitest": "^4.1.11"

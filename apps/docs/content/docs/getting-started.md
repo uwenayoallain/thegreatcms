@@ -11,13 +11,16 @@ npx greatcms init
 ```
 
 It detects what you build with (Astro, Next.js, Nuxt or SvelteKit) and puts
-content where that framework already looks for it: Astro gets
-`src/content/cms`, the others `content/cms`. It prints the
-small reader integration for that framework, so schema defaults render before a
-content file has ever been written.
+content where that framework already looks for it: Astro and SvelteKit get
+`src/content/cms`, the others `content/cms`.
 
 You end up with two commented files: `.cms/schema.yaml` describing what may be
-edited, and `.cms/config.yaml` describing where it goes.
+edited, and `.cms/config.yaml` describing where it goes. After asking, `init`
+also adds `@greatcms/reader` to `package.json` and the one line that connects
+the studio's live preview to your framework's config (the
+[table on Previewing](/docs/previewing/) lists them). Each is a single additive
+edit; a config it does not recognise is left alone and the line is printed for
+you instead. `--no-wire` skips both. Then install with your package manager.
 
 For a product or service business, start with the recurring pieces already
 wired together:

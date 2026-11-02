@@ -3,9 +3,11 @@
 const cx = 160;
 const cy = 170;
 const r = 140;
+// Rounded, because Node and the browser disagree in the last digit and Vue reports it as a hydration mismatch.
+const round = (value: number) => Math.round(value * 100) / 100;
 const at = (hour: number, radius: number) => {
   const angle = Math.PI * (1 - (hour - 6) / 12);
-  return { x: cx + radius * Math.cos(angle), y: cy - radius * Math.sin(angle) };
+  return { x: round(cx + radius * Math.cos(angle)), y: round(cy - radius * Math.sin(angle)) };
 };
 const ticks = Array.from({ length: 25 }, (_, i) => 6 + i / 2).map((hour) => ({
   hour,

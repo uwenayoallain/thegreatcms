@@ -21,6 +21,11 @@ your framework's own syntax.
 
 Templates: `hero` (one region), `landing` (a page of reorderable blocks),
 `business` (a complete small-business content model), `blog`, and `blank`.
+It also adds `@greatcms/reader` to `package.json` and connects the studio's
+live preview in your framework's config: one additive line each, shown before
+anything is written. A config it does not recognise is left alone and the line
+is printed instead; `--no-wire` skips this step entirely.
+
 `--yes` takes every default, and `--framework`, `--template`, `--name`, and
 `--dir` override one answer each, so it scripts as well as it prompts. It
 refuses to overwrite an existing setup without `--force`.

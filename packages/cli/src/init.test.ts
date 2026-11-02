@@ -176,7 +176,7 @@ describe("next steps", () => {
 
     const astro = answers();
     const output = nextSteps(astro, planInit(astro));
-    expect(output).toContain("npm install --save-dev @greatcms/reader");
+    expect(output).toContain("npm install @greatcms/reader");
     expect(output).toContain('cms.region("home.hero")');
   });
 

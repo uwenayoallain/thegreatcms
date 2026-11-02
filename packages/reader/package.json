@@ -1,13 +1,17 @@
 {
   "name": "@greatcms/reader",
-  "version": "0.1.1",
-  "description": "Build-time reader for GreatCMS content: synchronous filesystem reads, schema defaults, and a Vite plugin and Astro integration for live preview.",
+  "version": "0.1.2",
+  "description": "Build-time reader for GreatCMS content: synchronous filesystem reads, schema defaults, and live-preview integrations for Astro, Next.js, Nuxt, SvelteKit and Vite.",
   "keywords": [
     "astro",
     "cms",
     "content",
     "git",
+    "nextjs",
+    "nuxt",
+    "react",
     "static-site",
+    "sveltekit",
     "vite"
   ],
   "homepage": "https://greatcms.dev",
@@ -41,6 +45,18 @@
     "./astro": {
       "types": "./dist/astro.d.ts",
       "default": "./dist/astro.js"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "default": "./dist/next.js"
+    },
+    "./nuxt": {
+      "types": "./dist/nuxt.d.ts",
+      "default": "./dist/nuxt.js"
+    },
+    "./sveltekit": {
+      "types": "./dist/sveltekit.d.ts",
+      "default": "./dist/sveltekit.js"
     }
   },
   "publishConfig": {
@@ -56,7 +72,17 @@
   },
   "devDependencies": {
     "@greatcms/conformance": "workspace:*",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1",
     "vitest": "^4.1.11"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20"

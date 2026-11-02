@@ -10,16 +10,25 @@ Point a local site at your dev server's URL and the editor shows your real
 components beside the form. Publishing writes the files, your dev server
 reloads, and the pane updates: usually within a couple of seconds.
 
-For a Vite-based site this needs one plugin:
+It takes one dev-only line in your framework's config, and `greatcms init`
+adds it for you:
 
-```js
-import { greatcmsWatch } from "@greatcms/reader/vite";
-export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
-```
+| Framework        | One line                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Astro            | `astro.config`: `integrations: [greatcms()]` from `@greatcms/reader/astro`                                   |
+| Next.js          | root layout: `<GreatcmsPreview />` inside `<head>`, from `@greatcms/reader/next`                             |
+| Nuxt             | `nuxt.config`: `modules: ["@greatcms/reader/nuxt"]`                                                          |
+| SvelteKit        | `vite.config`: `greatcmsWatch()` and `src/hooks.server`: `greatcmsHandle`, from `@greatcms/reader/sveltekit` |
+| Other Vite sites | `vite.config`: `plugins: [greatcmsWatch()]` from `@greatcms/reader/vite`                                     |
 
 The reader reads content with the filesystem, which is what keeps it
-framework-neutral, and it also means Vite has no idea those files are
-dependencies. Without the watcher the file changes and the page does not.
+framework-neutral, and it also means a dev server has no idea those files are
+dependencies. The Vite-based integrations watch them and reload the page.
+`next dev` cannot be told about them, so the Next.js component asks the studio
+to reload the frame after each edit instead.
+
+Everything here runs only in development and only while the studio frames the
+page. A built page carries none of it, and on your own tab nothing changes.
 
 ## As you type, in your own site
 
@@ -68,7 +77,11 @@ reads them there.
 The inspector is part of the script the dev server injects while the page is
 framed, so a visitor never downloads it and the studio never reaches into your
 page: the two sides talk only through messages, each checking the other is
-who framed it.
+who framed it. It draws its outlines in a shadow root on an inert,
+`aria-hidden` element, so your CSS cannot restyle them and screen readers never
+meet them. It changes nothing on `<html>`, which React and Vue would report as
+a hydration mismatch, and it survives client-side navigation, Astro's view
+transitions included. Clicks belong to the page except while **Select** is on.
 
 ## Opening the page being edited
 
@@ -99,8 +112,8 @@ Anything still unsaved is listed on the site's page in the studio, and
 otherwise visible only in dev, which is exactly where you would stop noticing
 it.
 
-If your dev server is not Vite-based, the watcher plugin cannot reload it for
-you; **Reload the site** beside the frame does it by hand.
+For a dev server with none of the integrations above, **Reload the site**
+beside the frame reloads it by hand.
 
 ## Pages built from a collection
 

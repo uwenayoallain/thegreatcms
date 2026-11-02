@@ -222,7 +222,7 @@ export function sitePage(options: {
         </p>
       </div>
 
-      <dl class="workspace-meta" aria-label="Connected site details">
+      <dl class="workspace-meta">
         <div>
           <dt>Working copy</dt>
           <dd><code title="${site.path}">${shortPath(site.path)}</code></dd>

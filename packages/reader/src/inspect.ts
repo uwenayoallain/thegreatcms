@@ -11,7 +11,7 @@ if (window.top !== window.self) {
     const DOC = document;
     const ATTR = "data-greatcms-field";
     // A dev server that does not watch content says so here, and the studio reloads the page after each draft.
-    const WATCHED = !DOC.documentElement.hasAttribute("data-greatcms-unwatched");
+    const WATCHED = !(window.__greatcmsUnwatched === true || DOC.documentElement.hasAttribute("data-greatcms-unwatched"));
     const BLOCK_ATTR = "data-greatcms-block";
     let studio = null;
     let origin = "*";
@@ -33,26 +33,27 @@ if (window.top !== window.self) {
       return parsed.body;
     };
     const skip = (element) =>
-      element.closest("script, style, template, noscript, [data-greatcms-overlay], astro-dev-toolbar");
+      element.closest("script, style, template, noscript, greatcms-overlay, astro-dev-toolbar");
 
-    // The overlay: one box that follows the pointer, and one outline per section.
-    const overlay = DOC.createElement("div");
-    overlay.setAttribute("data-greatcms-overlay", "");
-    overlay.setAttribute("aria-hidden", "true");
+    // The overlay lives in a shadow root on an inert, hidden host: the page's CSS cannot restyle
+    // it, its selectors cannot match it, and assistive technology never meets it.
+    const host = DOC.createElement("greatcms-overlay");
+    host.setAttribute("aria-hidden", "true");
+    host.setAttribute("inert", "");
+    host.style.cssText = "all:initial;position:absolute;top:0;left:0;width:0;height:0;overflow:visible;z-index:2147483646;pointer-events:none;view-transition-name:none";
+    const shadow = host.attachShadow({ mode: "open" });
     const style = DOC.createElement("style");
     style.textContent = [
-      "[data-greatcms-overlay]{position:absolute;top:0;left:0;width:0;height:0;overflow:visible;z-index:2147483646;pointer-events:none;font:600 11px/1 system-ui,sans-serif}",
-      "[data-greatcms-overlay] .gc-box{position:absolute;box-sizing:border-box;border:2px solid #0d7a5f;border-radius:4px;background:rgb(13 122 95 / .07);transition:top .12s,left .12s,width .12s,height .12s;opacity:0}",
-      "[data-greatcms-overlay] .gc-box.is-on{opacity:1}",
-      "[data-greatcms-overlay] .gc-box.is-block{border-style:dashed;background:transparent}",
-      "[data-greatcms-overlay] .gc-tag{position:absolute;left:-2px;top:-2px;transform:translateY(-100%);padding:4px 7px;border-radius:4px 4px 4px 0;background:#0d7a5f;color:#fff;white-space:nowrap;max-width:40ch;overflow:hidden;text-overflow:ellipsis}",
-      "[data-greatcms-overlay] .gc-tag.is-inside{transform:none;border-radius:0 0 4px 0}",
-      "[data-greatcms-overlay] .gc-section{position:absolute;box-sizing:border-box;border:1px dashed rgb(13 122 95 / .55);border-radius:4px}",
-      "[data-greatcms-overlay] .gc-section .gc-tag{background:rgb(13 122 95 / .9);transform:none;border-radius:0 0 4px 0;left:0;top:0}",
-      "[data-greatcms-overlay] .gc-flash{animation:gc-flash 1.4s ease-out both}",
+      ".gc-box{position:absolute;box-sizing:border-box;border:2px solid #0d7a5f;border-radius:4px;background:rgb(13 122 95 / .07);transition:top .12s,left .12s,width .12s,height .12s;opacity:0}",
+      ".gc-box.is-on{opacity:1}",
+      ".gc-box.is-block{border-style:dashed;background:transparent}",
+      ".gc-tag{position:absolute;left:-2px;top:-2px;transform:translateY(-100%);padding:4px 7px;border-radius:4px 4px 4px 0;background:#0d7a5f;color:#fff;font:600 11px/1 system-ui,sans-serif;white-space:nowrap;max-width:40ch;overflow:hidden;text-overflow:ellipsis}",
+      ".gc-tag.is-inside{transform:none;border-radius:0 0 4px 0}",
+      ".gc-section{position:absolute;box-sizing:border-box;border:1px dashed rgb(13 122 95 / .55);border-radius:4px}",
+      ".gc-section .gc-tag{background:rgb(13 122 95 / .9);transform:none;border-radius:0 0 4px 0;left:0;top:0}",
+      ".gc-flash{animation:gc-flash 1.4s ease-out both}",
       "@keyframes gc-flash{0%{box-shadow:0 0 0 0 rgb(13 122 95 / .5)}100%{box-shadow:0 0 0 14px rgb(13 122 95 / 0)}}",
-      "html[data-greatcms-select],html[data-greatcms-select] *{cursor:crosshair!important}",
-      "@media (prefers-reduced-motion:reduce){[data-greatcms-overlay] .gc-box{transition:none}}",
+      "@media (prefers-reduced-motion:reduce){.gc-box{transition:none}.gc-flash{animation:none}}",
     ].join("\n");
     const box = DOC.createElement("div");
     box.className = "gc-box";
@@ -60,9 +61,16 @@ if (window.top !== window.self) {
     tag.className = "gc-tag";
     box.append(tag);
     const sections = DOC.createElement("div");
-    overlay.append(style, box, sections);
+    shadow.append(style, box, sections);
+    // The crosshair is the one rule that has to reach the page itself.
+    const pointer = DOC.createElement("style");
+    pointer.textContent = "html[data-greatcms-select],html[data-greatcms-select] *{cursor:crosshair!important}";
     const mount = () => {
-      if (!overlay.isConnected) DOC.body.append(overlay);
+      if (!host.isConnected) DOC.body.append(host);
+    };
+    const restore = () => {
+      if (!pointer.isConnected) DOC.head.append(pointer);
+      DOC.documentElement.toggleAttribute("data-greatcms-select", mode.select);
     };
 
     const rectOf = (element) => {
@@ -271,7 +279,7 @@ if (window.top !== window.self) {
       } else if (data.greatcms === "mode") {
         if (typeof data.select === "boolean") mode.select = data.select;
         if (typeof data.sections === "boolean") mode.sections = data.sections;
-        DOC.documentElement.toggleAttribute("data-greatcms-select", mode.select);
+        restore();
         if (!mode.select) hide();
         drawSections();
       } else if (data.greatcms === "focus" && typeof data.path === "string") {
@@ -298,10 +306,16 @@ if (window.top !== window.self) {
     // The page changes under the studio's own edits; look again once it settles.
     let settle = 0;
     new MutationObserver((records) => {
-      if (records.every((r) => overlay.contains(r.target))) return;
+      if (!fields.length) return;
+      const ours = (node) => node === host || node === pointer;
+      if (records.every((r) => ours(r.target) || [...r.addedNodes, ...r.removedNodes].every(ours))) return;
       window.clearTimeout(settle);
       settle = window.setTimeout(() => { index(); report(); }, 150);
     }).observe(DOC.documentElement, { childList: true, subtree: true, characterData: true });
+
+    restore();
+    // Astro's view transitions swap the head and the root's attributes, taking the crosshair with them.
+    DOC.addEventListener("astro:after-swap", restore);
 
     const hello = () => window.parent.postMessage({ greatcms: "ready", reloads: WATCHED }, "*");
     if (DOC.readyState === "loading") DOC.addEventListener("DOMContentLoaded", hello, { once: true });

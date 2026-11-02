@@ -2,7 +2,15 @@ import { defineConfig } from "tsdown";
 
 // Rolldown + oxc: builds in milliseconds, emits ESM and declarations.
 export default defineConfig({
-  entry: ["src/index.ts", "src/vite.ts", "src/astro.ts"],
+  entry: [
+    "src/index.ts",
+    "src/vite.ts",
+    "src/astro.ts",
+    "src/next.ts",
+    "src/nuxt.ts",
+    "src/nuxt-nitro.ts",
+    "src/sveltekit.ts",
+  ],
   format: ["esm"],
   dts: true,
   clean: true,

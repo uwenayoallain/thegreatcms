@@ -62,6 +62,17 @@ export interface InitPlan {
   agentsNote: string;
 }
 
+/** What `init` did to package.json and the framework's config, for the next steps. */
+export interface Connection {
+  /** Framework files the live preview was added to. */
+  edited: string[];
+  /** Steps left for a person, when a file was not one to edit safely. */
+  manual: string[];
+  manager: string;
+  /** Whether package.json gained the reader, so an install is all that is left. */
+  packageEdited: boolean;
+}
+
 export const AGENTS_START = "<!-- greatcms:start -->";
 export const AGENTS_END = "<!-- greatcms:end -->";
 
@@ -462,9 +473,24 @@ collections:
 }
 
 /** Next steps, written so they can be followed without opening the docs. */
-export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
+export function nextSteps(
+  answers: InitAnswers,
+  plan: InitPlan,
+  connection: Connection = { edited: [], manual: [], manager: "npm", packageEdited: false },
+): string {
   const u = ui();
-  const lines = ["", u.step("Created"), ...plan.files.map((file) => u.ok(file.path)), ""];
+  const lines = ["", u.step("Created"), ...plan.files.map((file) => u.ok(file.path))];
+  if (connection.packageEdited) lines.push(u.ok("package.json: @greatcms/reader added"));
+  for (const path of connection.edited) lines.push(u.ok(`${path}: live preview connected`));
+  lines.push("");
+  if (connection.manual.length) {
+    lines.push(
+      u.bold("Connect the live preview by hand:"),
+      "",
+      ...connection.manual.map((step) => u.warn(step)),
+      "",
+    );
+  }
   const addSection =
     answers.template === "business"
       ? "greatcms add section testimonial --to home.sections --field quote:richtext! --field name:text!"
@@ -472,9 +498,9 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
 
   if (plan.firstRegion) {
     lines.push(
-      u.bold("Install the build-time reader:"),
+      u.bold(connection.packageEdited ? "Install it:" : "Install the build-time reader:"),
       "",
-      "  npm install --save-dev @greatcms/reader",
+      `  ${connection.packageEdited ? `${connection.manager} install` : `${connection.manager} ${connection.manager === "npm" ? "install" : "add"} @greatcms/reader`}`,
       "",
       u.bold(`Read the managed region in your ${answers.framework.label} templates:`),
       "",
@@ -501,25 +527,6 @@ export function nextSteps(answers: InitAnswers, plan: InitPlan): string {
       "Render the pages collection through one dynamic route. Adding an entry in",
       "the studio can then add an About, Services, or legal page without another schema edit.",
       "The business example in GreatCMS shows this complete route.",
-      "",
-    );
-  }
-
-  if (["astro", "nuxt", "sveltekit"].includes(answers.framework.id)) {
-    lines.push(
-      u.bold("Add the dev-time watcher, so editing content reloads your dev server:"),
-      "",
-      indent(
-        [
-          `// ${answers.framework.id === "astro" ? "astro.config.mjs" : "vite config"}`,
-          'import { greatcmsWatch } from "@greatcms/reader/vite";',
-          "",
-          "vite: { plugins: [greatcmsWatch()] }",
-        ].join("\n"),
-      ),
-      "",
-      "Without it the files change and the page does not, because the reader uses",
-      "the filesystem and Vite has no way to know.",
       "",
     );
   }

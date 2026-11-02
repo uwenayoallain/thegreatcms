@@ -14,7 +14,7 @@
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource/instrument-serif": "^5.3.0",
     "@greatcms/reader": "workspace:*",
-    "astro": "^7.3.5",
+    "astro": "^7.4.4",
     "motion": "^14.1.0"
   },
   "devDependencies": {
@@ -24,7 +24,7 @@
     "axe-core": "^4.13.0",
     "jsdom": "^30.0.1",
     "playwright": "^1.62.1",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }
 }

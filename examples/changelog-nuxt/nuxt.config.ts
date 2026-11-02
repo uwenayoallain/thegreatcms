@@ -1,8 +1,9 @@
 import { renameSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
-import { greatcmsWatch } from "@greatcms/reader/vite";
 
 export default defineNuxtConfig({
+  // Under `nuxt dev` only: content edits reload the page, and the studio's preview works.
+  modules: ["@greatcms/reader/nuxt"],
   compatibilityDate: "2026-10-01",
   devtools: { enabled: false },
   telemetry: false,
@@ -20,9 +21,7 @@ export default defineNuxtConfig({
       link: [{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
     },
   },
-  // Content edits reach `nuxt dev` as a reload; drafts from the studio included.
   vite: {
-    plugins: [greatcmsWatch()],
     // Behind the self-hosted preview proxy the dev server answers to a public name; Vite only serves hosts it knows.
     server: { allowedHosts: process.env.PREVIEW_HOST ? [process.env.PREVIEW_HOST] : undefined },
   },

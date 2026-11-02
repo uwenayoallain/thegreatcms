@@ -23,20 +23,23 @@ In development the reader prefers an unsaved edit in `.cms/draft/` over the
 committed file, which is what lets the studio preview a change in your own dev
 server as you type. A production build never reads a draft.
 
-Two dev-only integrations make that preview work:
+One dev-only line per framework makes that preview work, and `greatcms init`
+adds it for you:
 
-```js
-// Vite
-import { greatcmsWatch } from "@greatcms/reader/vite";
-export default defineConfig({ vite: { plugins: [greatcmsWatch()] } });
+| Framework        | One line                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Astro            | `astro.config`: `integrations: [greatcms()]` from `@greatcms/reader/astro`                                   |
+| Next.js          | root layout: `<GreatcmsPreview />` inside `<head>`, from `@greatcms/reader/next`                             |
+| Nuxt             | `nuxt.config`: `modules: ["@greatcms/reader/nuxt"]`                                                          |
+| SvelteKit        | `vite.config`: `greatcmsWatch()` and `src/hooks.server`: `greatcmsHandle`, from `@greatcms/reader/sveltekit` |
+| Other Vite sites | `vite.config`: `plugins: [greatcmsWatch()]` from `@greatcms/reader/vite`                                     |
 
-// Astro
-import greatcms from "@greatcms/reader/astro";
-export default defineConfig({ integrations: [greatcms()] });
-```
-
-They reload the page when content changes, hide the framework's dev toolbar
-while the page is framed by the studio, and carry the inspector that lets the
-studio point at what it is editing. A built page carries none of it.
+In development it reloads the page when content changes (Next.js asks the
+studio to reload it instead), hides the framework's dev toolbar while the page
+is framed by the studio, and carries the inspector that lets the studio point
+at what it is editing. The inspector draws in a shadow root on an inert,
+`aria-hidden` element, so the page's own CSS, scripts and accessibility tree
+never meet it, and it keeps working through client-side navigation such as
+Astro's view transitions. A built page carries none of it.
 
 Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/getting-started.md · Source: https://github.com/uwenayoallain/thegreatcms

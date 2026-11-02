@@ -23,8 +23,11 @@ npx greatcms describe              # every field, its type and limits, and the f
 ```
 
 `init` writes `.cms/schema.yaml`, `.cms/config.yaml` and a note in `AGENTS.md`
-for the next agent. Flags for an unattended run: `--framework astro|next|nuxt|sveltekit|eleventy|generic`,
-`--template hero|landing|business|blog|blank`, `--name "<site>"`, `--dir <content dir>`.
+for the next agent. It also adds `@greatcms/reader` to `package.json` and the
+live-preview line to the framework's config (see below); run the package
+manager's install afterwards. Flags for an unattended run: `--framework astro|next|nuxt|sveltekit|eleventy|generic`,
+`--template hero|landing|business|blog|blank`, `--name "<site>"`, `--dir <content dir>`,
+`--no-wire` to leave `package.json` and framework config alone.
 
 Expected tail of the output:
 
@@ -119,6 +122,14 @@ content/cms/home.hero.json: heading is required
 
 ## Preview and publish
 
+- The live preview is one dev-only line per framework, which `init` adds when
+  the config is a shape it recognises and prints otherwise:
+  Astro `integrations: [greatcms()]` (`@greatcms/reader/astro`);
+  Next.js `<GreatcmsPreview />` in the root layout's `<head>` (`@greatcms/reader/next`);
+  Nuxt `modules: ["@greatcms/reader/nuxt"]`;
+  SvelteKit `greatcmsWatch()` in `vite.config` plus `export { greatcmsHandle as handle }`
+  in `src/hooks.server` (`@greatcms/reader/sveltekit`);
+  any other Vite site `plugins: [greatcmsWatch()]` (`@greatcms/reader/vite`).
 - The studio frames the site's own dev server. Tell it where entries are seen
   with `preview.paths` in `.cms/config.yaml`:
   ```yaml

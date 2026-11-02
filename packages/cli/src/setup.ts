@@ -38,6 +38,7 @@ import { planInit, DEFAULT_SCHEMA_URL, TEMPLATES } from "./init.js";
 import { CliError } from "./ports.js";
 import type { PromptPort } from "./prompt.js";
 import { renderTypes } from "./types.js";
+import { packageManager, READER_RANGE, wirePreview } from "./wire.js";
 
 interface PackageJson {
   name?: string;
@@ -227,22 +228,7 @@ export async function scanProject(root: string, discover = true): Promise<Projec
   if (schema) parseSchema(schema.source, { file: schema.path });
   if (config) parseConfig(config.source, config.path);
   const projects = discover ? await discoverProjects(root) : [];
-  const declared =
-    typeof packageJson?.packageManager === "string"
-      ? packageJson.packageManager.split("@")[0]
-      : undefined;
-  const manager =
-    declared && ["pnpm", "npm", "yarn", "bun"].includes(declared)
-      ? declared
-      : files.includes("pnpm-lock.yaml")
-        ? "pnpm"
-        : files.includes("yarn.lock")
-          ? "yarn"
-          : files.includes("bun.lock") || files.includes("bun.lockb")
-            ? "bun"
-            : packageJson
-              ? "npm"
-              : "pnpm";
+  const manager = packageManager(files, packageJson);
   return {
     root,
     files,
@@ -598,7 +584,7 @@ export async function setupProject(options: {
   const schema = parseSchema(source, { file: schemaPath });
   if (
     await prompt.confirm(
-      "Set up the build-time reader, generated types, and package scripts?",
+      "Set up the build-time reader, the live preview, generated types, and package scripts?",
       true,
     )
   ) {
@@ -611,6 +597,7 @@ export async function setupProject(options: {
         type: "module",
       },
     );
+    pkg.dependencies ??= {};
     pkg.devDependencies ??= {};
     const localPackages = fileURLToPath(new URL("../../", import.meta.url));
     const fromCheckout = await isGreatcmsCheckout(join(localPackages, ".."));
@@ -624,9 +611,11 @@ export async function setupProject(options: {
         local !== null &&
         JSON.parse(local).name === key &&
         (await readIfPresent(join(localPackages, name, "dist/index.js"))) !== null;
-      pkg.devDependencies[key] = isLocal
+      // The site imports the reader from its own code, so it is a dependency; the CLI is a tool.
+      const field = name === "reader" ? pkg.dependencies : pkg.devDependencies;
+      field[key] = isLocal
         ? `${scan.manager === "pnpm" || scan.manager === "yarn" ? "link" : "file"}:${join(localPackages, name)}`
-        : "^0.1.0";
+        : READER_RANGE;
       if (isLocal)
         prompt.note(
           `${key}: linked to this local GreatCMS checkout. Keep it available, or replace the dependency when publishing.`,
@@ -655,9 +644,16 @@ export async function setupProject(options: {
         prompt.note(`${name}: ${command}`);
       }
     }
+    if (!Object.keys(pkg.dependencies).length) delete pkg.dependencies;
     const packageContent = `${JSON.stringify(pkg, null, 2)}\n`;
     if (packageContent !== scan.packageSource)
       changes.push({ path: "package.json", content: packageContent, before: scan.packageSource });
+    const wiring = await wirePreview(framework.id, (path) => optionalRead(root, path));
+    for (const edit of wiring.edits) {
+      changes.push(edit);
+      prompt.note(`Live preview: ${edit.before === null ? "create" : "update"} ${edit.path}`);
+    }
+    for (const step of wiring.manual) prompt.note(`Live preview, by hand: ${step}`);
     const helper = ".cms/reader.mjs";
     const helperSource = [
       'import { existsSync } from "node:fs";',
@@ -699,7 +695,7 @@ export async function setupProject(options: {
     return 0;
   }
   prompt.note(
-    `${ui().step("Review")}\n${ui().note(root)}\n${changes.map((c) => `  ${c.before === null ? ui().accent("create") : ui().muted("update")} ${c.path}`).join("\n")}\n\n${ui().note("Existing pages, framework config, content, and lockfiles will not be changed. No dependencies will be installed.")}`,
+    `${ui().step("Review")}\n${ui().note(root)}\n${changes.map((c) => `  ${c.before === null ? ui().accent("create") : ui().muted("update")} ${c.path}`).join("\n")}\n\n${ui().note("Existing pages, content, and lockfiles will not be changed, and nothing is installed. Framework config only gains the live-preview line listed above.")}`,
   );
   if (!(await prompt.confirm("Apply this setup?", true))) {
     stdout(`${ui().warn("Cancelled. Nothing was written.")}\n`);

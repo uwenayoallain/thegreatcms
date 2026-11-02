@@ -55,7 +55,6 @@ export interface VitePluginLike {
 export const PREVIEW_SCRIPT = `
 // Comparing the window references is allowed across origins; reading them is not.
 if (window.top !== window.self) {
-  document.documentElement.setAttribute("data-greatcms-framed", "");
   const style = document.createElement("style");
   style.dataset.greatcmsPreview = "";
   style.textContent = [
@@ -65,7 +64,13 @@ if (window.top !== window.self) {
     "#__next-build-watcher",
     "nextjs-portal",
   ].map((selector) => selector + " { display: none !important; }").join("\\n");
-  document.head.append(style);
+  // Nothing touches <html> itself: React and Vue would report it as a hydration mismatch.
+  const apply = () => {
+    if (!style.isConnected) document.head.append(style);
+  };
+  apply();
+  // Astro's view transitions swap the head on every navigation.
+  document.addEventListener("astro:after-swap", apply);
 }
 ${INSPECT_SCRIPT}
 `;

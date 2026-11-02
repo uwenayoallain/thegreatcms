@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/spec",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The GreatCMS content standard in TypeScript: schema, config, content parsing, validation and resolution, with no I/O.",
   "keywords": [
     "astro",

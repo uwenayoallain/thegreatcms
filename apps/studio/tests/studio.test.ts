@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FIXTURES_DIR } from "@greatcms/conformance";
 import axe from "axe-core";
+import { HtmlValidate } from "html-validate";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
@@ -472,6 +473,32 @@ describe("accessibility", () => {
     });
 
     expect(results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)).toEqual([]);
+  });
+
+  // The rules that check the HTML standard itself; how void elements and booleans are spelled is style, not validity.
+  const validator = new HtmlValidate({
+    extends: ["html-validate:standard"],
+    rules: {
+      "void-style": "off",
+      "doctype-style": "off",
+      "attribute-boolean-style": "off",
+      "attribute-empty-style": "off",
+      "no-trailing-whitespace": "off",
+      "no-inline-style": "off",
+      // A list styled without bullets loses its semantics in Safari unless the role is restated.
+      "no-redundant-role": "off",
+    },
+  });
+
+  it.each(pages)("%s is valid HTML", async (_name, path) => {
+    const response = await get(path, path === "/sign-in" ? {} : signedIn);
+    const report = await validator.validateString(await response.text());
+
+    expect(
+      report.results.flatMap((result) =>
+        result.messages.map((m) => `${m.line}:${m.column} ${m.ruleId}: ${m.message}`),
+      ),
+    ).toEqual([]);
   });
 
   it("ships no JavaScript on pages that do not need it", async () => {

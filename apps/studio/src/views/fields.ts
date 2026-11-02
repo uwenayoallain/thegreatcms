@@ -505,7 +505,7 @@ ${asText(readRichText(value))}</textarea>
                     }
                   </div>
                 </details>
-                <div class="tools" aria-label="Reorder or remove ${itemName}">
+                <div class="tools" role="group" aria-label="Reorder or remove ${itemName}">
                   <button
                     type="submit"
                     name="action"
