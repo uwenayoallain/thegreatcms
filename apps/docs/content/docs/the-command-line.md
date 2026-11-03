@@ -7,6 +7,27 @@ order: 15
 Everything the CLI does runs on your machine with your toolchain. It edits the
 two files in `.cms/`, reads your content, and never talks to the studio.
 
+`greatcms help <command>` (or `greatcms <command> --help`) shows a command's
+options and examples, and `greatcms --version` prints the version. Short flags
+work where they exist (`-y` for `--yes`, `-f` for `--force`, `-o` for `--out`),
+`--` ends the options, and a misspelt command or option gets a suggestion
+rather than silence. `--no-color` or `NO_COLOR=1` gives plain text.
+
+The exit status is meant for scripts: `0` when done, `1` when the command failed
+or found problems (such as `check` finding content that will not render), `2`
+when it was called wrongly, and `130` when you cancelled a prompt.
+
+## Tab completion
+
+`greatcms completion <shell>` prints a completion script for bash, zsh or fish,
+covering commands, options, and the values they take:
+
+```sh
+greatcms completion bash > ~/.local/share/bash-completion/completions/greatcms
+greatcms completion zsh > "${fpath[1]}/_greatcms"
+greatcms completion fish > ~/.config/fish/completions/greatcms.fish
+```
+
 ## `greatcms init`
 
 ```sh

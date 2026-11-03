@@ -49,11 +49,25 @@ import {
 } from "./init.js";
 import { packageManager, wirePreview, withReader } from "./wire.js";
 import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } from "./prompt.js";
-import { CliError, type FilePort, type GitPort } from "./ports.js";
+import { CliError, UsageError, type FilePort, type GitPort } from "./ports.js";
+import {
+  commandHelp,
+  completionScript,
+  crashText,
+  findCommand,
+  overviewHelp,
+  parseFlags,
+  unknownCommand,
+  validate,
+  versionText,
+  type Flags,
+} from "./commands.js";
 import { setupProject } from "./setup.js";
 import { plainUi, ui, useUi, type Ui } from "./ui.js";
 
 export { createUi, wantsColour, type Ui } from "./ui.js";
+export { parseFlags, type Flags } from "./commands.js";
+export { VERSION } from "./version.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -207,37 +221,55 @@ function isInteractive(): boolean {
 }
 
 export async function run(options: RunOptions): Promise<number> {
-  const { argv, stdout, stderr } = options;
-  useUi(options.ui ?? plainUi);
+  const { stdout, stderr } = options;
+  // A global switch, honoured wherever it is typed, so it is taken out before anything else reads argv.
+  const plain = options.argv.includes("--no-color");
+  const argv = options.argv.filter((arg) => arg !== "--no-color");
+  useUi(plain ? plainUi : (options.ui ?? plainUi));
   const [command = "help", ...rest] = argv;
-  const flags = parseFlags(rest);
-  const knownCommand = ["setup", "init", "add", "check", "types", "doctor", "describe"].includes(
-    command,
-  );
-
-  // Help must be side-effect free even when it follows a mutating command.
-  if (knownCommand && (rest.includes("--help") || rest.includes("-h"))) {
-    stdout(help());
-    return 0;
-  }
 
   try {
-    if (knownCommand && command !== "setup" && flags.unknown.length > 0) {
-      throw new CliError(
-        `Unknown option ${flags.unknown.join(", ")}.`,
-        `Run \`greatcms ${command} --help\` to see the options it takes.`,
+    if (["--version", "-v", "-V", "version"].includes(command)) {
+      stdout(versionText());
+      return 0;
+    }
+    if (command === "--help" || command === "-h") {
+      stdout(overviewHelp());
+      return 0;
+    }
+    if (command.startsWith("-")) {
+      throw new UsageError(
+        `Unknown option ${command}.`,
+        "Options go after the command. Run `greatcms --help` to see the commands.",
       );
     }
-    switch (command) {
+    const spec = findCommand(command);
+    if (!spec) throw unknownCommand(command);
+    const flags = parseFlags(rest);
+
+    // Help and the version are side-effect free, even after a mutating command.
+    if (flags.boolean("help")) {
+      stdout(commandHelp(spec));
+      return 0;
+    }
+    if (flags.boolean("version")) {
+      stdout(versionText());
+      return 0;
+    }
+    validate(spec, flags);
+
+    switch (spec.name) {
       case "setup": {
-        if (rest.length > 1 || rest.some((arg) => arg.startsWith("-")))
-          throw new CliError("Usage: greatcms setup [directory]");
         const prompt =
           options.prompt ??
           (isInteractive()
             ? terminalPrompt({ input: process.stdin, output: process.stdout })
             : defaultsOnlyPrompt(stdout));
-        return await setupProject({ root: resolve(options.cwd, rest[0] ?? "."), prompt, stdout });
+        return await setupProject({
+          root: resolve(options.cwd, flags.positionals[0] ?? "."),
+          prompt,
+          stdout,
+        });
       }
       case "init":
         if (!rest.length && (options.prompt?.interactive || isInteractive())) {
@@ -250,7 +282,7 @@ export async function run(options: RunOptions): Promise<number> {
         }
         return await initCommand({ ...options, flags });
       case "add":
-        return await addCommand({ ...options, flags, rest });
+        return await addCommand({ ...options, flags });
       case "check":
         return await checkCommand({ ...options, flags });
       case "types":
@@ -259,14 +291,19 @@ export async function run(options: RunOptions): Promise<number> {
         return await doctorCommand({ ...options, flags });
       case "describe":
         return await describeCommand({ ...options, flags });
-      case "help":
-      case "--help":
-      case "-h":
-        stdout(help());
+      case "completion": {
+        const [shell] = flags.positionals;
+        if (!shell) {
+          throw new UsageError("Say which shell.", "greatcms completion bash | zsh | fish");
+        }
+        stdout(completionScript(shell));
         return 0;
-      default:
-        stderr(`${ui().err(`Unknown command "${command}".`)}\n\n${help()}`);
-        return 1;
+      }
+      default: {
+        const [topic] = flags.positionals;
+        stdout(topic ? commandHelp(findCommand(topic)!) : overviewHelp());
+        return 0;
+      }
     }
   } catch (error) {
     if (error instanceof PromptCancelled) {
@@ -275,9 +312,15 @@ export async function run(options: RunOptions): Promise<number> {
     }
     if (error instanceof AddError || error instanceof CliError || error instanceof SpecError) {
       stderr(`${ui().err(error.message)}\n`);
+      return error instanceof UsageError ? 2 : 1;
+    }
+    // A failure from the system, such as a folder it may not write to, is the person's to fix.
+    if (error instanceof Error && typeof (error as NodeJS.ErrnoException).code === "string") {
+      stderr(`${ui().err(error.message)}\n`);
       return 1;
     }
-    throw error;
+    stderr(crashText(error, Boolean(process.env.GREATCMS_DEBUG)));
+    return 1;
   }
 }
 
@@ -314,7 +357,7 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
     packageJson: await readPackageJson(root),
   });
   const frameworkFlag = flags.string("framework");
-  const chosenFramework = frameworkFlag ? frameworkFromFlag(frameworkFlag) : null;
+  const chosenFramework = frameworkFlag ? FRAMEWORKS[frameworkFlag as FrameworkId] : null;
 
   stdout(`\n${ui().step("Setting up GreatCMS")}\n${ui().note(root)}\n\n`);
   prompt.note(
@@ -344,7 +387,7 @@ async function initCommand(options: RunOptions & { flags: Flags }): Promise<numb
       );
 
   const template = flags.string("template")
-    ? templateFromFlag(flags.string("template") as string)
+    ? (flags.string("template") as TemplateId)
     : await prompt.select<TemplateId>(
         "What should the CMS manage to begin with?",
         TEMPLATES.map((entry) => ({ value: entry.id, label: entry.label, hint: entry.hint })),
@@ -422,8 +465,8 @@ async function connect(
  * indentation, the field syntax, and the file path are no longer yours to get
  * right.
  */
-async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }): Promise<number> {
-  const { cwd, stdout, flags, rest } = options;
+async function addCommand(options: RunOptions & { flags: Flags }): Promise<number> {
+  const { cwd, stdout, flags } = options;
   const root = resolve(cwd);
 
   const [requestedKind, name] = flags.positionals;
@@ -433,9 +476,9 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
     requestedKind !== "block" &&
     requestedKind !== "collection"
   ) {
-    throw new AddError(
-      requestedKind ? `Cannot add a "${requestedKind}".` : "Say what to add.",
-      "greatcms add region <id> | add section <name> | add collection <name>",
+    throw new UsageError(
+      "Say what to add.",
+      "greatcms add region <id> | add section <name> | add block <name> | add collection <name>",
     );
   }
   const kind = requestedKind === "section" ? "block" : requestedKind;
@@ -499,9 +542,7 @@ async function addCommand(options: RunOptions & { flags: Flags; rest: string[] }
     }
   }
 
-  // --field can appear several times; the flag parser keeps the last, so the raw
-  // argument list is the honest source for a repeated flag.
-  const fieldArgs = repeatedFlag(rest, "field");
+  const fieldArgs = flags.strings("field");
   const allow = flags
     .string("blocks")
     ?.split(",")
@@ -620,31 +661,13 @@ function suggestedName(kind: string): string {
 }
 
 function collectionFormat(value: string | undefined): CollectionFormat {
-  if (value === undefined) return "markdown";
-  if (value === "markdown" || value === "mdx" || value === "json") return value;
-  throw new AddError(`Unknown collection format "${value}".`, "Use markdown, mdx, or json.");
+  return (value as CollectionFormat | undefined) ?? "markdown";
 }
 
 function defaultCollectionsDir(root: string, config: CmsConfig): string {
   const regions = config.content.regions.replace(/\/+$/, "");
   // Collections sit beside regions rather than inside them: they are separate content.
   return regions.includes("/") ? regions.slice(0, regions.lastIndexOf("/")) : "content";
-}
-
-/** Every occurrence of `--name value`, because some flags are meant to repeat. */
-export function repeatedFlag(argv: string[], name: string): string[] {
-  const found: string[] = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (token?.startsWith(`--${name}=`)) {
-      found.push(token.slice(name.length + 3));
-      continue;
-    }
-    if (token !== `--${name}`) continue;
-    const value = argv[i + 1];
-    if (value && !value.startsWith("--")) found.push(value);
-  }
-  return found;
 }
 
 function indentBlock(text: string): string {
@@ -673,28 +696,6 @@ async function readPackageJson(root: string): Promise<Record<string, never> | un
 async function readPackageName(root: string): Promise<string | undefined> {
   const pkg = (await readPackageJson(root)) as { name?: string } | undefined;
   return pkg?.name?.replace(/^@[^/]+\//, "");
-}
-
-function frameworkFromFlag(value: string): Framework {
-  const framework = FRAMEWORKS[value as FrameworkId];
-  if (!framework) {
-    throw new CliError(
-      `Unknown framework "${value}".`,
-      `Choose one of: ${Object.keys(FRAMEWORKS).join(", ")}.`,
-    );
-  }
-  return framework;
-}
-
-function templateFromFlag(value: string): TemplateId {
-  const template = TEMPLATES.find((entry) => entry.id === value);
-  if (!template) {
-    throw new CliError(
-      `Unknown template "${value}".`,
-      `Choose one of: ${TEMPLATES.map((entry) => entry.id).join(", ")}.`,
-    );
-  }
-  return template.id;
 }
 
 /** Exits non-zero when the content would not render, so a build can run it. */
@@ -903,133 +904,3 @@ async function doctorCommand(options: RunOptions & { flags: Flags }): Promise<nu
   stdout(`${lines.join("\n")}\n`);
   return 0;
 }
-
-interface Flags {
-  string(name: string): string | undefined;
-  boolean(name: string): boolean;
-  /** Arguments that are not flags or flag values, in order. */
-  positionals: string[];
-  /** Flags no command understands, so a typo is reported rather than ignored. */
-  unknown: string[];
-}
-
-/** Switches never take a value, so `--yes hero.banner` leaves the name where it was typed. */
-const SWITCHES = new Set(["yes", "force", "check", "json", "help", "no-wire"]);
-const OPTIONS = new Set([
-  "name",
-  "framework",
-  "template",
-  "dir",
-  "format",
-  "label",
-  "module",
-  "out",
-  "to",
-  "field",
-]);
-
-export function parseFlags(argv: string[]): Flags {
-  const values = new Map<string, string | true>();
-  const positionals: string[] = [];
-  const unknown: string[] = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i] as string;
-    if (!token.startsWith("--")) {
-      if (token !== "-h") positionals.push(token);
-      continue;
-    }
-    const [name = "", inline] = token.slice(2).split(/=(.*)/s, 2);
-    if (SWITCHES.has(name)) {
-      values.set(name, true);
-    } else if (OPTIONS.has(name)) {
-      const next = argv[i + 1];
-      if (inline !== undefined) {
-        values.set(name, inline);
-      } else if (next !== undefined && !next.startsWith("--")) {
-        values.set(name, next);
-        i += 1;
-      } else {
-        values.set(name, true);
-      }
-    } else {
-      unknown.push(token);
-    }
-  }
-  return {
-    string: (name) => {
-      const value = values.get(name);
-      return typeof value === "string" ? value : undefined;
-    },
-    boolean: (name) => values.has(name),
-    positionals,
-    unknown,
-  };
-}
-
-/** The usage text, commands in the accent so the eye finds them. */
-function help(): string {
-  const u = ui();
-  if (!u.colour) return HELP;
-  return HELP.split("\n")
-    .map((line, index) => {
-      if (index === 0) return u.bold(line);
-      const usage = line.match(/^(  greatcms .+?)(\s{2,}.*)?$/);
-      return usage ? `${u.accent(usage[1]!)}${usage[2] ?? ""}` : line;
-    })
-    .join("\n");
-}
-
-const HELP = `greatcms: local tools for a Git-backed site
-
-  greatcms setup [directory]     scan a new/existing project or workspace, build
-                                 custom regions, sections and collections,
-                                 then review and apply CMS integration
-
-  greatcms init [options]        set up .cms/schema.yaml and .cms/config.yaml
-    --yes                        accept every default, no prompts
-    --name <name>                site name
-    --framework <id>             astro | next | nuxt | sveltekit | eleventy | generic
-    --template <id>              hero | landing | business | blog | blank
-    --dir <path>                 where content files live
-    --force                      overwrite an existing setup
-    --no-wire                    leave package.json and framework config alone
-
-  greatcms add region <id>       add a managed section to an existing schema
-  greatcms add section <name>    define a reusable page section and make it
-                                 selectable in a reorderable region
-  greatcms add block <name>      add a block type a blocks region can hold
-  greatcms add collection <name>
-                                 add a folder of entries
-    --field name:type            repeatable. text richtext image link number
-                                 boolean date file, select(a|b), list(text);
-                                 a trailing ! means required
-    --label "<text>"             what an editor sees (default: from the id)
-    --to <region>                destination for a section; optional for a block
-    --blocks a,b                 make the region a reorderable list of blocks
-    --format markdown|mdx|json   collections only (default: markdown)
-    --dir <path>                 collections only, where entries live
-
-  greatcms check [--json]        validate this repository's content against the
-                                 schema, media and internal links; exits
-                                 non-zero on problems (not warnings), so CI
-                                 can run it
-
-  greatcms types [--out <path>]  TypeScript for every region, block, and
-                                 collection, plus the augmentation that types
-                                 cms.region() by its id. Prints to stdout
-                                 without --out.
-    --check                      exit non-zero if the file is out of date,
-                                 so CI catches types that drifted
-    --module <specifier>         module the augmentation targets
-
-  greatcms doctor [--json]       check this repository's CMS setup; --json for
-                                 a machine-readable summary
-
-  greatcms describe [--json]     the content model in one screen: every region,
-                                 block and collection, each field's type and
-                                 limits, and where its file goes. Read this
-                                 before writing content by hand.
-
-Everything here runs on your machine, with your toolchain. Nothing from this
-repository is ever executed by the studio.
-`;

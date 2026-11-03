@@ -20,3 +20,11 @@ export interface FilePort {
 export interface GitPort {
   run(args: string[]): Promise<string>;
 }
+
+/** The command was called wrongly: an unknown option, a missing value, an extra argument. Exits 2. */
+export class UsageError extends CliError {
+  constructor(message: string, fix?: string) {
+    super(message, fix);
+    this.name = "UsageError";
+  }
+}

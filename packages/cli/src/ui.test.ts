@@ -12,6 +12,7 @@ describe("deciding on colour", () => {
   it("honours NO_COLOR and cli-kit's CK_PLAIN over a terminal", () => {
     expect(wantsColour({ isTTY: true }, { NO_COLOR: "1" })).toBe(false);
     expect(wantsColour({ isTTY: true }, { CK_PLAIN: "1" })).toBe(false);
+    expect(wantsColour({ isTTY: true }, { TERM: "dumb" })).toBe(false);
   });
 });
 

@@ -1,5 +1,19 @@
 #!/usr/bin/env node
-import { createUi, run, wantsColour } from "../dist/index.js";
+const major = Number(process.versions.node.split(".")[0]);
+if (major < 20) {
+  process.stderr.write(`greatcms needs Node.js 20 or newer, and this is ${process.version}.\n`);
+  process.exit(1);
+}
+
+// `greatcms describe | head` closes the pipe early; that is the reader being done, not an error.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (error) => {
+    if (error.code === "EPIPE") process.exit(0);
+    throw error;
+  });
+}
+
+const { createUi, run, wantsColour } = await import("../dist/index.js");
 
 process.exitCode = await run({
   argv: process.argv.slice(2),

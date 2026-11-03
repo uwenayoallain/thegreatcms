@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSchema } from "@greatcms/spec";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { parseFlags, repeatedFlag, run } from "./index.js";
+import { parseFlags, run } from "./index.js";
 
 let repo: string;
 const out: string[] = [];
@@ -86,7 +86,7 @@ describe("command help", () => {
       const before = git(["status", "--short"]);
 
       expect(await cli([command, "--help"])).toBe(0);
-      expect(out.join("")).toContain("greatcms: local tools for a Git-backed site");
+      expect(out.join("")).toContain(`Usage: greatcms ${command}`);
       expect(err).toEqual([]);
       expect(git(["status", "--short"])).toBe(before);
     },
@@ -104,15 +104,31 @@ describe("reading flags", () => {
   it("takes --name=value as well as --name value", () => {
     expect(parseFlags(["--out=src/cms.d.ts"]).string("out")).toBe("src/cms.d.ts");
     expect(parseFlags(["--out", "src/cms.d.ts"]).string("out")).toBe("src/cms.d.ts");
-    expect(repeatedFlag(["--field=a:text", "--field", "b:image"], "field")).toEqual([
+    expect(parseFlags(["--field=a:text", "--field", "b:image"]).strings("field")).toEqual([
       "a:text",
       "b:image",
     ]);
   });
 
-  it("reports a misspelt flag instead of silently ignoring it", async () => {
-    expect(await cli(["check", "--jsno"])).toBe(1);
+  it("reads short flags, alone, together, and with a value", () => {
+    const flags = parseFlags(["-yf", "-o", "out.d.ts", "name"]);
+    expect([flags.boolean("yes"), flags.boolean("force"), flags.string("out")]).toEqual([
+      true,
+      true,
+      "out.d.ts",
+    ]);
+    expect(flags.positionals).toEqual(["name"]);
+    expect(parseFlags(["-oout.d.ts"]).string("out")).toBe("out.d.ts");
+  });
+
+  it("stops reading options at --", () => {
+    expect(parseFlags(["--", "--yes"]).positionals).toEqual(["--yes"]);
+  });
+
+  it("reports a misspelt flag instead of silently ignoring it, and suggests the real one", async () => {
+    expect(await cli(["check", "--jsno"])).toBe(2);
     expect(err.join("")).toContain("Unknown option --jsno");
+    expect(err.join("")).toContain("Did you mean --json?");
   });
 });
 
@@ -189,9 +205,9 @@ describe("greatcms check", () => {
 });
 
 describe("unknown input", () => {
-  it("prints help rather than a stack trace", async () => {
-    expect(await cli(["wat"])).toBe(1);
-    expect(err.join("")).toContain("greatcms init");
+  it("points at the help rather than printing a stack trace", async () => {
+    expect(await cli(["wat"])).toBe(2);
+    expect(err.join("")).toContain("greatcms --help");
   });
 
   it("does not leave a stray overlay behind after all of that", () => {
@@ -300,7 +316,7 @@ describe("greatcms init", () => {
   });
 
   it("rejects an unknown framework by name, listing the real ones", async () => {
-    expect(await initIn(fresh, ["init", "--yes", "--framework", "wordpress"])).toBe(1);
+    expect(await initIn(fresh, ["init", "--yes", "--framework", "wordpress"])).toBe(2);
     expect(err.join("")).toContain("astro");
   });
 
@@ -346,5 +362,14 @@ describe("greatcms init", () => {
     });
     expect(out.join("")).toContain("Editors can now add it in home.sections");
     expect(out.join("")).toContain('_type: "testimonial"');
+  });
+
+  it("makes a region a list of the blocks named with --blocks", async () => {
+    await initIn(fresh, ["init", "--yes", "--template", "blank"]);
+    expect(await initIn(fresh, ["add", "block", "card", "--field", "title:text!"])).toBe(0);
+
+    expect(await initIn(fresh, ["add", "region", "home.cards", "--blocks", "card"])).toBe(0);
+    const schema = parseSchema(readFileSync(join(fresh, ".cms/schema.yaml"), "utf8"));
+    expect(schema.regions["home.cards"]).toMatchObject({ allow: ["card"] });
   });
 });

@@ -1,16 +1,10 @@
 /** Wires the studio's live preview into a site's own config: small additive edits, or a note when a file is not a shape we recognise. */
 
-import { readFileSync } from "node:fs";
 import type { FrameworkId } from "./detect.js";
+import { VERSION } from "./version.js";
 
 /** The reader is released with the CLI, so this CLI's version is the reader to install. */
-export const READER_RANGE = `^${
-  (
-    JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-      version: string;
-    }
-  ).version
-}`;
+export const READER_RANGE = `^${VERSION}`;
 
 export interface FileEdit {
   path: string;

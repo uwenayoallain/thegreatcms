@@ -49,7 +49,7 @@ export interface Ui {
 
 /** Colour only for a person at a terminal who has not asked for plain text. */
 export function wantsColour(stream: { isTTY?: boolean }, env: Env = process.env): boolean {
-  if (env.NO_COLOR || env.CK_PLAIN) return false;
+  if (env.NO_COLOR || env.CK_PLAIN || env.TERM === "dumb") return false;
   if (env.FORCE_COLOR && env.FORCE_COLOR !== "0") return true;
   return Boolean(stream.isTTY);
 }
