@@ -65,7 +65,9 @@ describe("the screens", () => {
     expect(await (await get(fixture, "/")).text()).toContain("Dev server not running");
     // Nothing to open while it is down, so there is no link to a page that will not load.
     expect(await (await get(fixture, "/")).text()).not.toContain("open-site");
-    expect(await (await get(fixture, "/sites/site-1")).text()).toContain("Not running");
+    const downOverview = await (await get(fixture, "/sites/site-1")).text();
+    expect(downOverview).toContain("Not running");
+    expect(downOverview).not.toContain("open-site");
     const editor = await (await get(fixture, "/sites/site-1/regions/home.hero")).text();
     expect(editor).toContain("is not running.");
   });
@@ -82,6 +84,11 @@ describe("the screens", () => {
     expect(link?.target).toBe("_blank");
     expect(link?.rel).toBe("noopener");
     expect(link?.textContent?.replace(/\s+/g, " ")).toContain(`Open site at 127.0.0.1:${open}`);
+    const overview = new JSDOM(await (await get(fixture, "/sites/site-1")).text()).window.document;
+    const overviewLink = overview.querySelector<HTMLAnchorElement>("a.open-site");
+    expect(overviewLink?.getAttribute("href")).toBe(`http://127.0.0.1:${open}`);
+    expect(overviewLink?.target).toBe("_blank");
+    expect(overviewLink?.rel).toBe("noopener");
     expect(await (await get(fixture, "/sites/site-1/regions/home.hero")).text()).not.toContain(
       "live-down",
     );

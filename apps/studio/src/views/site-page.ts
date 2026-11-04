@@ -232,10 +232,18 @@ export function sitePage(options: {
           <dd>
             ${
               site.devUrl
-                ? html`<span class="status ${running === false ? "down" : "ready"}"
-                      >${running === false ? "Not running" : "Running"}</span
-                    >
-                    <span class="hint"><code>${hostOf(site.devUrl)}</code></span>`
+                ? running === false
+                  ? html`<span class="status down">Not running</span>
+                      <span class="hint"><code>${hostOf(site.devUrl)}</code></span>`
+                  : html`<a
+                        class="status ready open-site"
+                        href="${site.devUrl}"
+                        target="_blank"
+                        rel="noopener"
+                        title="Open ${site.devUrl} in a new tab"
+                        ><span class="status-text">Running</span>${icon("external")}</a
+                      >
+                      <span class="hint"><code>${hostOf(site.devUrl)}</code></span>`
                 : html`<a href="/sites/${site.id}/settings">Add your dev server</a>`
             }
           </dd>
