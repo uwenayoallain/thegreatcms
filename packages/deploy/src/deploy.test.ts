@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Deployer, readStatus } from "./deploy.js";
 
@@ -65,7 +65,7 @@ describe("one publish", () => {
 
     expect(result).toMatchObject({ outcome: "deployed", sha });
     expect(live()).toBe("hello");
-    expect(readlinkSync(join(root, "current"))).toBe(join(root, "releases", sha));
+    expect(resolve(root, readlinkSync(join(root, "current")))).toBe(join(root, "releases", sha));
     // The checkout the build ran in is not the released folder: a build cannot leave junk live.
     expect(readdirSync(join(root, "releases", sha))).toEqual(["index.html"]);
     expect(existsSync(join(root, "work"))).toBe(false);

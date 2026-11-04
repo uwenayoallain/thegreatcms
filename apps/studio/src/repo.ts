@@ -233,6 +233,8 @@ export class LocalRepository implements Repository {
       await Promise.all(temps.map(({ temp }) => rm(temp, { force: true })));
       throw failed.reason;
     }
+    // What each file was before, so a commit git refuses leaves the working copy as it found it.
+    const before = await Promise.all(targets.map((target) => readFile(target).catch(() => null)));
     await Promise.all(temps.map(({ temp, target }) => rename(temp, target)));
     await Promise.all(
       request.files.flatMap((file, index) =>
@@ -240,6 +242,21 @@ export class LocalRepository implements Repository {
       ),
     );
 
+    try {
+      return await this.stageAndCommit(request);
+    } catch (error) {
+      await Promise.all(
+        targets.map((target, index) => {
+          const previous = before[index];
+          return previous ? writeFile(target, previous) : rm(target, { force: true });
+        }),
+      );
+      await this.tryGit(["reset", "-q", "--", ...request.files.map((file) => file.path)]);
+      throw error;
+    }
+  }
+
+  private async stageAndCommit(request: CommitRequest): Promise<CommitResult> {
     const url = `file://${this.root}`;
     if ((await this.tryGit(["rev-parse", "--is-inside-work-tree"]))?.trim() !== "true") {
       // Not a Git repository: the files are written, and that is the whole job.

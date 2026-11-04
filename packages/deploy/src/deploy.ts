@@ -12,7 +12,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
@@ -124,6 +124,11 @@ export class Deployer {
     mkdirSync(join(root, "releases"), { recursive: true });
     const status = readStatus(root) ?? { checkedAt: "" };
     const sha = requested ?? (await this.tip());
+    // A full commit id and nothing else: never an option, a range, or a path for a release folder.
+    if (!/^[0-9a-f]{40}$/.test(sha)) {
+      log(`refused to build ${JSON.stringify(sha.slice(0, 80))}: not a full commit id`);
+      return { outcome: "failed", sha, log: "Not a full 40-character commit id." };
+    }
     status.checkedAt = new Date().toISOString();
 
     if (!requested && status.pinned) {
@@ -146,11 +151,27 @@ export class Deployer {
     log(`${sha.slice(0, 7)} ${message}: building`);
     try {
       await run("git", [...SAFE_GIT, "clone", "-q", "--no-checkout", source, work]);
-      await run("git", [...SAFE_GIT, "-C", work, "checkout", "-q", sha]);
+      await run("git", [
+        ...SAFE_GIT,
+        "-C",
+        work,
+        "checkout",
+        "-q",
+        "--detach",
+        "--end-of-options",
+        sha,
+      ]);
       await this.build(work);
       const release = join(root, "releases", sha);
+      const output = resolve(work, this.options.output);
+      // The output must be a folder the build made inside the checkout, not a way out of it.
+      if (!output.startsWith(work + sep) || !statSync(output).isDirectory()) {
+        throw new BuildError(
+          `DEPLOY_OUTPUT ${this.options.output} is not a folder inside the checkout.`,
+        );
+      }
       rmSync(release, { recursive: true, force: true });
-      renameSync(resolve(work, this.options.output), release);
+      renameSync(output, release);
       this.swap(release);
       status.live = { sha, message, at: new Date().toISOString() };
       delete status.failed;
@@ -191,6 +212,7 @@ export class Deployer {
         "log",
         "-1",
         "--format=%s",
+        "--end-of-options",
         sha,
       ]);
       return stdout.trim();
@@ -229,7 +251,8 @@ export class Deployer {
   private swap(release: string): void {
     const temp = join(this.options.root, `.current.${process.pid}`);
     rmSync(temp, { force: true });
-    symlinkSync(release, temp);
+    // Relative, so `current` resolves wherever the folder is mounted: the web server's path need not match.
+    symlinkSync(relative(this.options.root, release), temp);
     renameSync(temp, join(this.options.root, "current"));
   }
 
