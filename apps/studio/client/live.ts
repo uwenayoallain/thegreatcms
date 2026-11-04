@@ -5,7 +5,8 @@
  * scrolls the page to it.
  */
 
-const DEBOUNCE_MS = 400;
+// Long enough to wait out the gap between keys, short enough that the page keeps up.
+const DEBOUNCE_MS = 250;
 
 interface Field {
   path: string;

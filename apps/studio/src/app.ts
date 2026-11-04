@@ -75,7 +75,7 @@ import { type Viewer, withViewer } from "./views/viewer.js";
 import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { errorsByPath } from "./views/fields.js";
 import { page, type PageOptions } from "./views/layout.js";
-import { asset, icon, ICONS } from "./assets.js";
+import { asset, compressed, icon, ICONS } from "./assets.js";
 import { editorsPage, sharePage, signInPage } from "./views/account-pages.js";
 import { collectionPage, editEntryPage } from "./views/collection-pages.js";
 import { inboxPage } from "./views/inbox-page.js";
@@ -218,6 +218,8 @@ export function createApp(options: AppOptions) {
       ].join("; "),
     );
     c.res.headers.set("x-content-type-options", "nosniff");
+    // A tab the studio opens, such as the site itself, gets no handle back on the signed-in window.
+    c.res.headers.set("cross-origin-opener-policy", "same-origin");
     // `same-origin`, not `no-referrer`. With no-referrer Chrome sends
     // `Origin: null` on a same-origin form post, which the CSRF check above
     // refuses: every form in this app would break for anyone without
@@ -547,12 +549,23 @@ export function createApp(options: AppOptions) {
     if (!found) return c.notFound();
 
     // A font's name changes whenever its bytes do, so it is pinned without a version in the URL.
+    const file = c.req.param("file");
     const pinned = c.req.query("v") === found.version || found.type.startsWith("font/");
-    return c.body(found.body, 200, {
+    const headers: Record<string, string> = {
       "content-type": typeof found.body === "string" ? `${found.type}; charset=utf-8` : found.type,
       "cache-control": pinned ? "public, max-age=31536000, immutable" : "public, max-age=300",
       etag: `"${found.version}"`,
-    });
+      vary: "accept-encoding",
+    };
+    if (c.req.header("if-none-match")?.includes(found.version)) return c.body(null, 304, headers);
+    const packed = compressed(file, found, c.req.header("accept-encoding"));
+    if (packed) {
+      return c.body(new Uint8Array(packed.body), 200, {
+        ...headers,
+        "content-encoding": packed.encoding,
+      });
+    }
+    return c.body(found.body, 200, headers);
   });
 
   const hasEditors = () => store.listEditors().length > 0;

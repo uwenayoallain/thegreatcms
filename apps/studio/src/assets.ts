@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import { STYLESHEET } from "./views/layout.js";
 
 export interface Asset {
@@ -20,6 +21,8 @@ export const ICONS: Record<string, string> = {
 /** Display type, the website's own, self-hosted so the studio needs nothing from another origin. */
 const FONTS = new Set(["space-grotesk-500.woff2", "space-grotesk-700.woff2"]);
 const cache = new Map<string, Asset | null>();
+/** Hashed once: every page asks for its URL. */
+let stylesheet: Asset | undefined;
 
 const hash = (content: string | Uint8Array<ArrayBuffer>) =>
   createHash("sha256").update(content).digest("hex").slice(0, 12);
@@ -51,7 +54,8 @@ export function icon(file: string): { body: Buffer; type: string } | null {
 
 export function asset(file: string): Asset | null {
   if (file === "studio.css") {
-    return { body: STYLESHEET, version: hash(STYLESHEET), type: "text/css" };
+    stylesheet ??= { body: STYLESHEET, version: hash(STYLESHEET), type: "text/css" };
+    return stylesheet;
   }
   if (!CLIENT_BUNDLES.has(file) && !FONTS.has(file)) return null;
 
@@ -73,4 +77,47 @@ export function asset(file: string): Asset | null {
 export function assetUrl(file: string): string {
   const found = asset(file);
   return found ? `/assets/${file}?v=${found.version}` : `/assets/${file}`;
+}
+
+const encoded = new Map<string, { br: Buffer; gzip: Buffer }>();
+
+/**
+ * An asset compressed once, at the highest level, in the encoding the browser
+ * prefers: the bundles never change while the server runs, so there is no
+ * reason to squeeze them again on every request. Null for fonts, which are
+ * compressed already, or when the browser takes neither encoding.
+ */
+export function compressed(
+  file: string,
+  found: Asset,
+  accept: string | undefined,
+): { body: Buffer; encoding: "br" | "gzip" } | null {
+  if (found.type.startsWith("font/")) return null;
+  const accepted = new Map(
+    (accept ?? "").split(",").map((part) => {
+      const [name = "", ...params] = part.trim().toLowerCase().split(";");
+      const q = params.find((param) => param.trim().startsWith("q="));
+      return [name.trim(), q ? Number(q.trim().slice(2)) : 1] as const;
+    }),
+  );
+  const wants = (encoding: string) => (accepted.get(encoding) ?? accepted.get("*") ?? 0) > 0;
+  const encoding = wants("br") ? "br" : wants("gzip") ? "gzip" : null;
+  if (!encoding) return null;
+  const key = `${file}@${found.version}`;
+  let both = encoded.get(key);
+  if (!both) {
+    const bytes =
+      typeof found.body === "string" ? Buffer.from(found.body) : Buffer.from(found.body);
+    both = {
+      br: brotliCompressSync(bytes, {
+        params: {
+          [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
+          [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+        },
+      }),
+      gzip: gzipSync(bytes, { level: constants.Z_BEST_COMPRESSION }),
+    };
+    encoded.set(key, both);
+  }
+  return { body: both[encoding], encoding };
 }

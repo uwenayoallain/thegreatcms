@@ -427,6 +427,7 @@ describe("headers on every page", () => {
     const response = await app.request("/sign-in");
 
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cross-origin-opener-policy")).toBe("same-origin");
     expect(response.headers.get("cache-control")).toBe("no-store");
     // Deliberately not `no-referrer`: with it Chrome sends `Origin: null` on a
     // same-origin form post, which the CSRF check refuses, and every form in
