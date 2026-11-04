@@ -53,7 +53,7 @@ The repository ships a skill that teaches an agent to add GreatCMS to a site, ex
 content model, read content at build time and check it before committing:
 
 ```sh
-npx skills add greatcms/greatcms@greatcms
+npx skills add uwenayoallain/thegreatcms@greatcms
 ```
 
 Inside a managed repository, `greatcms init` leaves a note in AGENTS.md, and

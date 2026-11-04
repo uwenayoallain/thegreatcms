@@ -107,7 +107,7 @@ const llms = [
   "content model, read content at build time and check it before committing:",
   "",
   "```sh",
-  "npx skills add greatcms/greatcms@greatcms",
+  "npx skills add uwenayoallain/thegreatcms@greatcms",
   "```",
   "",
   "Inside a managed repository, `greatcms init` leaves a note in AGENTS.md, and",
@@ -156,8 +156,8 @@ const manifest = {
   },
   // An installable skill for agents working inside a site: commands, file shapes, pitfalls.
   agentSkill: {
-    source: "https://github.com/greatcms/greatcms/tree/main/skills/greatcms",
-    install: "npx skills add greatcms/greatcms@greatcms",
+    source: "https://github.com/uwenayoallain/thegreatcms/tree/main/skills/greatcms",
+    install: "npx skills add uwenayoallain/thegreatcms@greatcms",
   },
   integration: {
     // The shortest possible description of what wiring up a site involves.

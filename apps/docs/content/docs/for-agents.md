@@ -26,7 +26,7 @@ person in the loop. Install it into Claude Code, Cursor or any agent that
 reads the open skills format:
 
 ```sh
-npx skills add greatcms/greatcms@greatcms
+npx skills add uwenayoallain/thegreatcms@greatcms
 ```
 
 ## In the repository

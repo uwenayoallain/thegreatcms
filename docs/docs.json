@@ -11,8 +11,8 @@
     "configJsonSchema": "/json-schema/config.schema.json"
   },
   "agentSkill": {
-    "source": "https://github.com/greatcms/greatcms/tree/main/skills/greatcms",
-    "install": "npx skills add greatcms/greatcms@greatcms"
+    "source": "https://github.com/uwenayoallain/thegreatcms/tree/main/skills/greatcms",
+    "install": "npx skills add uwenayoallain/thegreatcms@greatcms"
   },
   "integration": {
     "steps": [

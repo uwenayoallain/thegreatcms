@@ -164,7 +164,7 @@ function renderSchema(answers: InitAnswers): string {
 # What ${answers.name} lets the CMS manage. Everything not listed here is
 # ordinary code that the studio never sees or touches.
 #
-# Docs: https://github.com/greatcms/greatcms/blob/main/SPEC.md
+# Docs: https://greatcms.uwe.rw/spec/
 
 version: ${SPEC_VERSION}
 

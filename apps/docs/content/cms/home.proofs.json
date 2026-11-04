@@ -11,8 +11,8 @@
     },
     {
       "_type": "proof",
-      "title": "Four sites you can run",
-      "body": "A minimal Astro site, Paraline's motion-heavy studio, a bakery on Next.js and a writer's journal on SvelteKit, all reading the same standard.",
+      "title": "Six sites you can run",
+      "body": "A minimal Astro site, Paraline's motion-heavy studio, a ceramics studio, a bakery on Next.js, a journal on SvelteKit and a changelog on Nuxt, all reading the same standard.",
       "link": {
         "href": "/docs/examples/",
         "label": "The examples"
