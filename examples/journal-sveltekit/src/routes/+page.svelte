@@ -17,20 +17,20 @@
 
 {#if data.lead}
   <article class="lead">
-    <div>
+    <div class="lead-head">
       <p class="meta">
         <span>Latest</span> · <time datetime={data.lead.date}>{formatDate(data.lead.date)}</time> ·
         {data.lead.minutes} min read
       </p>
       <h2><a href="/essays/{data.lead.slug}/">{data.lead.title}</a></h2>
       {#if data.lead.dek}<p class="dek">{data.lead.dek}</p>{/if}
-      <a class="more" href="/essays/{data.lead.slug}/">Read the essay <span aria-hidden="true">→</span></a>
     </div>
     {#if data.lead.opening}
       <blockquote class="opening" cite="/essays/{data.lead.slug}/">
         <p>{data.lead.opening}</p>
       </blockquote>
     {/if}
+    <a class="more" href="/essays/{data.lead.slug}/">Read the essay <span aria-hidden="true">→</span></a>
   </article>
 {/if}
 

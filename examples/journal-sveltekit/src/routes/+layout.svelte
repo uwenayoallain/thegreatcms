@@ -43,7 +43,7 @@
     </form>
   </section>
   <p class="colophon">
-    {data.identity.title} · {data.identity.author}. Set in Newsreader, written in Markdown, built by
-    SvelteKit with no JavaScript on the page.
+    <span>{data.identity.title} · {data.identity.author}</span>
+    <span>Set in Newsreader, written in Markdown, built by SvelteKit with no JavaScript on the page.</span>
   </p>
 </footer>

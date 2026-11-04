@@ -3,23 +3,28 @@
 :root {
   color-scheme: light dark;
   --paper: #f5f5f2;
+  --paper-deep: #ecebe6;
   --ink: #161514;
-  --ink-soft: #5b5954;
+  --ink-soft: #57554f;
   --line: #dddcd6;
   --mark: #ffe45c;
+  --mark-rule: #f2cc2c;
   --serif: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --measure: 36rem;
+  --wide: 64rem;
   --gap: clamp(1.25rem, 5vw, 3rem);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #141413;
+    --paper-deep: #1b1b19;
     --ink: #ecebe6;
-    --ink-soft: #a9a7a0;
+    --ink-soft: #aaa8a1;
     --line: #34332f;
     --mark: #6b5a00;
+    --mark-rule: #c9a924;
   }
 }
 
@@ -29,12 +34,18 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
   font: 400 1.2rem/1.6 var(--serif);
   font-optical-sizing: auto;
+  font-kerning: normal;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -60,7 +71,8 @@ a {
   color: inherit;
   text-decoration: none;
   background: linear-gradient(var(--mark), var(--mark)) 0 100% / 100% 0.3em no-repeat;
-  transition: background-size 0.2s ease;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 a:hover {
@@ -75,11 +87,13 @@ a:hover {
 
 .skip-link {
   position: absolute;
+  z-index: 1;
   left: 1rem;
   top: -4rem;
   padding: 0.5rem 1rem;
   background: var(--ink);
   color: var(--paper);
+  font: 600 0.95rem var(--sans);
 }
 
 .skip-link:focus {
@@ -91,8 +105,8 @@ a:hover {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
-  max-width: 64rem;
+  gap: 0.5rem 1.5rem;
+  max-width: var(--wide);
   margin: 0 auto;
   padding: 1.75rem var(--gap);
 }
@@ -101,6 +115,7 @@ a:hover {
   font-size: 1.5rem;
   font-style: italic;
   font-weight: 500;
+  letter-spacing: -0.01em;
   background: none;
 }
 
@@ -111,6 +126,7 @@ a:hover {
 }
 
 .masthead nav a {
+  padding-block: 0.2rem;
   background-size: 100% 0;
 }
 
@@ -120,9 +136,9 @@ a:hover {
 }
 
 main {
-  max-width: 64rem;
+  max-width: var(--wide);
   margin: 0 auto;
-  padding: 0 var(--gap) 5rem;
+  padding: 0 var(--gap) clamp(4rem, 10vw, 6rem);
 }
 
 .kicker,
@@ -133,6 +149,11 @@ main {
   text-transform: uppercase;
   color: var(--ink-soft);
   margin: 0 0 1.25rem;
+}
+
+.meta time,
+.archive time {
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .intro {
@@ -146,8 +167,9 @@ main {
 
 .lede {
   max-width: var(--measure);
-  margin-top: 1.75rem;
-  font-size: 1.35rem;
+  margin: 1.75rem 0 0;
+  font-size: clamp(1.2rem, 1.1rem + 0.4vw, 1.35rem);
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
@@ -159,30 +181,48 @@ main {
 .lead {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 2rem clamp(2rem, 6vw, 5rem);
-  align-items: center;
+  grid-template-areas:
+    "head opening"
+    "more opening";
+  gap: 1.75rem clamp(2rem, 6vw, 5rem);
   padding: clamp(2.5rem, 7vw, 4.5rem) 0;
   border-bottom: 1px solid var(--line);
+}
+
+.lead-head {
+  grid-area: head;
+  align-self: end;
+}
+
+.lead .more {
+  grid-area: more;
+  align-self: start;
+  justify-self: start;
+}
+
+.opening {
+  grid-area: opening;
+  align-self: center;
+  margin: 0;
+  padding: 0.35rem 0 0.35rem 1.75rem;
+  border-left: 3px solid var(--mark-rule);
 }
 
 @media (max-width: 52rem) {
   .lead {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "opening" "more";
   }
-}
 
-.opening {
-  position: relative;
-  margin: 0;
-  padding: 0.5rem 0 0.5rem 1.75rem;
-  border-left: 3px solid var(--mark);
+  .opening {
+    padding-left: 1.25rem;
+  }
 }
 
 .opening p {
   margin: 0;
-  font-size: clamp(1.25rem, 1.05rem + 0.6vw, 1.5rem);
+  font-size: clamp(1.2rem, 1.05rem + 0.6vw, 1.5rem);
   line-height: 1.55;
-  color: var(--ink);
   display: -webkit-box;
   -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
@@ -194,30 +234,36 @@ main {
   max-width: 20ch;
 }
 
-.lead h2 a {
+.lead h2 a,
+.archive h3 a {
   background-size: 100% 0;
 }
 
-.lead h2 a:hover {
+.lead h2 a:hover,
+.archive h3 a:hover {
   background-size: 100% 0.25em;
 }
 
 .dek {
   max-width: var(--measure);
-  font-size: 1.35rem;
+  font-size: clamp(1.2rem, 1.1rem + 0.4vw, 1.35rem);
   font-style: italic;
+  line-height: 1.5;
   color: var(--ink-soft);
-  margin: 1.25rem 0 0;
+  margin: 1.1rem 0 0;
 }
 
 .more {
   display: inline-block;
-  margin-top: 1.75rem;
   font: 600 0.95rem var(--sans);
 }
 
+.more span {
+  display: inline-block;
+}
+
 .section-label {
-  margin-top: 3.5rem;
+  margin-top: clamp(2.5rem, 6vw, 3.5rem);
 }
 
 .archive {
@@ -229,31 +275,26 @@ main {
 .archive li {
   display: grid;
   grid-template-columns: 11rem minmax(0, 1fr);
+  align-items: baseline;
   gap: 1.5rem;
-  padding: 1.6rem 0;
+  padding: 1.75rem 0;
   border-top: 1px solid var(--line);
 }
 
 .archive time {
-  font: 500 0.9rem/2 var(--sans);
+  font: 500 0.9rem/1.4 var(--sans);
   color: var(--ink-soft);
 }
 
 .archive h3 {
-  font-size: 1.65rem;
-}
-
-.archive h3 a {
-  background-size: 100% 0;
-}
-
-.archive h3 a:hover {
-  background-size: 100% 0.25em;
+  font-size: clamp(1.5rem, 1.3rem + 0.7vw, 1.75rem);
+  line-height: 1.15;
 }
 
 .archive p {
   margin: 0.5rem 0 0;
   max-width: var(--measure);
+  line-height: 1.5;
   color: var(--ink-soft);
 }
 
@@ -262,14 +303,26 @@ main {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 0.6rem;
-  margin-top: 0.85rem;
+  margin-top: 0.9rem;
   font: 500 0.8rem/1.4 var(--sans);
 }
 
-.archive .facts .tag {
-  padding: 0.1rem 0.55rem;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font: 500 0.8rem/1.4 var(--sans);
+}
+
+.tag,
+.tags li {
+  padding: 0.12rem 0.6rem;
   border: 1px solid var(--line);
   border-radius: 999px;
+  color: var(--ink-soft);
 }
 
 /* What a reader selects is marked the way they would mark a page. */
@@ -281,7 +334,8 @@ main {
 @media (max-width: 40rem) {
   .archive li {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.25rem;
+    gap: 0.4rem;
+    padding: 1.5rem 0;
   }
 }
 
@@ -292,95 +346,188 @@ main {
   padding-top: clamp(3rem, 8vw, 6rem);
 }
 
-.essay header {
-  margin-bottom: 2.5rem;
+.essay > header {
+  margin-bottom: 2.75rem;
+}
+
+.essay > header::after {
+  content: "";
+  display: block;
+  width: 3rem;
+  height: 3px;
+  margin-top: 2.25rem;
+  background: var(--mark-rule);
 }
 
 .essay h1 {
   font-size: clamp(2.4rem, 1.6rem + 3.4vw, 4rem);
 }
 
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 1.5rem 0 0;
-  padding: 0;
-  list-style: none;
-  font: 500 0.82rem var(--sans);
-}
-
-.tags li {
-  padding: 0.15rem 0.65rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--ink-soft);
-}
-
 .prose {
-  font-size: 1.25rem;
+  font-size: clamp(1.15rem, 1.08rem + 0.3vw, 1.25rem);
   line-height: 1.7;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  hanging-punctuation: first;
+}
+
+.prose p {
+  margin: 0 0 1.1em;
 }
 
 .prose h2 {
   font-size: 1.6rem;
-  margin: 2.5rem 0 0.75rem;
+  line-height: 1.2;
+  margin: 2em 0 0.6em;
 }
 
-.prose p:first-child::first-letter {
+.prose h3 {
+  font-size: 1.3rem;
+  line-height: 1.25;
+  margin: 2em 0 0.5em;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose strong {
+  font-weight: 600;
+}
+
+.prose blockquote {
+  margin: 1.75em 0;
+  padding-left: 1.25em;
+  border-left: 3px solid var(--mark-rule);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.25em;
+}
+
+.prose li + li {
+  margin-top: 0.35em;
+}
+
+.prose hr {
+  margin: 2.5em 0;
+  border: 0;
+  text-align: center;
+}
+
+.prose hr::after {
+  content: "* * *";
+  letter-spacing: 0.5em;
+  color: var(--ink-soft);
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose > p:first-child::first-letter {
   float: left;
-  font-size: 4.2em;
+  font-size: 4.1em;
   line-height: 0.8;
-  margin: 0.08em 0.1em 0 0;
+  margin: 0.08em 0.08em 0 0;
+}
+
+@supports (initial-letter: 3) or (-webkit-initial-letter: 3) {
+  .prose > p:first-child::first-letter {
+    float: none;
+    font-size: inherit;
+    line-height: inherit;
+    margin: 0 0.1em 0 0;
+    -webkit-initial-letter: 3;
+    initial-letter: 3;
+  }
+
+  @media (max-width: 40rem) {
+    .prose > p:first-child::first-letter {
+      -webkit-initial-letter: 2;
+      initial-letter: 2;
+    }
+  }
 }
 
 .elsewhere {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.25rem;
-  margin: 2rem 0 0;
-  padding: 0;
+  gap: 0.75rem 1.5rem;
+  margin: 2.5rem 0 0;
+  padding: 1.75rem 0 0;
+  border-top: 1px solid var(--line);
   list-style: none;
   font: 600 0.95rem var(--sans);
 }
 
 .pager {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
   max-width: var(--measure);
-  margin: 4rem auto 0;
+  margin: clamp(3.5rem, 8vw, 5rem) auto 0;
   padding-top: 2rem;
   border-top: 1px solid var(--line);
 }
 
 .pager a {
   display: grid;
-  gap: 0.3rem;
+  align-content: start;
+  gap: 0.4rem;
   font-size: 1.25rem;
+  line-height: 1.3;
   background: none;
 }
 
-.pager a:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--mark);
-  text-decoration-thickness: 0.3em;
-  text-underline-offset: -0.1em;
-  text-decoration-skip-ink: none;
-}
-
 .pager .older {
+  grid-column: 2;
   text-align: right;
 }
 
-.pager span {
-  font: 600 0.75rem var(--sans);
+.pager .label {
+  font: 600 0.75rem/1.4 var(--sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 
+.pager .name {
+  justify-self: start;
+  background: linear-gradient(var(--mark), var(--mark)) 0 100% / 100% 0 no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.pager .older .name {
+  justify-self: end;
+}
+
+.pager a:hover .name {
+  background-size: 100% 0.25em;
+}
+
+@media (max-width: 34rem) {
+  .pager {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pager .older {
+    grid-column: auto;
+    text-align: left;
+  }
+
+  .pager .older .name {
+    justify-self: start;
+  }
+}
+
 .footer {
+  background: var(--paper-deep);
   border-top: 1px solid var(--line);
   padding: clamp(3rem, 8vw, 5rem) 0 2.5rem;
 }
@@ -388,7 +535,7 @@ main {
 /* The same column as the page above: the padding sits inside the width, as it does on main. */
 .letter,
 .colophon {
-  max-width: 64rem;
+  max-width: var(--wide);
   margin: 0 auto;
   padding-inline: var(--gap);
 }
@@ -399,12 +546,14 @@ main {
 
 .letter > p {
   max-width: var(--measure);
+  margin: 0.75rem 0 0;
+  line-height: 1.5;
   color: var(--ink-soft);
 }
 
 .letter label {
   display: block;
-  margin: 1.5rem 0 0.5rem;
+  margin: 1.75rem 0 0.5rem;
   font: 600 0.9rem var(--sans);
 }
 
@@ -416,20 +565,30 @@ main {
 }
 
 .inline input {
-  flex: 1 1 14rem;
+  flex: 1 1 12rem;
+  min-width: 0;
   min-height: 3rem;
   padding: 0.6rem 0.9rem;
   border: 1px solid var(--ink-soft);
   border-radius: 6px;
-  background: transparent;
+  background: var(--paper);
   color: inherit;
   font: 1rem var(--sans);
+}
+
+.inline input:hover {
+  border-color: var(--ink);
+}
+
+.inline input:focus-visible {
+  border-color: var(--ink);
+  outline-offset: 2px;
 }
 
 .inline button {
   min-height: 3rem;
   padding: 0.6rem 1.3rem;
-  border: 0;
+  border: 1px solid var(--ink);
   border-radius: 6px;
   background: var(--ink);
   color: var(--paper);
@@ -437,14 +596,57 @@ main {
   cursor: pointer;
 }
 
+.inline button:hover {
+  background: var(--mark);
+  color: var(--ink);
+}
+
 .colophon {
-  margin-top: 4rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 2rem;
+  margin-top: clamp(3rem, 7vw, 4.5rem);
   font: 0.85rem/1.5 var(--sans);
   color: var(--ink-soft);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  a {
-    transition: none;
+.colophon::before {
+  content: "";
+  flex: 0 0 100%;
+  margin-bottom: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 40rem) {
+  .masthead {
+    padding-block: 1.25rem;
+  }
+
+  .masthead nav {
+    gap: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a,
+  .pager .name {
+    transition: background-size 0.2s ease;
+  }
+
+  .more span {
+    transition: transform 0.2s ease;
+  }
+
+  .more:hover span {
+    transform: translateX(0.2em);
+  }
+
+  .inline button,
+  .inline input {
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
   }
 }

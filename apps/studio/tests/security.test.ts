@@ -511,6 +511,13 @@ describe("vouching for sibling hosts", () => {
   });
 
   it("sets the cookie for the whole domain, so the preview sees the same sign-in", async () => {
+    const signInForm = await shared().request(
+      "https://studio.example.com/sign-in?next=https%3A%2F%2Fpreview.example.com%2F",
+    );
+    expect(signInForm.headers.get("content-security-policy")).toContain(
+      "form-action 'self' https://example.com https://*.example.com http://example.com http://*.example.com",
+    );
+
     const response = await shared().request("https://studio.example.com/sign-in", {
       method: "POST",
       headers: {

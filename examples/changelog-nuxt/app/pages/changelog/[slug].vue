@@ -10,12 +10,14 @@ useHead({ title: `${release.version}: ${release.title}` });
 
 <template>
   <article v-if="release" class="release">
-    <span v-if="release.kind" :class="['kind', release.kind]">{{ KINDS[release.kind] }}</span>
-    <h1>{{ release.title }}</h1>
-    <p class="when">
-      Version {{ release.version }} ·
-      <time :datetime="release.date">{{ formatDate(release.date) }}</time>
+    <p class="meta">
+      <span v-if="release.kind" :class="['kind', release.kind]">{{ KINDS[release.kind] }}</span>
+      <span class="when">
+        Version {{ release.version }} ·
+        <time :datetime="release.date">{{ formatDate(release.date) }}</time>
+      </span>
     </p>
+    <h1>{{ release.title }}</h1>
     <!-- A studio edit is stored as sanitized HTML; a file written by hand is trusted like any other source. -->
     <div class="prose" v-html="release.html" />
     <a class="back" href="/changelog/">All releases</a>

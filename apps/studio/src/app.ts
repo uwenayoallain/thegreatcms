@@ -202,6 +202,11 @@ export function createApp(options: AppOptions) {
    * `style` attributes while it measures and positions things. The stylesheet
    * itself is served as a file, so that allowance is the only inline style left.
    */
+  const parentDomain = options.cookieDomain?.replace(/^\./, "");
+  const formAction = parentDomain
+    ? `form-action 'self' https://${parentDomain} https://*.${parentDomain} http://${parentDomain} http://*.${parentDomain}`
+    : "form-action 'self'";
+
   app.use("*", async (c, next) => {
     await next();
 
@@ -220,7 +225,7 @@ export function createApp(options: AppOptions) {
         "frame-src 'self' http: https:",
         "img-src 'self' data: http: https:",
         "connect-src 'self'",
-        "form-action 'self'",
+        formAction,
         "frame-ancestors 'none'",
         "base-uri 'none'",
         "object-src 'none'",

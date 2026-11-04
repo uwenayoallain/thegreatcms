@@ -1,7 +1,7 @@
 /** The home page: hero, what is in the oven, the story, opening hours and the pre-order form. */
 
-import { categoryLabel, content, dietary, price, studio } from "#lib/cms";
-import { Lines } from "./parts";
+import { categoryLabel, content, dietary, studio } from "#lib/cms";
+import { Lines, Price } from "./parts";
 
 export default function Home() {
   const { identity, hero, story, visit, featured, sections } = content();
@@ -67,7 +67,7 @@ export default function Home() {
                 <h3>{item.name}</h3>
                 {item.description ? <p>{item.description}</p> : null}
                 <p className="price">
-                  {price(item.price)}
+                  <Price value={item.price} className="amount" />
                   {dietary(item.dietary).map((tag) => (
                     <span className="tag" key={tag}>
                       {tag}

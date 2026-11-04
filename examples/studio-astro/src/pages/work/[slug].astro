@@ -70,6 +70,7 @@ const next = all[(at + 1) % all.length]!;
     <a class="next" href={`/work/${next.slug}/`} data-cursor="Next">
       <span class="eyebrow">Next project</span>
       <span class="next__title">{next.data.title}</span>
+      <span class="next__arrow" aria-hidden="true">→</span>
       <Art palette={next.data.palette} motif={next.data.motif} class="next__art" />
     </a>
   </article>

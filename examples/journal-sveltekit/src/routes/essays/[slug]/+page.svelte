@@ -28,9 +28,13 @@
 
 <nav class="pager" aria-label="More essays">
   {#if data.newer}
-    <a href="/essays/{data.newer.slug}/"><span>Newer</span>{data.newer.title}</a>
+    <a href="/essays/{data.newer.slug}/"
+      ><span class="label">Newer</span> <span class="name">{data.newer.title}</span></a
+    >
   {/if}
   {#if data.older}
-    <a class="older" href="/essays/{data.older.slug}/"><span>Older</span>{data.older.title}</a>
+    <a class="older" href="/essays/{data.older.slug}/"
+      ><span class="label">Older</span> <span class="name">{data.older.title}</span></a
+    >
   {/if}
 </nav>

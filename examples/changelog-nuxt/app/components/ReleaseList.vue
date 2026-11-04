@@ -17,7 +17,7 @@ withDefaults(
         <strong>{{ release.version }}</strong>
         <time :datetime="release.date">{{ formatDate(release.date) }}</time>
       </p>
-      <div>
+      <div class="what">
         <span v-if="release.kind" :class="['kind', release.kind]">{{ KINDS[release.kind] }}</span>
         <component :is="headingTag">
           <a :href="`/changelog/${release.slug}/`">{{ release.title }}</a>

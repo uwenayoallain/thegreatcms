@@ -80,7 +80,17 @@ export default function Layout({ children }: { children: ReactNode }) {
               ))}
             </dl>
           ) : null}
-          <p className="small">Rendered by Next.js from files in Git, then served as plain HTML.</p>
+          <details className="colophon">
+            <summary>How this site is built</summary>
+            <ul>
+              <li>The notice, the home page and the opening hours are edited in GreatCMS.</li>
+              <li>Each menu item is a file of its own; the menu page groups them by category.</li>
+              <li>
+                Pre-orders arrive in the studio&apos;s inbox, with no form service in between.
+              </li>
+              <li>Next.js writes every page as plain HTML when the site is built.</li>
+            </ul>
+          </details>
         </footer>
       </body>
     </html>

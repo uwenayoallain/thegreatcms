@@ -1,7 +1,7 @@
 /** @greatcms/reader: read managed content at build time. */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import {
   type CmsConfig,
   type CmsSchema,
@@ -153,14 +153,25 @@ export class CmsReader {
     return Array.isArray(blocks) ? (blocks as Array<T & { _type: string }>) : [];
   }
 
-  /** A file's contents, taking an unsaved draft over the committed copy. */
+  /** A file's contents, taking an unsaved draft over the committed copy, and refusing symlinks outside the site root. */
   private read(relative: string): string | null {
     if (this.drafts) {
-      const draft = join(this.root, draftFilePath(relative));
-      if (existsSync(draft)) return readFileSync(draft, "utf8");
+      const draft = this.readInside(join(this.root, draftFilePath(relative)));
+      if (draft !== null) return draft;
     }
-    const absolute = join(this.root, relative);
-    return existsSync(absolute) ? readFileSync(absolute, "utf8") : null;
+    return this.readInside(join(this.root, relative));
+  }
+
+  private readInside(absolute: string): string | null {
+    if (!existsSync(absolute)) return null;
+    try {
+      const realRoot = realpathSync(this.root);
+      const realFile = realpathSync(absolute);
+      if (realFile !== realRoot && !realFile.startsWith(realRoot + sep)) return null;
+      return readFileSync(realFile, "utf8");
+    } catch {
+      return null;
+    }
   }
 
   /** Every region id the schema defines. */
@@ -199,11 +210,12 @@ export class CmsReader {
     for (const file of readdirSync(dir).toSorted()) {
       if (!file.endsWith(extension)) continue;
       const relative = `${def.path.replace(/\/+$/, "")}/${file}`;
-      const source = this.read(relative) ?? readFileSync(join(dir, file), "utf8");
+      const source = this.read(relative);
+      if (source === null) continue;
       const slug = file.slice(0, -extension.length);
 
       if (def.format === "json") {
-        entries.push({ slug, file: relative, data: JSON.parse(source), body: "" });
+        entries.push({ slug, file: relative, data: parseRegionFile(source, relative), body: "" });
         continue;
       }
 

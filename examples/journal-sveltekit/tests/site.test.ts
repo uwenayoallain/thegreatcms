@@ -1,4 +1,4 @@
-/** The built journal: script-free, accessible, and every essay in the collection on the page. */
+/** The built journal: script-free, accessible, linked without redirects, and every essay in the collection on the page. */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -44,9 +44,25 @@ describe.each(PAGES)("$name", ({ file }) => {
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 
-  it("ships no JavaScript, not even SvelteKit's runtime, and none of the studio's preview", () => {
-    expect(read(file)).not.toMatch(/<script|modulepreload/i);
+  it("ships no JavaScript: its one script element is speculation rules, which the browser reads as data", () => {
+    const scripts = [...dom(file).querySelectorAll("script")];
+    expect(scripts.map((script) => script.type)).toEqual(["speculationrules"]);
+    const rules = JSON.parse(scripts[0]!.textContent ?? "") as { prerender: unknown[] };
+    expect(rules.prerender.length).toBeGreaterThan(0);
+    expect(read(file).match(/<script/gi)).toHaveLength(1);
+    expect(read(file)).not.toMatch(/modulepreload/i);
     expect(read(file)).not.toContain("data-greatcms");
+  });
+
+  it("links every page at the address it is built at, so no click waits on a redirect", () => {
+    for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
+      const href = link.getAttribute("href")!.split("#")[0]!;
+      if (!href) continue;
+      expect(href, `${file}: ${href}`).toMatch(/\/$/);
+      expect(existsSync(join(DIST, href, "index.html")), `${file}: ${href} is not built`).toBe(
+        true,
+      );
+    }
   });
 
   it("has a language, a title and one h1", () => {

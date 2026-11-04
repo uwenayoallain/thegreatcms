@@ -54,6 +54,24 @@ describe.each(PAGES)("%s", (file) => {
     expect(document.querySelector("a.skip")?.getAttribute("href")).toBe("#main");
   });
 
+  it("runs only its own bundled script, beside speculation rules that the browser reads as data", () => {
+    const scripts = [...dom(file).querySelectorAll("script")];
+    expect(scripts.map((script) => script.type).toSorted()).toEqual(["module", "speculationrules"]);
+    const motion = scripts.find((script) => script.type === "module")!;
+    expect(motion.getAttribute("src")).toMatch(/^\/_astro\/.+\.js$/);
+    expect(motion.textContent).toBe("");
+    const rules = scripts.find((script) => script.type === "speculationrules")!;
+    const parsed = JSON.parse(rules.textContent ?? "") as { prerender: unknown[] };
+    expect(parsed.prerender.length).toBeGreaterThan(0);
+  });
+
+  it("links every page at the address it is built at, so no click waits on a redirect", () => {
+    for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
+      const href = link.getAttribute("href")!.split("#")[0]!;
+      expect(href, `${file}: ${href}`).toMatch(/\/$/);
+    }
+  });
+
   it("names each morphing element once, so a page change knows what became what", () => {
     const names = [...read(file).matchAll(/view-transition-name:\s*([\w-]+)/g)].map((m) => m[1]);
     expect(new Set(names).size).toBe(names.length);

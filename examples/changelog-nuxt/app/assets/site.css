@@ -9,6 +9,7 @@
   --ink: #101418;
   --ink-soft: #545d6a;
   --line: #e2e5ea;
+  --line-strong: #cfd4db;
   --sun: #f2a31b;
   --sun-deep: #9a5a00;
   --sun-wash: #fff4df;
@@ -16,7 +17,9 @@
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --gap: clamp(1.25rem, 4vw, 3rem);
+  --section: clamp(4rem, 9vw, 7rem);
   --radius: 16px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 *,
@@ -29,8 +32,13 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 400 1.03rem/1.6 var(--sans);
+  font: 400 1.0625rem/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--sun-wash);
+  color: var(--ink);
 }
 
 h1,
@@ -45,17 +53,20 @@ h3 {
 }
 
 h1 {
-  font-size: clamp(2.6rem, 1.6rem + 3.6vw, 4.4rem);
+  font-size: clamp(2.6rem, 1.6rem + 3.6vw, 4.5rem);
   font-variation-settings: "wdth" 82;
+  letter-spacing: -0.035em;
 }
 
 h2 {
   font-size: clamp(1.9rem, 1.3rem + 2.2vw, 3rem);
+  letter-spacing: -0.03em;
 }
 
 h3 {
-  font-size: 1.15rem;
-  letter-spacing: -0.01em;
+  font-size: 1.2rem;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
 }
 
 p {
@@ -65,7 +76,8 @@ p {
 
 a {
   color: inherit;
-  text-underline-offset: 0.2em;
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 1.5px;
 }
 
 :focus-visible {
@@ -91,9 +103,10 @@ a {
 
 .masthead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem 1.5rem;
   width: 100%;
   max-width: 72rem;
   margin: 0 auto;
@@ -109,15 +122,16 @@ a {
   text-decoration: none;
 }
 
-.wordmark svg {
-  width: 1.6rem;
-  height: 1.6rem;
+.sun-mark {
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: none;
 }
 
 .masthead ul {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.75rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -125,24 +139,48 @@ a {
 }
 
 .masthead a:not(.wordmark, .button) {
-  text-decoration: none;
+  display: inline-block;
+  padding: 0.35rem 0;
+  text-decoration: underline transparent;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.45em;
 }
 
-.masthead a[aria-current="page"],
 .masthead a:not(.wordmark, .button):hover {
   color: var(--sun-deep);
+}
+
+.masthead a[aria-current="page"] {
+  color: var(--sun-deep);
+  text-decoration-color: var(--sun);
+}
+
+@media (max-width: 30rem) {
+  .masthead nav {
+    width: 100%;
+  }
+
+  .masthead ul {
+    gap: 1.25rem;
+  }
+
+  .masthead .signup {
+    margin-left: auto;
+  }
 }
 
 .button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 2.9rem;
-  padding: 0.7rem 1.3rem;
+  padding: 0.7rem 1.35rem;
   border: 0;
   border-radius: 999px;
   background: var(--ink);
   color: var(--paper);
   font: 600 0.98rem var(--sans);
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }
@@ -151,9 +189,13 @@ a {
   background: #262d36;
 }
 
+.button:active {
+  translate: 0 1px;
+}
+
 .button.small {
   min-height: 2.4rem;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.05rem;
   font-size: 0.9rem;
 }
 
@@ -169,7 +211,7 @@ main {
   width: 100%;
   max-width: 72rem;
   margin: 0 auto;
-  padding: 0 var(--gap) 5rem;
+  padding: 0 var(--gap) var(--section);
 }
 
 .eyebrow {
@@ -181,32 +223,39 @@ main {
 
 .lede {
   margin: 1.5rem 0 0;
-  font-size: clamp(1.08rem, 1rem + 0.4vw, 1.3rem);
+  font-size: clamp(1.1rem, 1rem + 0.4vw, 1.3rem);
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
 /* The hero: the promise, and the dial whose shadow marks the hours kept for focus. */
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   align-items: center;
-  gap: var(--gap);
-  padding: clamp(2.5rem, 7vw, 6rem) 0 clamp(3rem, 7vw, 5rem);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  padding: clamp(2.5rem, 7vw, 6rem) 0 clamp(1rem, 3vw, 2rem);
+}
+
+.hero .lede {
+  max-width: 34rem;
 }
 
 .hero .button {
-  margin-top: 2rem;
+  margin-top: 2.25rem;
 }
 
 .dial {
   width: 100%;
   height: auto;
+  overflow: visible;
 }
 
 .dial .face {
   fill: var(--raised);
   stroke: var(--line);
   stroke-width: 2;
+  filter: drop-shadow(0 18px 28px rgb(16 20 24 / 0.07));
 }
 
 .dial .focus {
@@ -233,11 +282,46 @@ main {
   stroke: var(--sun);
   stroke-width: 5;
   stroke-linecap: round;
+  transform-box: view-box;
+  transform-origin: 160px 170px;
 }
 
 .dial text {
   fill: var(--ink-soft);
   font: 500 11px var(--mono);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dial .shadow {
+    animation: shadow-settles 1.6s var(--ease) 0.2s both;
+  }
+
+  @keyframes shadow-settles {
+    from {
+      rotate: -22.5deg;
+    }
+  }
+
+  .button,
+  .masthead a,
+  .log a,
+  .back,
+  .inline input {
+    transition:
+      background-color 0.15s,
+      color 0.15s,
+      border-color 0.15s,
+      text-decoration-color 0.15s,
+      translate 0.1s;
+  }
+
+  .log li::after,
+  .back::before,
+  .back::after {
+    transition:
+      translate 0.2s var(--ease),
+      opacity 0.2s;
+  }
 }
 
 @media (max-width: 52rem) {
@@ -251,35 +335,48 @@ main {
 }
 
 section + section {
-  padding-top: clamp(3.5rem, 8vw, 6rem);
+  padding-top: var(--section);
 }
 
 .features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: 1rem;
-  margin: 2.25rem 0 0;
+  margin: 2.5rem 0 0;
   padding: 0;
   list-style: none;
 }
 
 .features li {
-  padding: 1.5rem;
+  padding: 1.6rem 1.5rem 1.75rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--raised);
 }
 
+/* A dial tick, so each card reads as an hour on the same face. */
+.features li::before {
+  content: "";
+  display: block;
+  width: 1.75rem;
+  height: 3px;
+  margin-bottom: 1.25rem;
+  border-radius: 2px;
+  background: var(--sun);
+}
+
 .features p {
-  margin: 0.6rem 0 0;
+  margin: 0.65rem 0 0;
   color: var(--ink-soft);
+  font-size: 0.98rem;
 }
 
 .plans {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: start;
   gap: 1rem;
-  margin: 2.25rem 0 0;
+  margin: 2.5rem 0 0;
   padding: 0;
   list-style: none;
 }
@@ -288,7 +385,7 @@ section + section {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 1.75rem;
+  padding: 1.85rem 1.75rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--raised);
@@ -314,13 +411,16 @@ section + section {
 }
 
 .plan .price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
   margin: 1rem 0 0;
-  font: 650 2.6rem/1 var(--display);
+  font: 650 2.75rem/1 var(--display);
   letter-spacing: -0.03em;
 }
 
 .plan .price span {
-  margin-left: 0.4rem;
   font: 400 0.95rem var(--sans);
   letter-spacing: 0;
   color: var(--ink-soft);
@@ -333,140 +433,368 @@ section + section {
 }
 
 .plan li {
-  padding: 0.55rem 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.6rem 0;
   border-top: 1px solid var(--line);
 }
 
-.faq {
-  max-width: 48rem;
+.plan li::before {
+  content: "";
+  flex: none;
+  width: 0.65rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sun);
+  translate: 0 -0.3em;
 }
 
 .faq dl {
-  margin: 2rem 0 0;
+  margin: 2.5rem 0 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .faq dt {
-  padding-top: 1.25rem;
+  padding-top: 1.4rem;
   border-top: 1px solid var(--line);
-  font: 650 1.1rem/1.35 var(--display);
+  font: 650 1.15rem/1.35 var(--display);
+  letter-spacing: -0.01em;
 }
 
 .faq dd {
-  margin: 0.5rem 0 1.25rem;
+  margin: 0.5rem 0 0;
+  padding-bottom: 1.4rem;
+  max-width: 62ch;
   color: var(--ink-soft);
+}
+
+@media (min-width: 52rem) {
+  .faq dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    column-gap: var(--gap);
+  }
+
+  .faq dd {
+    margin: 0;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--line);
+  }
 }
 
 /* The changelog reads like a log: version and date in mono down the left, the change on the right. */
 .log {
-  margin: 2rem 0 0;
+  margin: 2.5rem 0 0;
   padding: 0;
   list-style: none;
+  border-bottom: 1px solid var(--line);
 }
 
 .log li {
+  position: relative;
   display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr);
-  gap: 0.5rem 2rem;
-  padding: 1.5rem 0;
+  grid-template-columns: 12rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.6rem 2rem;
+  padding: 1.6rem 0;
   border-top: 1px solid var(--line);
 }
 
+.log li::after {
+  content: "→" / "";
+  color: var(--sun-deep);
+  font-weight: 600;
+  opacity: 0;
+  translate: -0.5rem 0;
+}
+
+.log li:hover::after {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.log li:has(a:focus-visible) {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
 .log .when {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
   white-space: nowrap;
-  font: 500 0.88rem/1.6 var(--mono);
+  font: 500 0.88rem/1.4 var(--mono);
   color: var(--ink-soft);
 }
 
 .log .when strong {
-  display: block;
   color: var(--ink);
+  font-size: 1.05rem;
   font-weight: 650;
+}
+
+.log li:hover .when strong {
+  color: var(--sun-deep);
+}
+
+.log .what {
+  display: grid;
+  grid-template-columns: 6.25rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
+.log .what > :is(h2, h3) {
+  grid-column: 2;
 }
 
 .log h2,
 .log h3 {
-  font-size: 1.15rem;
-  letter-spacing: -0.01em;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
 }
 
 .log h2 a,
 .log h3 a {
-  text-decoration: none;
-}
-
-.log h2 a:hover,
-.log h3 a:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--sun);
+  text-decoration: underline transparent;
   text-decoration-thickness: 3px;
 }
 
-.log p {
-  margin: 0.4rem 0 0;
-  color: var(--ink-soft);
+/* The whole row is the link. */
+.log h2 a::after,
+.log h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.log a:focus-visible {
+  outline: none;
+}
+
+.log li:hover a {
+  text-decoration-color: var(--sun);
 }
 
 .kind {
-  display: inline-block;
-  margin-bottom: 0.5rem;
-  padding: 0.1rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 6.25rem;
+  padding: 0.15rem 0.65rem;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  font: 600 0.72rem/1.6 var(--mono);
-  background: #eef0f3;
+  background: var(--raised);
   color: var(--ink-soft);
+  font: 600 0.72rem/1.6 var(--mono);
+  letter-spacing: 0.02em;
+  translate: 0 -0.15em;
+}
+
+.kind::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .kind.feature {
+  border-color: #f6cf8a;
   background: var(--sun-wash);
   color: var(--sun-deep);
+}
+
+.kind.feature::before {
+  background: var(--sun);
+}
+
+.kind.improvement {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.kind.fix::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
 }
 
 @media (max-width: 40rem) {
   .log li {
     grid-template-columns: minmax(0, 1fr);
+    padding: 1.35rem 0;
+  }
+
+  .log li::after {
+    display: none;
+  }
+
+  .log .when {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+
+  .log .what {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  .log .what > :is(h2, h3) {
+    grid-column: 1;
+  }
+
+  .log .kind {
+    translate: none;
   }
 }
 
 .release {
-  max-width: 44rem;
+  max-width: 46rem;
   padding-top: clamp(2.5rem, 7vw, 5rem);
 }
 
 .release h1 {
-  font-size: clamp(2.2rem, 1.5rem + 3vw, 3.6rem);
+  font-size: clamp(2.3rem, 1.5rem + 3vw, 3.75rem);
 }
 
-.release .when {
-  margin: 1rem 0 0;
-  font: 500 0.92rem var(--mono);
+.release .meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.release .meta .kind {
+  translate: none;
+}
+
+.release .meta .when {
+  font: 500 0.9rem var(--mono);
   color: var(--ink-soft);
 }
 
 .prose {
-  margin-top: 2rem;
-  font-size: 1.1rem;
+  margin-top: 2.25rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--line);
+  font-size: 1.125rem;
+  line-height: 1.7;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose h2,
+.prose h3 {
+  margin: 2.25rem 0 0.5rem;
+  font-size: 1.4rem;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.25rem;
+}
+
+.prose li {
+  padding-left: 0.35rem;
+}
+
+.prose li::marker {
+  color: var(--sun-deep);
 }
 
 .prose li + li {
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.prose a {
+  text-decoration-color: var(--sun);
+}
+
+.prose code {
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: #eef0f3;
+  font: 0.9em var(--mono);
 }
 
 .back {
   display: inline-block;
   margin-top: 2.5rem;
   font-weight: 600;
+  text-decoration-color: var(--line-strong);
+}
+
+.back:hover {
+  color: var(--sun-deep);
+  text-decoration-color: var(--sun);
+}
+
+/* Inline blocks, so the link's underline skips the arrow. */
+.back::after {
+  content: "→" / "";
+  display: inline-block;
+  margin-left: 0.45rem;
+}
+
+.back:hover::after {
+  translate: 0.2rem 0;
+}
+
+/* Leaving a page reads as going back, so its arrow points left. */
+.release .back::after {
+  content: none;
+}
+
+.release .back::before {
+  content: "←" / "";
+  display: inline-block;
+  margin-right: 0.45rem;
+}
+
+.release .back:hover::before {
+  translate: -0.2rem 0;
 }
 
 .waitlist {
-  margin-top: clamp(3.5rem, 8vw, 6rem);
-  padding: clamp(1.75rem, 4vw, 3rem);
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--ink);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 var(--gap);
+  margin-top: var(--section);
+  padding: clamp(1.75rem, 5vw, 3.5rem);
+  border-radius: calc(var(--radius) + 6px);
+  background:
+    radial-gradient(120% 90% at 100% 100%, rgb(242 163 27 / 0.16), transparent 55%), var(--ink);
   color: var(--paper);
 }
 
+section.waitlist {
+  padding-top: clamp(1.75rem, 5vw, 3.5rem);
+}
+
 .waitlist p {
+  margin: 0.9rem 0 0;
   color: #b9c0ca;
+}
+
+@media (min-width: 52rem) {
+  .waitlist {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: end;
+  }
+
+  .waitlist form {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
 }
 
 .inline {
@@ -474,37 +802,57 @@ section + section {
   flex-wrap: wrap;
   align-items: end;
   gap: 0.75rem;
-  margin-top: 1.5rem;
+  margin-top: 1.75rem;
+}
+
+.waitlist .inline {
+  margin-top: 1.75rem;
 }
 
 .inline .field {
   display: grid;
-  gap: 0.4rem;
-  flex: 1 1 16rem;
-  max-width: 24rem;
+  gap: 0.45rem;
+  flex: 1 1 15rem;
 }
 
 .inline label {
   font-weight: 600;
+  font-size: 0.95rem;
 }
 
 .inline input {
-  min-height: 2.9rem;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid #3a434e;
-  border-radius: 10px;
+  min-height: 3rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid #4a5462;
+  border-radius: 12px;
   background: #182028;
   color: inherit;
   font: inherit;
 }
 
+.inline input:hover {
+  border-color: #6b7685;
+}
+
+.inline input:focus-visible {
+  border-color: var(--sun);
+  outline-offset: 2px;
+}
+
 .inline .button {
+  min-height: 3rem;
   background: var(--sun);
   color: var(--ink);
 }
 
 .inline .button:hover {
   background: #ffb93d;
+}
+
+@media (max-width: 30rem) {
+  .inline .button {
+    width: 100%;
+  }
 }
 
 .trap {
@@ -519,16 +867,52 @@ section + section {
 .footer {
   display: flex;
   flex-wrap: wrap;
+  align-items: start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.5rem 3rem;
   width: min(100% - 2 * var(--gap), 72rem - 2 * var(--gap));
   margin: 0 auto;
-  padding: 2rem 0 3rem;
+  padding: 2.5rem 0 3rem;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.92rem;
 }
 
-.footer p {
-  margin: 0;
+.footer .wordmark {
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+
+.footer .sun-mark {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.footer-main p {
+  margin: 0.75rem 0 0;
+  max-width: 34ch;
+}
+
+.colophon {
+  max-width: 26rem;
+}
+
+.colophon summary {
+  cursor: pointer;
+  width: fit-content;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.colophon summary:hover {
+  color: var(--sun-deep);
+}
+
+.colophon ul {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.colophon li + li {
+  margin-top: 0.35rem;
 }

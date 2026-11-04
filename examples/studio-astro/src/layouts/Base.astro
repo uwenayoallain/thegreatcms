@@ -23,6 +23,10 @@ const nav = [
   { href: '/contact/', label: 'Contact' },
 ];
 const year = new Date().getFullYear();
+// The browser loads a page as the pointer settles on its link; it is data, not a script that runs.
+const speculation = JSON.stringify({
+  prerender: [{ where: { href_matches: '/*' }, eagerness: 'moderate' }],
+});
 ---
 
 <!doctype html>
@@ -39,6 +43,7 @@ const year = new Date().getFullYear();
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href={display} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />
+    <script type="speculationrules" is:inline set:html={speculation} />
     <script>
       import '../scripts/motion.ts';
     </script>
