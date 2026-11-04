@@ -65,8 +65,15 @@ function previewStatus(site: Site, running: boolean | null | undefined) {
   if (!site.devUrl) return html`<span class="status idle">No live preview</span>`;
   return running === false
     ? html`<span class="status down" title="${hostOf(site.devUrl)}">Dev server not running</span>`
-    : html`<span class="status ready" title="${site.devUrl}"
-        ><span class="status-text">Running at ${hostOf(site.devUrl)}</span></span
+    : html`<a
+        class="status ready open-site"
+        href="${site.devUrl}"
+        target="_blank"
+        rel="noopener"
+        title="Open ${site.devUrl} in a new tab"
+        ><span class="status-text">Open site</span>${icon("external")}<span class="visually-hidden">
+          at ${hostOf(site.devUrl)} (opens in a new tab)</span
+        ></a
       >`;
 }
 

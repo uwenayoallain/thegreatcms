@@ -1,5 +1,6 @@
 /** Whether a site's dev server is running, as the studio's screens report it. */
 
+import { JSDOM } from "jsdom";
 import { createServer, type Server } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { Liveness } from "../src/liveness.js";
@@ -62,6 +63,8 @@ describe("the screens", () => {
     fixture = makeSite({ schema: SCHEMA, devUrl: `http://127.0.0.1:${closed}` });
 
     expect(await (await get(fixture, "/")).text()).toContain("Dev server not running");
+    // Nothing to open while it is down, so there is no link to a page that will not load.
+    expect(await (await get(fixture, "/")).text()).not.toContain("open-site");
     expect(await (await get(fixture, "/sites/site-1")).text()).toContain("Not running");
     const editor = await (await get(fixture, "/sites/site-1/regions/home.hero")).text();
     expect(editor).toContain("is not running.");
@@ -72,7 +75,13 @@ describe("the screens", () => {
     server = listening;
     fixture = makeSite({ schema: SCHEMA, devUrl: `http://127.0.0.1:${open}` });
 
-    expect(await (await get(fixture, "/")).text()).toContain(`Running at 127.0.0.1:${open}`);
+    const list = new JSDOM(await (await get(fixture, "/")).text()).window.document;
+    // Straight from the list of sites: a link to the running site, in a new tab.
+    const link = list.querySelector<HTMLAnchorElement>("a.open-site");
+    expect(link?.getAttribute("href")).toBe(`http://127.0.0.1:${open}`);
+    expect(link?.target).toBe("_blank");
+    expect(link?.rel).toBe("noopener");
+    expect(link?.textContent?.replace(/\s+/g, " ")).toContain(`Open site at 127.0.0.1:${open}`);
     expect(await (await get(fixture, "/sites/site-1/regions/home.hero")).text()).not.toContain(
       "live-down",
     );

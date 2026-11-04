@@ -638,6 +638,11 @@ a:hover { text-decoration-color: var(--accent); }
 .status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .status.ready::before { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
 .status.down { color: var(--warn); }
+/* Above the card's own stretched link, so it opens the site rather than the card. */
+a.status.open-site { position: relative; z-index: 1; color: var(--ink-2); text-decoration: none; border-radius: 999px; padding: .15rem .55rem .15rem .4rem; margin-left: -.4rem; }
+a.status.open-site:hover { color: var(--ink); background: var(--surface-2); }
+a.status.open-site:hover .status-text { text-decoration: underline; text-underline-offset: .2em; }
+a.status.open-site svg { width: .85rem; height: .85rem; flex: none; }
 .status.down::before { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
 .workspace-meta { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(9rem, 1fr)); margin: 0 0 2rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 .workspace-meta > div { min-width: 0; padding: .85rem 1.1rem; }
