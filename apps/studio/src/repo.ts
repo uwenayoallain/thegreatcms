@@ -138,7 +138,10 @@ export class LocalRepository implements Repository {
 
   async listDirectory(path: string): Promise<string[]> {
     try {
-      const entries = await readdir(this.absolute(path), { withFileTypes: true });
+      const folder = this.absolute(path);
+      // A linked folder could list any directory on this machine; only one inside the site is read.
+      if (!(await this.reallyInside(folder))) return [];
+      const entries = await readdir(folder, { withFileTypes: true });
       return entries
         .filter((entry) => entry.isFile())
         .map((entry) => `${path.replace(/\/+$/, "")}/${entry.name}`);
@@ -454,6 +457,17 @@ export class LocalRepository implements Repository {
   }
 
   /** Resolves a repo-relative path, refusing anything that climbs out. */
+  /** Whether `path`, with every link followed, is the site's folder or inside it. */
+  private async reallyInside(path: string): Promise<boolean> {
+    try {
+      const [root, real] = await Promise.all([realpath(this.root), realpath(path)]);
+      const inside = relative(root, real);
+      return !(inside.startsWith("..") || resolve(inside) === inside);
+    } catch {
+      return false;
+    }
+  }
+
   private absolute(path: string): string {
     const target = resolve(this.root, path);
     const inside = relative(this.root, target);
@@ -472,20 +486,38 @@ export class LocalRepository implements Repository {
    */
   private async writable(path: string): Promise<string> {
     const target = this.absolute(path);
+    // Checked before anything is created, so a linked folder cannot have one made outside the site.
+    if (!(await this.reallyInside(await nearestExisting(dirname(target))))) {
+      throw new LocalRepositoryError(
+        `Refusing to write ${path}: a symbolic link points it outside ${this.root}.`,
+        "Replace the link with a real folder or file inside the site.",
+      );
+    }
     await mkdir(dirname(target), { recursive: true });
-    const [root, parent] = await Promise.all([realpath(this.root), realpath(dirname(target))]);
-    const inside = relative(root, parent);
     const linked = await lstat(target).then(
       (stat) => stat.isSymbolicLink(),
       () => false,
     );
-    if (inside.startsWith("..") || resolve(inside) === inside || linked) {
+    if (!(await this.reallyInside(dirname(target))) || linked) {
       throw new LocalRepositoryError(
         `Refusing to write ${path}: a symbolic link points it outside ${this.root}.`,
         "Replace the link with a real folder or file inside the site.",
       );
     }
     return target;
+  }
+}
+
+/** The path itself or its closest ancestor that exists, which is what a link would redirect. */
+async function nearestExisting(path: string): Promise<string> {
+  let current = path;
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- each step up is only needed if the last was missing
+    const exists = await lstat(current).then(Boolean, () => false);
+    if (exists) return current;
+    const parent = dirname(current);
+    if (parent === current) return current;
+    current = parent;
   }
 }
 

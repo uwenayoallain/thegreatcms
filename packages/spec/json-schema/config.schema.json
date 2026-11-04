@@ -19,14 +19,14 @@
           "description": "Directory for structured region JSON.",
           "type": "string",
           "minLength": 1,
-          "pattern": "^(?!/)(?!.*\\.\\.)",
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\\\u0000-\\u001f]+$",
           "default": "content/cms"
         },
         "media": {
           "description": "Directory uploads are committed into.",
           "type": "string",
           "minLength": 1,
-          "pattern": "^(?!/)(?!.*\\.\\.)",
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\\\u0000-\\u001f]+$",
           "default": "public/media"
         }
       }

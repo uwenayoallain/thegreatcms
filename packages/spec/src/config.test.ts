@@ -19,6 +19,21 @@ preview:
     expect(previewPath(config, { region: "constructor" })).toBe("/");
   });
 
+  it("only ever opens a page on the site itself", () => {
+    const hostile = parseConfig(`version: 1
+preview:
+  paths:
+    pages: "javascript:alert(1)"
+    posts: "//elsewhere.example/{slug}"
+    notes: "https://elsewhere.example/{slug}"
+    visit: "/\\\\elsewhere.example"
+`);
+    for (const collection of ["pages", "posts", "notes"]) {
+      expect(previewPath(hostile, { collection, slug: "x" })).toBe("/");
+    }
+    expect(previewPath(hostile, { region: "visit" })).toBe("/");
+  });
+
   it("opens an entry where the site shows it", () => {
     expect(previewPath(config, { collection: "updates", slug: "new-office" })).toBe(
       "/updates/new-office",

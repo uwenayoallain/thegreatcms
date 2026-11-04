@@ -37,7 +37,9 @@ import {
 } from "@greatcms/spec";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { html } from "hono/html";
+import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
+import { setFlagsFromString } from "node:v8";
 import {
   checkPassword,
   clearPreviewCookie,
@@ -60,7 +62,7 @@ import {
 } from "./auth.js";
 import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
-import { ALLOWED_TYPES, UploadError, type UploadResult } from "./media.js";
+import { ALLOWED_TYPES, MAX_BYTES, UploadError, type UploadResult } from "./media.js";
 import {
   assessSpam,
   contentFields,
@@ -86,6 +88,10 @@ import { siteTile } from "./views/pixel.js";
 import { findSiteIcon } from "./site-icon.js";
 import { Liveness } from "./liveness.js";
 import { historyPage, searchPage } from "./views/tool-pages.js";
+
+// A schema's `pattern` comes from the repository and runs on every save. One that backtracks
+// without end, like `^(a+)+$`, is handed to V8's linear-time engine instead of hanging the server.
+setFlagsFromString("--enable-experimental-regexp-engine-on-excessive-backtracks");
 
 export interface AppOptions {
   store: Store;
@@ -127,6 +133,9 @@ export interface AppOptions {
 const MAX_SUBMISSION_BYTES = 64 * 1024;
 /** A password form is a few hundred bytes; anything near this is not a sign-in. */
 const MAX_SIGN_IN_BYTES = 4 * 1024;
+/** Any other form: a few kilobytes of fields, or on an editor, a few full-size images with them. */
+const MAX_FORM_BYTES = 1024 * 1024;
+const MAX_EDITOR_BYTES = 6 * MAX_BYTES;
 /** What a committed upload can be previewed as: anything the studio accepts, plus SVG a developer committed. */
 const MEDIA_TYPES: Record<string, string> = {
   ...Object.fromEntries(
@@ -235,6 +244,33 @@ export function createApp(options: AppOptions) {
   // Pages are small; the editor bundle is not, and a remote studio is often on a slow link.
   app.use("*", compress());
 
+  // No body is read whole into memory unbounded: the editors take uploads, every other form is small.
+  const small = bodyLimit({
+    maxSize: MAX_FORM_BYTES,
+    onError: (c) => c.text("That form is too large.", 413),
+  });
+  const large = bodyLimit({
+    maxSize: MAX_EDITOR_BYTES,
+    onError: (c) => c.text("Those files are too large to send at once.", 413),
+  });
+  app.use("*", (c, next) => {
+    // Public forms and sign-in measure their own, smaller bodies as they stream in.
+    if (c.req.method !== "POST" || c.req.path === "/sign-in" || c.req.path.startsWith("/f/"))
+      return next();
+    return /^\/sites\/[^/]+\/(regions|collections|settings)\//.test(`${c.req.path}/`)
+      ? large(c, next)
+      : small(c, next);
+  });
+
+  // A body the form parser cannot read is the sender's mistake, not the server's.
+  app.onError((error, c) => {
+    if (error instanceof TypeError && /form ?data|parse body|boundary/i.test(error.message)) {
+      return c.text("That form could not be read.", 400);
+    }
+    process.stderr.write(`${error.stack ?? error}\n`);
+    return c.text("Something went wrong in the studio.", 500);
+  });
+
   /** The public submission endpoint. */
   app.post("/f/:siteId/:form", async (c) => {
     const siteId = c.req.param("siteId");
@@ -308,7 +344,7 @@ export function createApp(options: AppOptions) {
 
   /** Who a signed session belongs to now: null once an editor is removed or their password changes. */
   const viewerOf = (session: Session | null): Viewer | null => {
-    if (!session) return null;
+    if (!session || store.isSessionRevoked(session.id)) return null;
     if (session.actor === "studio") return { name: "studio", owner: true };
     const editor = store.getEditor(Number(session.actor.slice("editor:".length)));
     if (!editor || session.stamp !== editorStamp(signingKey, editor.passwordHash)) return null;
@@ -333,6 +369,14 @@ export function createApp(options: AppOptions) {
     }
   };
   const signOut = (c: Context) => {
+    // Clearing the cookie is the browser's part; a copy of it must stop working as well.
+    const cookies = c.req.header("cookie");
+    for (const session of [
+      readSession(cookies, signingKey),
+      readPreviewSession(cookies, signingKey),
+    ]) {
+      if (session) store.revokeSession(session.id, session.expiresAt);
+    }
     c.header("Set-Cookie", clearSessionCookie(isSecure(c)));
     if (options.cookieDomain) {
       c.header("Set-Cookie", clearPreviewCookie(isSecure(c), options.cookieDomain), {
@@ -1896,7 +1940,13 @@ function describeError(error: unknown): string {
 function regionPreview(site: Site, config: CmsConfig, region: string): string | undefined {
   if (!site.devUrl) return undefined;
   const path = previewPath(config, { region });
-  return path === "/" ? site.devUrl : new URL(path, site.devUrl).href;
+  return path === "/" ? site.devUrl : onDevServer(site.devUrl, path);
+}
+
+/** A path resolved against the dev server, and the dev server itself if it would leave it. */
+function onDevServer(devUrl: string, path: string): string {
+  const url = new URL(path, devUrl);
+  return url.origin === new URL(devUrl).origin ? url.href : devUrl;
 }
 
 function entryPreview(
@@ -1907,7 +1957,7 @@ function entryPreview(
 ): string | undefined {
   if (!site.devUrl) return undefined;
   if (!slug) return site.devUrl;
-  return new URL(previewPath(config, { collection, slug }), site.devUrl).href;
+  return onDevServer(site.devUrl, previewPath(config, { collection, slug }));
 }
 
 function errorPage(title: string, message: string): string {

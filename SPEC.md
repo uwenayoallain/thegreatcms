@@ -319,6 +319,9 @@ tags: [release, git]
 Body text becomes the field named by the collection's `body` key.
 ```
 
+A slug is one file name: up to 120 characters, not starting with `.`, and with
+no `/`, `\`, `%` or control characters.
+
 An `mdx` entry is the same file with an `.mdx` extension, and a body that may
 import and use components:
 
@@ -423,7 +426,8 @@ publish:
   commitMessage: "content: update {summary}"
 ```
 
-Paths must be repository-relative and may not contain `..`.
+Paths must be repository-relative and may not contain `..`, a backslash or a
+control character. A collection's `path` in the schema follows the same rule.
 
 `preview.paths` tells a studio where a collection entry can be seen on the
 site, so its live preview opens the page being edited rather than the front
@@ -439,7 +443,8 @@ preview:
 ```
 
 A collection without an entry here previews at `/`. A region previews at the
-path its id names here, which has no `{slug}`, and otherwise at `/`.
+path its id names here, which has no `{slug}`, and otherwise at `/`. Every path
+here starts with a single `/`: it names a page on the site, never another host.
 
 Earlier configs may also contain `publish.branch`, `publish.draftBranchPrefix`,
 `publish.dispatchEvent` and `preview.urlTemplate`. They are still accepted, so

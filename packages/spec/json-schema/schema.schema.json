@@ -913,9 +913,10 @@
           "$ref": "#/definitions/description"
         },
         "path": {
-          "description": "Folder holding the entries.",
+          "description": "Folder holding the entries, inside the repository.",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\\\u0000-\\u001f]+$"
         },
         "format": {
           "enum": ["markdown", "mdx", "json"],

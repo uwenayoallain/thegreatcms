@@ -232,3 +232,15 @@ export const withDefault = (parse: Parser<unknown>, value: () => unknown): Prope
   parse,
   default: value,
 });
+
+/**
+ * A folder or file inside the repository, as a config or schema names it: relative, with no
+ * `..`, no backslash (a separator on Windows) and no control characters, so it cannot point
+ * anywhere but where it says.
+ */
+export const repoPath = string({
+  // oxlint-disable-next-line no-control-regex -- control characters are exactly what is refused
+  pattern: /^(?!\/)(?!.*\.\.)[^\\\u0000-\u001f]+$/,
+  expected: "a path inside the repository",
+  fix: "Use a repo-relative path with forward slashes and no `..`, e.g. `content/cms`.",
+});

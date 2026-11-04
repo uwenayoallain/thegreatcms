@@ -14,6 +14,7 @@ import {
   object,
   optional,
   record,
+  repoPath,
   required,
   string,
   withDefault,
@@ -48,11 +49,7 @@ export interface CmsConfig {
   };
 }
 
-const relPath = string({
-  pattern: /^(?!\/)(?!.*\.\.).+$/,
-  expected: "a path inside the repository",
-  fix: "Use a repo-relative path without `..`, e.g. `content/cms`.",
-});
+const relPath = repoPath;
 
 const nullableString: Parser<string | null> = (value, at, problems) =>
   value === null ? null : string()(value, at, problems);
@@ -166,12 +163,15 @@ export function previewPath(
   const paths = config.preview?.paths;
   if ("region" in entry) {
     const path = paths && Object.hasOwn(paths, entry.region) ? paths[entry.region] : undefined;
-    return typeof path === "string" && !path.includes("{slug}") ? path : "/";
+    return typeof path === "string" && sitePath(path) && !path.includes("{slug}") ? path : "/";
   }
   const rule =
     paths && Object.hasOwn(paths, entry.collection) ? paths[entry.collection] : undefined;
   const template =
     typeof rule === "string" ? rule : rule ? (own(rule, entry.slug) ?? own(rule, "*")) : undefined;
-  if (!template) return "/";
+  if (!template || !sitePath(template)) return "/";
   return template.replaceAll("{slug}", encodeURIComponent(entry.slug));
 }
+
+/** A path on the site itself: `/work/{slug}`, never `//host`, `https:` or `javascript:`. */
+const sitePath = (path: string) => path.startsWith("/") && !/^\/[\\/]/.test(path);

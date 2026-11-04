@@ -41,7 +41,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_COOKIE_DOMAIN`   | Parent domain the preview's sign-in cookie covers, e.g. for `preview.`; see [Self-hosting](/docs/self-hosting/). |
 | `STUDIO_TRUST_PROXY`     | `1` behind a reverse proxy you control, `cloudflare` behind Cloudflare. Unset when reachable directly.           |
 | `RESEND_API_KEY`         | With `NOTIFY_FROM` and `NOTIFY_TO`, emails each form submission. Without them, submissions are only stored.      |
-| `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON. Slack and Discord incoming webhooks work as they are.          |
+| `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON to this `http(s)` URL. Slack and Discord webhooks work as is.   |
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 

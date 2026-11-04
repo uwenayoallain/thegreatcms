@@ -5,6 +5,7 @@ import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
 import { applySites, parseSites } from "./config.js";
 import { Store } from "./db.js";
+import { isHttpUrl } from "./http.js";
 import { type Notifier, Notifiers, ResendNotifier, WebhookNotifier } from "./submissions.js";
 import { setLocale } from "./views/locale.js";
 
@@ -32,8 +33,13 @@ if (process.env.RESEND_API_KEY && process.env.NOTIFY_FROM && process.env.NOTIFY_
     }),
   );
 }
-if (process.env.STUDIO_WEBHOOK_URL)
+if (process.env.STUDIO_WEBHOOK_URL) {
+  if (!isHttpUrl(process.env.STUDIO_WEBHOOK_URL)) {
+    process.stderr.write("STUDIO_WEBHOOK_URL must be an http:// or https:// URL.\n");
+    process.exit(1);
+  }
   configured.push(new WebhookNotifier(process.env.STUDIO_WEBHOOK_URL));
+}
 const notifier = configured.length > 0 ? new Notifiers(configured) : undefined;
 
 // Only behind a proxy you control: the headers it sets are otherwise the visitor's to forge.

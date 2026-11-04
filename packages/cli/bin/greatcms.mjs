@@ -13,6 +13,12 @@ for (const stream of [process.stdout, process.stderr]) {
   });
 }
 
+// `check` runs a schema's `pattern` over content, often a pull request's: one that backtracks
+// without end is handed to V8's linear-time engine instead of hanging CI.
+(await import("node:v8")).setFlagsFromString(
+  "--enable-experimental-regexp-engine-on-excessive-backtracks",
+);
+
 const { createUi, run, wantsColour } = await import("../dist/index.js");
 
 process.exitCode = await run({

@@ -2,6 +2,7 @@
 
 import { connect } from "node:net";
 import type { Site } from "./db.js";
+import { isHttpUrl } from "./http.js";
 
 /** A server on the same machine or network answers in milliseconds; this is the limit, not the norm. */
 const TIMEOUT_MS = 1200;
@@ -46,6 +47,8 @@ export class Liveness {
  * which can take longer than anyone should wait for a status dot; a connection cannot.
  */
 function ask(url: string): Promise<boolean> {
+  // Only a web server is asked; a file:, data: or any other URL is not somewhere to connect.
+  if (!isHttpUrl(url)) return Promise.resolve(false);
   let target: URL;
   try {
     target = new URL(url);

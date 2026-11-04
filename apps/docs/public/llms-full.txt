@@ -329,6 +329,9 @@ tags: [release, git]
 Body text becomes the field named by the collection's `body` key.
 ```
 
+A slug is one file name: up to 120 characters, not starting with `.`, and with
+no `/`, `\`, `%` or control characters.
+
 An `mdx` entry is the same file with an `.mdx` extension, and a body that may
 import and use components:
 
@@ -433,7 +436,8 @@ publish:
   commitMessage: "content: update {summary}"
 ```
 
-Paths must be repository-relative and may not contain `..`.
+Paths must be repository-relative and may not contain `..`, a backslash or a
+control character. A collection's `path` in the schema follows the same rule.
 
 `preview.paths` tells a studio where a collection entry can be seen on the
 site, so its live preview opens the page being edited rather than the front
@@ -449,7 +453,8 @@ preview:
 ```
 
 A collection without an entry here previews at `/`. A region previews at the
-path its id names here, which has no `{slug}`, and otherwise at `/`.
+path its id names here, which has no `{slug}`, and otherwise at `/`. Every path
+here starts with a single `/`: it names a page on the site, never another host.
 
 Earlier configs may also contain `publish.branch`, `publish.draftBranchPrefix`,
 `publish.dispatchEvent` and `preview.urlTemplate`. They are still accepted, so
@@ -1108,7 +1113,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_COOKIE_DOMAIN`   | Parent domain the preview's sign-in cookie covers, e.g. for `preview.`; see [Self-hosting](/docs/self-hosting/). |
 | `STUDIO_TRUST_PROXY`     | `1` behind a reverse proxy you control, `cloudflare` behind Cloudflare. Unset when reachable directly.           |
 | `RESEND_API_KEY`         | With `NOTIFY_FROM` and `NOTIFY_TO`, emails each form submission. Without them, submissions are only stored.      |
-| `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON. Slack and Discord incoming webhooks work as they are.          |
+| `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON to this `http(s)` URL. Slack and Discord webhooks work as is.   |
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 

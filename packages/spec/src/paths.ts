@@ -23,7 +23,8 @@ export function regionIdFromPath(config: CmsConfig, filePath: string): string | 
 export function isSafeSlug(slug: string): boolean {
   if (slug.length === 0 || slug.length > 120) return false;
   if (slug.startsWith(".")) return false; // ".", "..", and dotfiles
-  if (/[/\\]/.test(slug)) return false;
+  // `%` too: a site's own router may decode `%2f` back into a separator.
+  if (/[/\\%]/.test(slug)) return false;
   return ![...slug].some((character) => (character.codePointAt(0) ?? 0) < 0x20);
 }
 

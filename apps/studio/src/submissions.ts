@@ -1,5 +1,7 @@
 /** The dynamic layer: the one thing Git cannot hold. */
 
+import { isHttpUrl } from "./http.js";
+
 export const SPAM_THRESHOLD = 3;
 
 /** Fields that are machinery rather than content the author typed. */
@@ -136,6 +138,12 @@ export class WebhookNotifier implements Notifier {
   ) {}
 
   async notify(message: Notification): Promise<void> {
+    if (!isHttpUrl(this.url)) {
+      process.stderr.write(
+        "webhook skipped: STUDIO_WEBHOOK_URL must be an http:// or https:// URL\n",
+      );
+      return;
+    }
     const text = [message.subject, ...message.lines].join("\n");
     try {
       const response = await this.fetchImpl(this.url, {

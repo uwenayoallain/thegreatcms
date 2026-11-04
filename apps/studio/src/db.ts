@@ -197,6 +197,11 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     name: "011-deploy-root",
     sql: "ALTER TABLE sites ADD COLUMN deploy_root TEXT NOT NULL DEFAULT '';",
   },
+  {
+    // A signed cookie stays valid until it expires; one signed out of is listed here until then.
+    name: "012-revoked-sessions",
+    sql: "CREATE TABLE revoked_sessions (id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);",
+  },
 ];
 
 export interface Submission {
@@ -624,6 +629,18 @@ export class Store {
   }
 
   /** Submissions older than `days` are deleted: an inbox is not an archive. */
+  /** Retires one signed session for the rest of its life, and forgets those that have expired. */
+  revokeSession(id: string, expiresAt: number, now = Date.now()): void {
+    this.db.prepare("DELETE FROM revoked_sessions WHERE expires_at < ?").run(now);
+    this.db
+      .prepare("INSERT OR IGNORE INTO revoked_sessions (id, expires_at) VALUES (?, ?)")
+      .run(id, expiresAt);
+  }
+
+  isSessionRevoked(id: string): boolean {
+    return this.db.prepare("SELECT 1 FROM revoked_sessions WHERE id = ?").get(id) !== undefined;
+  }
+
   pruneSubmissions(days: number): number {
     return Number(
       this.db

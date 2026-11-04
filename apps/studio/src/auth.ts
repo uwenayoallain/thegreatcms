@@ -12,6 +12,8 @@ export interface Session {
   /** For an editor, a fingerprint of their password hash: changing the password ends the session. */
   stamp: string;
   expiresAt: number;
+  /** The token's signature: unique to this sign-in, so signing out can retire exactly it. */
+  id: string;
 }
 
 export interface CookieOptions {
@@ -126,7 +128,7 @@ function readSigned(raw: string | undefined, key: string): Session | null {
   if (!constantTimeEqual(sign(`${actor}.${stamp}.${expiry}`, key), signature)) return null;
   const expiresAt = Number(expiry);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
-  return { actor, stamp, expiresAt };
+  return { actor, stamp, expiresAt, id: signature };
 }
 
 /** One key per kind of token, so none of them can be passed off as another. */
