@@ -22,3 +22,6 @@ overrides:
   vite: ^8.0.13
   # An older css-tree under svgo still pins the release with the event-loop advisory.
   source-map-js: ^1.2.2
+  # Nuxt's archiver still pulls releases with open advisories; the patched ones are drop-in.
+  "glob@>=9.0.0 <=14.0.1": ^14.0.2
+  "minimatch@<11.0.1": ^11.0.1
