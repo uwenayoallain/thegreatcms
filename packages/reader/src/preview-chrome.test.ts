@@ -58,12 +58,16 @@ describe("injecting it into HTML", () => {
 function setup(command: "dev" | "build") {
   const scripts: string[] = [];
   const plugins: unknown[] = [];
+  let toolbar: boolean | undefined;
   greatcms().hooks["astro:config:setup"]({
     command,
     injectScript: (_stage, content) => scripts.push(content),
-    updateConfig: (config) => plugins.push(...config.vite.plugins),
+    updateConfig: (config) => {
+      plugins.push(...(config.vite?.plugins ?? []));
+      if (config.devToolbar) toolbar = config.devToolbar.enabled;
+    },
   });
-  return { scripts, plugins };
+  return { scripts, plugins, toolbar };
 }
 
 /** Astro renders its own HTML and never calls transformIndexHtml, so it needs the integration. */
@@ -73,6 +77,16 @@ describe("the Astro integration", () => {
 
     expect(plugins).toHaveLength(1);
     expect(scripts).toEqual([PREVIEW_SCRIPT]);
+  });
+
+  it("leaves the dev toolbar to the developer, and off on a preview server", () => {
+    expect(setup("dev").toolbar).toBeUndefined();
+    process.env.GREATCMS_PREVIEW_SERVER = "1";
+    try {
+      expect(setup("dev").toolbar).toBe(false);
+    } finally {
+      delete process.env.GREATCMS_PREVIEW_SERVER;
+    }
   });
 
   it("adds nothing to a build, so a shipped page carries none of it", () => {

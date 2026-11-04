@@ -52,7 +52,13 @@ function run(site, attempt = 0) {
   const cwd = join(root, site.dir);
   const child = spawn(join(cwd, "node_modules/.bin", bin), args, {
     cwd,
-    env: { ...process.env, PREVIEW_HOST: `${site.id}-preview.${domain}`, BROWSER: "none" },
+    env: {
+      ...process.env,
+      PREVIEW_HOST: `${site.id}-preview.${domain}`,
+      BROWSER: "none",
+      // Only ever seen inside the studio: frameworks skip their dev toolbars, which cost round trips.
+      GREATCMS_PREVIEW_SERVER: "1",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const tag = `[${site.id}] `;

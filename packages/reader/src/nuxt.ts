@@ -10,6 +10,7 @@ interface NuxtLike {
     rootDir: string;
     vite: { plugins?: unknown[] };
     nitro: { plugins?: string[] };
+    devtools?: boolean | { enabled?: boolean };
   };
 }
 
@@ -19,6 +20,8 @@ interface NuxtLike {
  */
 export function greatcmsNuxt(options: WatchOptions = {}, nuxt?: NuxtLike): void {
   if (!nuxt?.options.dev) return;
+  // A preview server is only seen inside the studio, so DevTools would be loaded for nobody.
+  if (process.env.GREATCMS_PREVIEW_SERVER === "1") nuxt.options.devtools = { enabled: false };
   nuxt.options.vite.plugins = [
     ...(nuxt.options.vite.plugins ?? []),
     // Nuxt renders its own HTML; the Nitro plugin adds the script instead.

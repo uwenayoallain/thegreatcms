@@ -7,7 +7,10 @@ interface AstroIntegration {
   hooks: {
     "astro:config:setup": (options: {
       command: "dev" | "build" | "preview" | "sync";
-      updateConfig: (config: { vite: { plugins: unknown[] } }) => unknown;
+      updateConfig: (config: {
+        vite?: { plugins: unknown[] };
+        devToolbar?: { enabled: boolean };
+      }) => unknown;
       injectScript: (stage: "page", content: string) => void;
     }) => void;
   };
@@ -35,6 +38,10 @@ export function greatcms(options: GreatcmsOptions = {}): AstroIntegration {
         if (command !== "dev") return;
 
         updateConfig({ vite: { plugins: [greatcmsWatch(options)] } });
+        // A preview server is only ever seen inside the studio, where the toolbar is hidden anyway;
+        // not loading it at all spares every page a chain of modules over a remote link.
+        if (process.env.GREATCMS_PREVIEW_SERVER === "1")
+          updateConfig({ devToolbar: { enabled: false } });
         if (options.hideDevOverlays !== false) injectScript("page", PREVIEW_SCRIPT);
       },
     },

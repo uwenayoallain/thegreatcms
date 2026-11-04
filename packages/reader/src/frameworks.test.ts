@@ -38,6 +38,12 @@ function nuxt(dev: boolean) {
       rootDir: "/site",
       vite: { plugins: [{ name: "theirs" }] as unknown[] },
       nitro: {} as { plugins?: string[] },
+    } as {
+      dev: boolean;
+      rootDir: string;
+      vite: { plugins: unknown[] };
+      nitro: { plugins?: string[] };
+      devtools?: boolean | { enabled?: boolean };
     },
   };
 }
@@ -49,6 +55,20 @@ describe("Nuxt", () => {
     expect(app.options.vite.plugins).toHaveLength(2);
     expect(app.options.vite.plugins[0]).toEqual({ name: "theirs" });
     expect(app.options.nitro.plugins?.[0]).toMatch(/nuxt-nitro\.js$/);
+  });
+
+  it("leaves DevTools to the developer, and off on a preview server", () => {
+    const own = nuxt(true);
+    greatcmsNuxt({}, own);
+    expect(own.options.devtools).toBeUndefined();
+    process.env.GREATCMS_PREVIEW_SERVER = "1";
+    try {
+      const preview = nuxt(true);
+      greatcmsNuxt({}, preview);
+      expect(preview.options.devtools).toEqual({ enabled: false });
+    } finally {
+      delete process.env.GREATCMS_PREVIEW_SERVER;
+    }
   });
 
   it("adds nothing to a generated site", () => {

@@ -58,7 +58,8 @@ export class PreviewRunner {
       shell: true,
       detached: true,
       stdio: ["ignore", "inherit", "inherit"],
-      env: { ...process.env, PORT: String(options.upstreamPort) },
+      // Only ever seen inside the studio: frameworks skip their dev toolbars, which cost round trips.
+      env: { ...process.env, PORT: String(options.upstreamPort), GREATCMS_PREVIEW_SERVER: "1" },
     });
     this.child.on("exit", (code) => {
       options.log(`dev server exited (${code ?? "signal"})`);

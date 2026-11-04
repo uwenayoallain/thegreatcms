@@ -1390,6 +1390,9 @@ the server, so a `localhost` address works only on the machine running the dev
 server. The same compose file also runs the previews for editors anywhere:
 
 - `previews` runs every site's dev server, inside the compose network only.
+  It sets `GREATCMS_PREVIEW_SERVER=1`, so the Astro integration and the Nuxt
+  module leave the framework's dev toolbar out: nobody sees it inside the
+  studio, and over a remote link each of its modules is a round trip.
 - `caddy` sits in front of them and asks the studio's `/auth/check` about each
   visitor, so a preview opens for someone signed in to the studio and for
   nobody else.
