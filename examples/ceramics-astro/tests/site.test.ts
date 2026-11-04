@@ -54,9 +54,23 @@ describe.each(PAGES)("%s", (file) => {
     expect(document.querySelector("a.skip")?.getAttribute("href")).toBe("#main");
   });
 
-  it("ships no JavaScript, and none of the studio's preview", () => {
-    expect(read(file)).not.toMatch(/<script/i);
+  it("ships no JavaScript, only speculation rules data, and none of the studio's preview", () => {
+    const scripts = [...dom(file).querySelectorAll("script")];
+    expect(scripts.map((script) => script.type)).toEqual(["speculationrules"]);
+    const rules = JSON.parse(scripts[0]!.textContent ?? "") as { prerender: unknown[] };
+    expect(rules.prerender.length).toBeGreaterThan(0);
     expect(read(file)).not.toContain("data-greatcms");
+  });
+
+  it("links every internal page at its built address without a redirect", () => {
+    for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
+      const href = link.getAttribute("href")!.split("#")[0]!.split("?")[0]!;
+      if (!href) continue;
+      expect(href, `${file}: ${href}`).toMatch(/\/$/);
+      expect(existsSync(join(DIST, href, "index.html")), `${file}: ${href} is not built`).toBe(
+        true,
+      );
+    }
   });
 });
 

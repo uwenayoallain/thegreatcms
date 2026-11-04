@@ -9,9 +9,10 @@ allowBuilds:
 
 # Security fixes released too recently for pnpm's minimum release age to allow yet.
 minimumReleaseAgeExclude:
-  - fast-uri@3.1.6 || 3.1.7 || 3.1.8
-  - vitest@4.1.11
-  - "@vitest/mocker@4.1.11"
+  - fast-uri@3.1.6 || 3.1.7 || 3.1.8 || 3.1.9
+  - vitest@4.1.11 || 4.1.12
+  - "@vitest/mocker@4.1.11 || 4.1.12"
+  - tinypool@2.1.1 || 2.1.2 || 2.2.0
   - js-yaml@4.3.2
   - hono@4.13.5 || 4.13.7
   - devalue@5.9.1 || 5.9.3
@@ -25,3 +26,8 @@ overrides:
   # Nuxt's archiver still pulls releases with open advisories; the patched ones are drop-in.
   "glob@>=9.0.0 <=14.0.1": ^14.0.2
   "minimatch@<11.0.1": ^11.0.1
+  "fast-uri@>=3.0.0 <3.1.9": ^3.1.9
+  "tinypool@<2.1.2": ^2.1.2
+  "@vitest/mocker@<4.1.12": ^4.1.12
+  # deepmerge <=4.3.1 (GHSA-gcqx-w48m-w2h4, low) is pulled only by Nuxt and SvelteKit's build
+  # plugins for static config merging; 4.3.2 is not yet published on npm.

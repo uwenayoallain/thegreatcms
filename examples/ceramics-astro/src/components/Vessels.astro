@@ -5,23 +5,46 @@
   <defs>
     <linearGradient id="clay" x1="0" x2="1">
       <stop offset="0" stop-color="var(--clay-deep)" />
-      <stop offset="0.55" stop-color="var(--clay)" />
+      <stop offset="0.48" stop-color="var(--clay)" />
       <stop offset="1" stop-color="var(--clay-deep)" />
     </linearGradient>
     <linearGradient id="glaze" x1="0" x2="1">
       <stop offset="0" stop-color="var(--glaze-deep)" />
-      <stop offset="0.5" stop-color="var(--glaze)" />
+      <stop offset="0.45" stop-color="var(--glaze)" />
       <stop offset="1" stop-color="var(--glaze-deep)" />
     </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.45" r="0.5">
+      <stop offset="0" stop-color="var(--clay)" stop-opacity="0.14" />
+      <stop offset="1" stop-color="var(--clay)" stop-opacity="0" />
+    </radialGradient>
   </defs>
-  <ellipse cx="210" cy="300" rx="190" ry="12" fill="var(--shadow)" />
-  <path class="pot pot--tall" d="M70 296c-22-40-30-96-12-140 8-20 10-40 4-58h52c-6 18-4 38 4 58 18 44 10 100-12 140z" fill="url(#clay)" />
-  <path d="M62 98h52" stroke="var(--ink)" stroke-opacity=".25" stroke-width="3" />
-  <path class="pot pot--bowl" d="M150 236c0 36 30 62 70 62s70-26 70-62z" fill="url(#glaze)" />
-  <path d="M150 236h140" stroke="var(--ink)" stroke-opacity=".2" stroke-width="3" />
-  <path class="pot pot--jar" d="M318 296c-26-8-38-40-34-72 4-30 20-44 24-62h40c4 18 20 32 24 62 4 32-8 64-34 72z" fill="url(#clay)" />
-  <rect x="306" y="150" width="44" height="12" rx="6" fill="var(--clay-deep)" />
-  <path d="M296 212c20 8 44 8 64 0" stroke="var(--cream)" stroke-opacity=".5" stroke-width="4" fill="none" />
+  <circle cx="215" cy="155" r="135" fill="url(#halo)" />
+  <ellipse cx="210" cy="300" rx="192" ry="11" fill="var(--shadow)" />
+  <line x1="28" y1="296" x2="392" y2="296" stroke="var(--line)" stroke-width="1.5" />
+
+  <g class="pot pot--tall">
+    <path d="M70 296c-22-40-30-96-12-140 8-20 10-40 4-58h52c-6 18-4 38 4 58 18 44 10 100-12 140z" fill="url(#clay)" />
+    <ellipse cx="88" cy="98" rx="26" ry="5.5" fill="var(--clay-deep)" />
+    <ellipse cx="88" cy="98" rx="20" ry="3.2" fill="var(--ink)" fill-opacity=".35" />
+    <path d="M56 164q32 7 64 0" stroke="var(--cream)" stroke-opacity=".28" stroke-width="2" fill="none" />
+    <path d="M53 204q35 8 70 0" stroke="var(--cream)" stroke-opacity=".22" stroke-width="1.75" fill="none" />
+  </g>
+
+  <g class="pot pot--bowl">
+    <path d="M150 236c0 36 30 62 70 62s70-26 70-62z" fill="url(#glaze)" />
+    <ellipse cx="220" cy="236" rx="70" ry="9" fill="var(--glaze-deep)" />
+    <ellipse cx="220" cy="236" rx="63" ry="6" fill="var(--ink)" fill-opacity=".28" />
+    <path d="M162 258q58 12 116 0" stroke="var(--cream)" stroke-opacity=".35" stroke-width="2.5" fill="none" />
+    <rect x="196" y="294" width="48" height="4" rx="2" fill="var(--clay-deep)" />
+  </g>
+
+  <g class="pot pot--jar">
+    <path d="M318 296c-26-8-38-40-34-72 4-30 20-44 24-62h40c4 18 20 32 24 62 4 32-8 64-34 72z" fill="url(#clay)" />
+    <path d="M292 212c22 9 48 9 72 0" stroke="var(--cream)" stroke-opacity=".5" stroke-width="3.5" fill="none" />
+    <path d="M286 238c26 10 56 10 84 0" stroke="var(--glaze)" stroke-opacity=".55" stroke-width="3" fill="none" />
+    <rect x="304" y="152" width="48" height="12" rx="6" fill="var(--clay-deep)" />
+    <circle cx="328" cy="147" r="6" fill="var(--clay)" />
+  </g>
 </svg>
 
 <style>

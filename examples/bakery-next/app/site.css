@@ -445,6 +445,7 @@ main > section.story {
   gap: var(--gap);
   margin-top: var(--section);
   padding-block: var(--section);
+  background-color: var(--blue);
   border-image: conic-gradient(var(--blue) 0 0) fill 0 / /0 100vmax;
   color: #fff;
 }

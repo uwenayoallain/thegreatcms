@@ -99,7 +99,7 @@ export async function renderMarkdown(source: string): Promise<Rendered> {
           placeholder,
           html: highlight(text, language).then(
             (inner) =>
-              `<pre><code${language ? ` class="language-${escape(language)}"` : ""}>${inner}</code></pre>\n`,
+              `<pre tabindex="0"><code${language ? ` class="language-${escape(language)}"` : ""}>${inner}</code></pre>\n`,
           ),
         });
         return placeholder;

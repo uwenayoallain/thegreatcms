@@ -24,6 +24,9 @@ const nav = [
     <title>{pageTitle}</title>
     {(description ?? identity.tagline) && <meta name="description" content={description ?? identity.tagline} />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script type="speculationrules" is:inline>
+      {"prerender":[{"where":{"href_matches":"/*"},"eagerness":"moderate"}]}
+    </script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>

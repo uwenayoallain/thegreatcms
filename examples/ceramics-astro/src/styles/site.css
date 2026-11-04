@@ -113,7 +113,8 @@ main,
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  padding-block: 1.5rem;
+  padding-block: 1.35rem;
+  border-bottom: 1px solid var(--line);
 }
 .wordmark {
   display: inline-flex;
@@ -131,6 +132,9 @@ main,
   background: var(--clay);
   color: #fbf7f0;
   font: 600 1.25rem/1 var(--serif);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    0 2px 6px var(--shadow);
 }
 .wordmark__name {
   font: 600 0.95rem/1 var(--sans);
@@ -150,6 +154,9 @@ main,
   font-weight: 500;
   padding-block: 0.4rem;
   border-bottom: 2px solid transparent;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease;
 }
 .masthead nav a:hover,
 .masthead nav a[aria-current="page"] {
@@ -165,10 +172,11 @@ main {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 1rem;
+  margin-bottom: 0.9rem;
 }
 .lede {
   font-size: 1.2rem;
+  line-height: 1.6;
   color: var(--muted);
   max-width: 52ch;
 }
@@ -177,20 +185,24 @@ main {
   display: inline-block;
   background: var(--ink);
   color: var(--paper);
-  padding: 0.85rem 1.5rem;
+  padding: 0.85rem 1.6rem;
   border-radius: 999px;
   font-weight: 600;
   text-decoration: none;
   border: 0;
   font-size: 1rem;
   cursor: pointer;
+  margin-top: 0.5rem;
+  box-shadow: 0 2px 8px var(--shadow);
   transition:
     transform 160ms ease,
-    background 160ms ease;
+    background 160ms ease,
+    box-shadow 160ms ease;
 }
 .button:hover {
   background: var(--clay-deep);
   color: #fbf7f0;
+  box-shadow: 0 6px 16px var(--shadow);
 }
 @media (prefers-reduced-motion: no-preference) {
   .button:hover {
@@ -206,12 +218,16 @@ main {
   grid-template-columns: 1.1fr 0.9fr;
   gap: clamp(2rem, 6vw, 5rem);
   align-items: center;
-  padding-block: clamp(2rem, 6vw, 5rem);
+  padding-block: clamp(2.25rem, 6vw, 4.75rem);
 }
 .hero__art {
   background: var(--cream);
+  border: 1px solid var(--line);
   border-radius: 2rem;
   padding: clamp(1.5rem, 4vw, 3rem);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 12px 32px var(--shadow);
 }
 @media (max-width: 52rem) {
   .hero {
@@ -221,21 +237,28 @@ main {
 
 /* Every home section keeps the same distance from the last, whatever element it is. */
 .hero ~ * {
-  margin-top: clamp(3rem, 8vw, 6rem);
+  margin-top: clamp(3rem, 8vw, 5.5rem);
 }
 
 .statement {
   max-width: 52rem;
 }
+.statement--plain {
+  border-left: 3px solid var(--clay);
+  padding-left: clamp(1.25rem, 3vw, 2rem);
+}
 .statement__text {
-  font: 400 clamp(1.4rem, 2.6vw, 2rem)/1.35 var(--serif);
+  font: 400 clamp(1.4rem, 2.6vw, 2rem)/1.38 var(--serif);
+  margin-bottom: 0;
 }
 .statement--clay {
   max-width: none;
-  background: var(--clay-deep);
+  background:
+    radial-gradient(circle at 85% 20%, rgb(255 255 255 / 0.08), transparent 55%), var(--clay-deep);
   color: #fbf7f0;
-  padding: clamp(2rem, 6vw, 4rem);
+  padding: clamp(2rem, 6vw, 3.75rem);
   border-radius: 2rem;
+  box-shadow: 0 14px 34px var(--shadow);
 }
 .statement--clay .eyebrow {
   color: #f2c9a8;
@@ -252,12 +275,21 @@ main {
 .step {
   border-top: 2px solid var(--line);
   padding-top: 1.25rem;
+  transition: border-color 180ms ease;
+}
+.step:hover {
+  border-top-color: var(--clay);
 }
 .step__number {
-  font: 500 0.9rem/1 var(--serif);
+  font: 600 0.85rem/1 var(--serif);
+  letter-spacing: 0.08em;
   color: var(--accent);
-  display: block;
+  display: inline-block;
   margin-bottom: 0.75rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--cream);
+  border: 1px solid var(--line);
 }
 .step p {
   color: var(--muted);
@@ -280,15 +312,18 @@ main {
 .card {
   position: relative;
   background: var(--cream);
+  border: 1px solid var(--line);
   border-radius: 1.25rem;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   transition:
     transform 200ms ease,
+    border-color 200ms ease,
     box-shadow 200ms ease;
 }
 .card:hover {
+  border-color: var(--clay);
   box-shadow: 0 12px 32px var(--shadow);
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -297,13 +332,18 @@ main {
   }
 }
 .card__date {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 500;
   color: var(--muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.45rem;
 }
 .card__title a {
   color: var(--ink);
   text-decoration: none;
+  transition: color 160ms ease;
+}
+.card:hover .card__title a {
+  color: var(--accent);
 }
 .card__title a::after {
   content: "";
@@ -314,9 +354,11 @@ main {
 .card__summary {
   color: var(--muted);
   flex: 1;
+  margin-bottom: 1.1rem;
 }
 .card[data-full] {
-  opacity: 0.85;
+  background: var(--paper);
+  border-style: dashed;
 }
 
 .facts {
@@ -324,11 +366,13 @@ main {
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
   margin: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
   font-size: 0.92rem;
 }
 .facts dt {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -366,11 +410,18 @@ main {
 .quote {
   margin-inline: 0;
   margin-bottom: 0;
-  max-width: 48rem;
+  max-width: 50rem;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
 }
 .quote blockquote {
   margin: 0;
-  font: italic 400 clamp(1.4rem, 2.6vw, 2rem)/1.4 var(--serif);
+  font: italic 400 clamp(1.35rem, 2.4vw, 1.85rem)/1.42 var(--serif);
+}
+.quote blockquote p {
+  margin-bottom: 0;
 }
 .quote blockquote p::before {
   content: "\201C";
@@ -383,10 +434,14 @@ main {
 .quote figcaption {
   display: flex;
   flex-direction: column;
-  margin-top: 1rem;
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.95rem;
 }
 .quote figcaption span {
   color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .page-head {
@@ -424,8 +479,14 @@ main {
 .visit {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 2rem;
+  gap: 1.5rem;
   margin-top: 1rem;
+}
+.visit > div {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  padding: 1.5rem 1.75rem;
 }
 .visit h2 {
   font-size: 1.3rem;
@@ -436,19 +497,26 @@ main {
   display: flex;
   flex-direction: column;
 }
+.visit__address {
+  margin-bottom: 1rem;
+}
 .hours {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 .hours li {
-  padding-block: 0.4rem;
+  padding-block: 0.45rem;
   border-bottom: 1px solid var(--line);
 }
+.hours li:last-child {
+  border-bottom: 0;
+}
 .note {
-  margin-top: 2.5rem;
+  margin-top: 2rem;
   background: var(--cream);
-  padding: 1.5rem;
+  border: 1px solid var(--line);
+  padding: 1.5rem 1.75rem;
   border-radius: 1.25rem;
 }
 .note p:last-child {
@@ -460,6 +528,10 @@ main {
   display: grid;
   gap: 1.25rem;
   margin-top: 1rem;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
 }
 .field {
   display: grid;
@@ -493,6 +565,7 @@ main {
   border-radius: 0.75rem;
   padding: 0.7rem 0.9rem;
   width: 100%;
+  transition: border-color 150ms ease;
 }
 .field input:focus-visible,
 .field select:focus-visible,

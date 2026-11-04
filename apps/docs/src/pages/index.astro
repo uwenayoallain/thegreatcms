@@ -97,7 +97,7 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
       <li class="step step-commit">
         <div class="card">
           <p class="step-name"><span>One commit</span> <span class="mono sha">c4a1f3e</span></p>
-          <pre class="diff"><span class="del">- "heading": "A CMS that gets out of the way"</span><span class="add">+ "heading": "Publish from anywhere"</span></pre>
+          <pre class="diff" tabindex="0"><span class="del">- "heading": "A CMS that gets out of the way"</span><span class="add">+ "heading": "Publish from anywhere"</span></pre>
           <p class="mono file">content/cms/home.hero.json</p>
         </div>
       </li>
@@ -145,7 +145,7 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
           <li class="ink">
             <h3 class="mono">{file.name}</h3>
             <p>{file.note}</p>
-            <pre><code set:html={highlighted[files.indexOf(file)]} /></pre>
+            <pre tabindex="0"><code set:html={highlighted[files.indexOf(file)]} /></pre>
           </li>
         ))
       }
