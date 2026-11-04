@@ -1,7 +1,7 @@
 # The studio alone, reached through a Cloudflare Tunnel: no open ports, no certificates to renew.
 #
 #   cp .env.example .env     # then fill it in
-#   docker compose up -d --build
+#   COMPOSE_BAKE=false docker compose up -d --build   # bake refuses to build on the host network
 #
 # In Cloudflare, give the tunnel the public hostname STUDIO_HOST -> http://studio:8787, and one per
 # preview, <site>-preview.PREVIEW_DOMAIN -> http://caddy:80. No port is published, so the tunnel is
@@ -14,6 +14,8 @@ services:
     build:
       context: ../../..
       dockerfile: apps/studio/Dockerfile
+      # The host's resolver: Docker's build network has failed to reach the npm registry before.
+      network: host
     restart: unless-stopped
     environment:
       STUDIO_PASSWORD: "${STUDIO_PASSWORD:?set STUDIO_PASSWORD in .env}"
@@ -35,6 +37,11 @@ services:
       # Mounted at the same path, so a site's folder is written the same way inside and out.
       - ${SITES_DIR:?set SITES_DIR in .env}:${SITES_DIR}
       - studio-data:/data
+      # The website's releases: the studio shows what is live and can ask for a rollback.
+      - website:/srv/www
+    # The builder first, so its image, not this one, creates the shared folder and owns it.
+    depends_on:
+      - website
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/sign-in"]
       interval: 30s
@@ -61,17 +68,41 @@ services:
     # Six dev servers; a ceiling keeps them from starving the rest of the machine.
     mem_limit: ${PREVIEW_MEMORY:-3g}
 
-  # The door to the previews: asks the studio about each visitor, then passes them through.
+  # The door to the previews, which asks the studio about each visitor, and the public website.
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped
     environment:
       PREVIEW_DOMAIN: ${PREVIEW_DOMAIN}
+      WEBSITE_HOST: ${WEBSITE_HOST:-greatcms.${PREVIEW_DOMAIN}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - website:/srv/www:ro
     depends_on:
       - studio
       - previews
+
+  # Builds the public website from every commit in this checkout and swaps it live, so a publish
+  # in the studio reaches WEBSITE_HOST a minute later. A failed build leaves the last one up.
+  website:
+    build:
+      context: ../../..
+      dockerfile: packages/deploy/Dockerfile
+      network: host
+    restart: unless-stopped
+    environment:
+      DEPLOY_SOURCE: ${SITES_DIR}
+      DEPLOY_ROOT: /srv/www
+      DEPLOY_BRANCH: ${WEBSITE_BRANCH:-main}
+      DEPLOY_BUILD: pnpm install --frozen-lockfile --filter "@greatcms/docs..." && pnpm --filter "@greatcms/docs..." build
+      DEPLOY_OUTPUT: apps/docs/dist
+      ASTRO_TELEMETRY_DISABLED: "1"
+    volumes:
+      # Read only: the builder clones from the checkout and never writes to it.
+      - ${SITES_DIR}:${SITES_DIR}:ro
+      - website:/srv/www
+      - website-pnpm:/home/node/.local/share/pnpm
+    mem_limit: ${WEBSITE_MEMORY:-2g}
 
   cloudflared:
     image: cloudflare/cloudflared:2026.10.5
@@ -85,3 +116,5 @@ services:
 
 volumes:
   studio-data:
+  website:
+  website-pnpm:

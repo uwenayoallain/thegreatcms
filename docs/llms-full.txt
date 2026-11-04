@@ -5,7 +5,7 @@ This file concatenates the public docs in source order, for agents that prefer o
 ---
 title: The GreatCMS Content Standard
 source: SPEC.md
-url: https://greatcms.dev/spec
+url: https://greatcms.uwe.rw/spec
 ---
 
 # The GreatCMS Content Standard: version 1
@@ -540,7 +540,7 @@ resolves requires a version bump and a documented migration.
 ---
 title: GreatCMS Overview
 source: README.md
-url: https://greatcms.dev/
+url: https://greatcms.uwe.rw/
 ---
 
 # thegreatcms
@@ -647,7 +647,7 @@ versions.
 ---
 title: Getting started
 source: apps/docs/content/docs/getting-started.md
-url: https://greatcms.dev/docs/getting-started
+url: https://greatcms.uwe.rw/docs/getting-started
 ---
 
 # Getting started
@@ -771,7 +771,7 @@ which is the point.
 ---
 title: The command line
 source: apps/docs/content/docs/the-command-line.md
-url: https://greatcms.dev/docs/the-command-line
+url: https://greatcms.uwe.rw/docs/the-command-line
 ---
 
 # The command line
@@ -955,7 +955,7 @@ collection work → content/work/<slug>.json  page /work/{slug}/
 ---
 title: The hybrid model
 source: apps/docs/content/docs/the-hybrid-model.md
-url: https://greatcms.dev/docs/the-hybrid-model
+url: https://greatcms.uwe.rw/docs/the-hybrid-model
 ---
 
 # The hybrid model
@@ -1002,7 +1002,7 @@ managed keeps building.
 ---
 title: Publishing
 source: apps/docs/content/docs/publishing.md
-url: https://greatcms.dev/docs/publishing
+url: https://greatcms.uwe.rw/docs/publishing
 ---
 
 # Publishing
@@ -1069,7 +1069,7 @@ Run `greatcms check` in CI to hold hand-edited content to the same rules.
 ---
 title: Running the studio
 source: apps/docs/content/docs/running-the-studio.md
-url: https://greatcms.dev/docs/running-the-studio
+url: https://greatcms.uwe.rw/docs/running-the-studio
 ---
 
 # Running the studio
@@ -1189,7 +1189,7 @@ an image.
 ---
 title: Self-hosting
 source: apps/docs/content/docs/self-hosting.md
-url: https://greatcms.dev/docs/self-hosting
+url: https://greatcms.uwe.rw/docs/self-hosting
 ---
 
 # Self-hosting
@@ -1422,7 +1422,7 @@ share cookies across ports, so the sign-in covers the preview there too.
 ---
 title: Previewing
 source: apps/docs/content/docs/previewing.md
-url: https://greatcms.dev/docs/previewing
+url: https://greatcms.uwe.rw/docs/previewing
 ---
 
 # Previewing
@@ -1569,7 +1569,7 @@ preview, on your machine, with your toolchain; your CI builds what you publish.
 ---
 title: Forms and submissions
 source: apps/docs/content/docs/forms-and-submissions.md
-url: https://greatcms.dev/docs/forms-and-submissions
+url: https://greatcms.uwe.rw/docs/forms-and-submissions
 ---
 
 # Forms and submissions
@@ -1624,7 +1624,7 @@ and optional email notification.
 ---
 title: Accessibility
 source: apps/docs/content/docs/accessibility.md
-url: https://greatcms.dev/docs/accessibility
+url: https://greatcms.uwe.rw/docs/accessibility
 ---
 
 # Accessibility
@@ -1660,7 +1660,7 @@ weight budget so "fast" cannot quietly stop being true.
 ---
 title: Any language
 source: apps/docs/content/docs/any-language.md
-url: https://greatcms.dev/docs/any-language
+url: https://greatcms.uwe.rw/docs/any-language
 ---
 
 # Any language
@@ -1737,7 +1737,7 @@ steps. Every page here is also served as Markdown at its own path plus `.md`.
 ---
 title: For coding agents
 source: apps/docs/content/docs/for-agents.md
-url: https://greatcms.dev/docs/for-agents
+url: https://greatcms.uwe.rw/docs/for-agents
 ---
 
 # For coding agents
@@ -1797,7 +1797,7 @@ same for agents as for people.
 ---
 title: The examples
 source: apps/docs/content/docs/examples.md
-url: https://greatcms.dev/docs/examples
+url: https://greatcms.uwe.rw/docs/examples
 ---
 
 # The examples

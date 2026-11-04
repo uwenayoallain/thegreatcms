@@ -112,7 +112,7 @@ this repository. The rules, in order of how often they are needed:
   --json\` shows what exists, what is still at defaults, and unsaved drafts.
 - Do not edit \`.cms/draft/\`: it is the studio's unsaved-edit scratch space.
 
-Standard: https://greatcms.dev/spec.md · Agent index: https://greatcms.dev/llms.txt
+Standard: https://greatcms.uwe.rw/spec.md · Agent index: https://greatcms.uwe.rw/llms.txt
 `;
 }
 

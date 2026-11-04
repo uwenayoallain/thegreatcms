@@ -53,7 +53,7 @@ describe.each(PAGES)("$name", ({ file }) => {
   it("has no axe violations", async () => {
     const { window } = new JSDOM(read(file), {
       pretendToBeVisual: true,
-      url: "https://greatcms.dev/",
+      url: "https://greatcms.uwe.rw/",
     });
     Object.assign(globalThis, { window, document: window.document, Node: window.Node });
 
@@ -81,7 +81,7 @@ describe.each(PAGES)("$name", ({ file }) => {
   it("is findable and shareable without a script", () => {
     const document = dom(file);
     expect(document.querySelector('link[rel="canonical"]')?.getAttribute("href")).toMatch(
-      /^https:\/\/greatcms\.dev\//,
+      /^https:\/\/greatcms\.uwe\.rw\//,
     );
     expect(document.querySelector('meta[property="og:title"]')?.getAttribute("content")).toBe(
       document.title,
@@ -255,8 +255,8 @@ describe("the agent surface", () => {
     const llms = read("llms.txt");
     const full = read("llms-full.txt");
     for (const slug of slugs) {
-      expect(llms, slug).toContain(`https://greatcms.dev/docs/${slug}.md`);
-      expect(full, slug).toContain(`url: https://greatcms.dev/docs/${slug}`);
+      expect(llms, slug).toContain(`https://greatcms.uwe.rw/docs/${slug}.md`);
+      expect(full, slug).toContain(`url: https://greatcms.uwe.rw/docs/${slug}`);
     }
   });
 
@@ -271,9 +271,10 @@ describe("the agent surface", () => {
     const pages = walk(DIST)
       .filter((file) => file.endsWith("index.html"))
       .map((file) => file.slice(DIST.length, -"index.html".length));
-    for (const page of pages) expect(sitemap).toContain(`<loc>https://greatcms.dev${page}</loc>`);
+    for (const page of pages)
+      expect(sitemap).toContain(`<loc>https://greatcms.uwe.rw${page}</loc>`);
     expect(sitemap).not.toContain("/404");
-    expect(read("robots.txt")).toContain("Sitemap: https://greatcms.dev/sitemap.xml");
+    expect(read("robots.txt")).toContain("Sitemap: https://greatcms.uwe.rw/sitemap.xml");
   });
 });
 

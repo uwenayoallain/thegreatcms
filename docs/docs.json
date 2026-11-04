@@ -1,6 +1,6 @@
 {
   "name": "GreatCMS",
-  "url": "https://greatcms.dev",
+  "url": "https://greatcms.uwe.rw",
   "description": "GreatCMS is a Git-backed CMS for sites that should not depend on one at runtime. It manages only the regions of a page you opt in; everything else stays hand-written code. Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.",
   "specVersion": 1,
   "agentEntrypoints": {

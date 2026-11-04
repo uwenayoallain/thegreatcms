@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outDirs = [join(root, "docs"), join(root, "apps/docs/public")];
 
-const SITE = "https://greatcms.dev";
+const SITE = "https://greatcms.uwe.rw";
 
 const PAGES = [
   {

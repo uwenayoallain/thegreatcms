@@ -92,7 +92,7 @@ if (!post) return Astro.redirect("/404");
 
 Any other language reads the same files: `<regions dir>/<region-id>.json` over
 the schema's `default:` values. A missing file is not an error. The rules are
-in https://greatcms.dev/spec.md (section 6 is the part that matters).
+in https://greatcms.uwe.rw/spec.md (section 6 is the part that matters).
 
 ## Edit content as files
 
@@ -142,7 +142,7 @@ content/cms/home.hero.json: heading is required
   pass it as `PREVIEW_HOST` and set `vite.server.allowedHosts: [process.env.PREVIEW_HOST]`.
 - Never write into `.cms/draft/`; it is the studio's unsaved edits.
 - Publishing is one commit of content and the media it references. Hosting on
-  one server: https://greatcms.dev/docs/self-hosting.md
+  one server: https://greatcms.uwe.rw/docs/self-hosting.md
 
 ## Invariants you must not break
 
@@ -153,7 +153,7 @@ content/cms/home.hero.json: heading is required
 
 ## Where to read more
 
-- Index for agents: https://greatcms.dev/llms.txt
-- Every doc in one fetch: https://greatcms.dev/llms-full.txt
-- JSON Schema for `.cms/schema.yaml`: https://greatcms.dev/json-schema/schema.schema.json
-- JSON Schema for `.cms/config.yaml`: https://greatcms.dev/json-schema/config.schema.json
+- Index for agents: https://greatcms.uwe.rw/llms.txt
+- Every doc in one fetch: https://greatcms.uwe.rw/llms-full.txt
+- JSON Schema for `.cms/schema.yaml`: https://greatcms.uwe.rw/json-schema/schema.schema.json
+- JSON Schema for `.cms/config.yaml`: https://greatcms.uwe.rw/json-schema/config.schema.json

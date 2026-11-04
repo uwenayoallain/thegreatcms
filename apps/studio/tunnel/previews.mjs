@@ -45,6 +45,7 @@ const SITES = [
     command: (port) => ["nuxt", "dev", "--port", String(port), "--host", "0.0.0.0"],
   },
   { id: "docs", dir: "apps/docs", port: 4327, command: astro },
+  { id: "ibumba", dir: "examples/ceramics-astro", port: 4328, command: astro },
 ];
 
 function run(site, attempt = 0) {
