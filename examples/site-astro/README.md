@@ -18,6 +18,11 @@ and a contact form that posts to the studio.
   schema.
 - `src/components/Feature.astro` decides what the schema's `icon` select looks
   like. The CMS stores `git`, `bolt`, or `lock`; the site owns the drawing.
+- The pages read like a real site. Which parts the studio edits is told once,
+  in the footer's "How this site is built".
+- Every link points at the address its page is built at, and speculation rules
+  let the browser prerender the next page as the pointer settles on a link.
+  They are data the browser reads, not a script, so no page ships JavaScript.
 
 From the repository root:
 

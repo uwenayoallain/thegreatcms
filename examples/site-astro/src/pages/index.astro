@@ -4,43 +4,43 @@ import Quote from '../components/Quote.astro';
 import Base from '../layouts/Base.astro';
 import { cms } from '../lib/cms';
 
-// Managed content: one function call, resolved at build time.
 const hero = cms.region('home.hero');
 const features = cms.region('home.features').blocks;
 
 // Where form submissions go.
 const studio = import.meta.env.PUBLIC_CMS_URL ?? '';
 const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
+
+const steps = [
+  { title: 'Write', text: 'Edit the page you are looking at, with the real design beside the form.' },
+  { title: 'Publish', text: 'One click saves it as a commit, with your name on it and a history behind it.' },
+  { title: 'Go live', text: 'The site rebuilds the way it always has. Nothing new sits between it and its visitors.' },
+];
 ---
 
 <Base title={hero.heading} description={hero.subtitle}>
-  <!-- ── Managed by the CMS ───────────────────────────────────────────── -->
-  <section class="hero managed">
-    <p class="eyebrow">Managed region: home.hero</p>
+  <section class="hero">
     <h1>{hero.heading}</h1>
     {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
     {hero.cta?.href && <a class="button" href={hero.cta.href}>{hero.cta.label ?? 'Learn more'}</a>}
   </section>
 
-  <!-- ── Not managed: ordinary Astro the studio never sees ────────────── -->
   <section aria-labelledby="how">
-    <p class="eyebrow">Hand-written, not managed</p>
-    <h2 id="how">How this page is assembled</h2>
-    <p>
-      The heading above came from <code>content/cms/home.hero.json</code>. This
-      paragraph is hard-coded in <code>src/pages/index.astro</code>. Both end up
-      in the same static HTML, and the CMS has no idea this section exists.
-    </p>
-    <ol>
-      <li>An editor saves in the studio.</li>
-      <li>The studio commits JSON to this repository.</li>
-      <li>The commit triggers the deploy this site already had.</li>
+    <h2 id="how">From a sentence to a live page</h2>
+    <ol class="steps" role="list">
+      {
+        steps.map((step, index) => (
+          <li>
+            <span class="step-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+            <h3>{step.title}</h3>
+            <p>{step.text}</p>
+          </li>
+        ))
+      }
     </ol>
   </section>
 
-  <!-- ── Managed block list ───────────────────────────────────────────── -->
-  <section class="managed" aria-labelledby="why">
-    <p class="eyebrow">Managed region: home.features</p>
+  <section aria-labelledby="why">
     <h2 id="why">Why it works this way</h2>
     <ul class="grid" role="list">
       {
@@ -51,14 +51,11 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
     </ul>
   </section>
 
-  <!-- ── Dynamic: the one thing Git cannot hold ──────────────────────── -->
-  <section aria-labelledby="contact">
-    <p class="eyebrow">Managed by the studio</p>
-    <h2 id="contact">Send a message</h2>
-    <p>
-      A plain HTML form posting to the studio. No JavaScript, no third-party
-      form service, and submissions land in one inbox across every site.
-    </p>
+  <section class="contact-section" aria-labelledby="contact">
+    <div class="contact-intro">
+      <h2 id="contact">Send a message</h2>
+      <p>Questions, ideas, or a site you would like to move over. Every message is read by a person.</p>
+    </div>
 
     <form class="contact" method="POST" action={`${studio}/f/${siteId}/contact`}>
       <div>
@@ -67,10 +64,7 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
       </div>
 
       <div>
-        <label for="email">
-          Email
-          <span class="hint" id="email-hint">So we can reply. Never shared.</span>
-        </label>
+        <label for="email">Email</label>
         <input
           id="email"
           name="email"
@@ -79,6 +73,7 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
           aria-describedby="email-hint"
           required
         />
+        <span class="hint" id="email-hint">So we can reply. Never shared.</span>
       </div>
 
       <div>
@@ -86,9 +81,8 @@ const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'example';
         <textarea id="message" name="message" rows="5" required></textarea>
       </div>
 
-      <!-- Machinery: where to land after posting, and when the form was
-           rendered. The timestamp is how a submission filled in under a second
-           gets scored as a bot without ever showing anyone a CAPTCHA. -->
+      <!-- Where to land after posting, and when the form was rendered: a submission filled in
+           under a second is scored as a bot, so nobody is shown a CAPTCHA. -->
       <input type="hidden" name="_redirect" value="/thanks/" />
       <input type="hidden" name="_t" value={String(Date.now())} />
 

@@ -47,14 +47,14 @@ regions:
   about.intro:
     label: About intro
     fields:
-      heading: { type: text, default: About this example }
+      heading: { type: text, default: A small studio for sites that last }
       body:
         type: text
         multiline: true
         default: >-
-          Nobody has edited this region yet, so it renders the defaults declared
-          in the schema. The studio has never touched this page, and the build
-          did not care.
+          We build fast, quiet websites for people who would rather write than
+          wrestle with software. Each one is a folder of plain files you own,
+          and keeps working whether or not anyone is editing it.
 
 collections:
   blog:

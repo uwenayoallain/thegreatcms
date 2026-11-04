@@ -7,15 +7,22 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+// Trailing slashes are the address each page is built at, so a click never waits on a redirect.
 const nav = [
   { href: '/', label: 'Home' },
-  { href: '/about', label: 'About' },
-  { href: '/blog', label: 'Blog' },
+  { href: '/about/', label: 'About' },
+  { href: '/blog/', label: 'Blog' },
 ];
+// The browser loads a page as the pointer settles on its link; it is data, not a script that runs.
+const speculation = JSON.stringify({
+  prerender: [{ where: { href_matches: '/*' }, eagerness: 'moderate' }],
+});
 const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
 // A post is inside Blog: the link says so, without claiming to be the page itself.
-const current = (href: string) =>
-  path === href ? 'page' : href !== '/' && path.startsWith(`${href}/`) ? 'true' : undefined;
+const current = (href: string) => {
+  const target = href.replace(/\/+$/, '') || '/';
+  return path === target ? 'page' : target !== '/' && path.startsWith(`${target}/`) ? 'true' : undefined;
+};
 ---
 
 <!doctype html>
@@ -26,6 +33,7 @@ const current = (href: string) =>
     <title>{title}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     {description && <meta name="description" content={description} />}
+    <script type="speculationrules" is:inline set:html={speculation} />
   </head>
   <body>
     <!-- A skip link is the cheapest accessibility win there is: it lets keyboard
@@ -54,8 +62,20 @@ const current = (href: string) =>
     </main>
 
     <footer class="site-footer">
-      <p>Built from files in Git. This page shipped no JavaScript.</p>
-      <p>© {new Date().getFullYear()} Example</p>
+      <div class="footer-main">
+        <a class="wordmark" href="/">Example<span aria-hidden="true">.</span></a>
+        <p>Fast, quiet websites, built from plain files.</p>
+      </div>
+      <details class="colophon">
+        <summary>How this site is built</summary>
+        <ul>
+          <li>The home page's headline and the cards under "Why it works this way" are edited in GreatCMS.</li>
+          <li>The about page has never been edited: its words are the defaults in the schema.</li>
+          <li>Blog posts are Markdown files in the repository.</li>
+          <li>Everything else is ordinary Astro, and no page ships any JavaScript.</li>
+        </ul>
+      </details>
+      <p class="copyright">© {new Date().getFullYear()} Example</p>
     </footer>
   </body>
 </html>

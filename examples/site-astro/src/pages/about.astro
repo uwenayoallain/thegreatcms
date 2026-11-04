@@ -2,30 +2,31 @@
 import Base from '../layouts/Base.astro';
 import { cms } from '../lib/cms';
 
-// `about.intro` has no content file in this repo.
+// `about.intro` has no content file in this repository: it renders the schema's defaults.
 const intro = cms.region('about.intro');
 ---
 
-<Base title={intro.heading}>
-  <section class="managed">
-    <p class="eyebrow">Managed region: about.intro (never edited)</p>
+<Base title={intro.heading} description={intro.body}>
+  <section class="page-intro">
     <h1>{intro.heading}</h1>
-    <p>{intro.body}</p>
+    <p class="lede">{intro.body}</p>
   </section>
 
-  <section aria-labelledby="proof">
-    <h2 id="proof">Why this page is the interesting one</h2>
-    <p>
-      There is no <code>content/cms/about.intro.json</code> in this repository.
-      The text above comes from <code>default:</code> values in
-      <code>.cms/schema.yaml</code>, so this page rendered correctly before the
-      studio had ever been opened.
-    </p>
-    <p>
-      Everything this build needs is committed here: a schema file, some JSON,
-      some Markdown. No network call, no database, no API key, no running
-      studio. Shut the CMS down permanently and this site keeps building from
-      what is already in Git.
-    </p>
+  <section aria-labelledby="principles">
+    <h2 id="principles">What we hold to</h2>
+    <dl class="principles">
+      <div>
+        <dt>Plain files</dt>
+        <dd>Words live in the repository beside the code, in formats any tool can read.</dd>
+      </div>
+      <div>
+        <dt>Nothing at runtime</dt>
+        <dd>Pages are built ahead of time, so there is no server to slow a visitor down.</dd>
+      </div>
+      <div>
+        <dt>History you can trust</dt>
+        <dd>Every change is a commit with an author, and any of them can be undone.</dd>
+      </div>
+    </dl>
   </section>
 </Base>

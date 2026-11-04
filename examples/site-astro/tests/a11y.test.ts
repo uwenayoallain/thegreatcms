@@ -46,9 +46,22 @@ describe.each(PAGES)("$name", ({ file }) => {
     expect(summary).toEqual([]);
   });
 
-  it("ships no JavaScript", () => {
+  it("ships no JavaScript: its one script element is speculation rules, which the browser reads as data", () => {
     const html = readFileSync(join(DIST, file), "utf8");
-    expect(html).not.toMatch(/<script/i);
+    const { document } = new JSDOM(html).window;
+    const scripts = [...document.querySelectorAll("script")];
+    expect(scripts.map((script) => script.type)).toEqual(["speculationrules"]);
+    const rules = JSON.parse(scripts[0]!.textContent ?? "") as { prerender: unknown[] };
+    expect(rules.prerender.length).toBeGreaterThan(0);
+  });
+
+  it("links every page at the address it is built at, so no click waits on a redirect", () => {
+    const html = readFileSync(join(DIST, file), "utf8");
+    const { document } = new JSDOM(html).window;
+    for (const link of document.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')) {
+      const href = link.getAttribute("href")!.split("#")[0]!;
+      if (href) expect(href, `${file}: ${href}`).toMatch(/\/$/);
+    }
   });
 
   it("has a language, a title, one h1, and a skip link", () => {

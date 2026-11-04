@@ -3,25 +3,25 @@
     {
       "_type": "feature",
       "title": "Content lives in Git",
-      "body": "Every publish is a commit, so content has history, review, and rollback for free.",
+      "body": "Every change is saved with its history, so nothing you publish is ever lost, and any of it can be undone.",
       "icon": "git"
     },
     {
       "_type": "feature",
       "title": "Nothing at runtime",
-      "body": "Pages are built from files on disk. The CMS is never in the request path, so it can never be the reason a page is slow or down.",
+      "body": "Pages are built ahead of time and served as files. There is no server to fall over and nothing to slow a visitor down.",
       "icon": "bolt"
     },
     {
       "_type": "feature",
       "title": "Your design stays yours",
-      "body": "The CMS stores content shapes, never markup. Every component on this page is ordinary Astro the studio cannot see or break.",
+      "body": "Editors change words and images, never the layout, so the site still looks the way it was designed on its hundredth edit.",
       "icon": "lock"
     },
     {
       "_type": "quote",
-      "text": "The best CMS dependency is the one your production site does not have.",
-      "attribution": "The README"
+      "text": "We changed our opening hours ourselves for the first time in five years. It took a minute.",
+      "attribution": "Marie Uwase, Café Lumière"
     }
   ],
   "_meta": {

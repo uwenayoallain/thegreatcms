@@ -7,10 +7,10 @@ const posts = cms
   .toSorted((a, b) => b.data.date.localeCompare(a.data.date));
 ---
 
-<Base title="Blog" description="Posts, stored as Markdown in this repository.">
-  <section>
+<Base title="Blog" description="Notes on building websites that last.">
+  <section class="page-intro">
     <h1>Blog</h1>
-    <p>Collection entries are Markdown with frontmatter: exactly what every static site generator already expects.</p>
+    <p class="lede">Notes on building websites that last, and on keeping them easy to change.</p>
 
     <ul class="entry-list" role="list">
       {
