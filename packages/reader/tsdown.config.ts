@@ -13,7 +13,8 @@ export default defineConfig({
   ],
   format: ["esm"],
   dts: true,
-  clean: true,
+  // Written over in place, never emptied first: running dev servers import these files.
+  clean: false,
   target: "node20",
   treeshake: true,
   // Plain .js/.d.ts so package.json exports stay obvious and every consumer resolves them without thinking.
