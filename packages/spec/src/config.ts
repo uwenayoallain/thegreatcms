@@ -155,14 +155,19 @@ const own = (map: Record<string, string>, key: string) =>
 
 /**
  * Where an entry is seen on the site, from `preview.paths`: the slug's own
- * path, else the `*` template, else the front page. Regions are the front page.
+ * path, else the `*` template, else the front page. A region is seen at the
+ * path named by its id, else the front page too.
  */
 export function previewPath(
   config: CmsConfig,
-  entry?: { collection: string; slug: string },
+  entry?: { collection: string; slug: string } | { region: string },
 ): string {
   if (!entry) return "/";
   const paths = config.preview?.paths;
+  if ("region" in entry) {
+    const path = paths && Object.hasOwn(paths, entry.region) ? paths[entry.region] : undefined;
+    return typeof path === "string" && !path.includes("{slug}") ? path : "/";
+  }
   const rule =
     paths && Object.hasOwn(paths, entry.collection) ? paths[entry.collection] : undefined;
   const template =

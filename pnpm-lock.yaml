@@ -119,6 +119,9 @@ importers:
       '@greatcms/conformance':
         specifier: workspace:*
         version: link:../../packages/conformance
+      '@greatcms/reader':
+        specifier: workspace:*
+        version: link:../../packages/reader
       axe-core:
         specifier: ^4.13.0
         version: 4.13.0

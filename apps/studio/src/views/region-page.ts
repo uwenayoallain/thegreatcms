@@ -72,8 +72,10 @@ export function editRegionPage(options: EditPageOptions): string {
   const title = region.label ?? regionId;
 
   const editor = isBlocksRegion(region)
-    ? region.allow.some((type) => hasRichText(schema.blocks[type]?.fields ?? {}))
-    : hasRichText(region.fields);
+    ? region.allow.some((type) =>
+        hasRichText(schema.blocks[type]?.fields ?? {}, new Set(), schema.blocks, new Set([type])),
+      )
+    : hasRichText(region.fields, new Set(), schema.blocks);
 
   return page(
     {

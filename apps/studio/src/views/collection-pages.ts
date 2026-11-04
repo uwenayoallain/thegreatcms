@@ -169,7 +169,7 @@ export function editEntryPage(options: {
         { href: action, label: slug ? heading : "New entry" },
       ],
       flash,
-      editor: hasRichText(fields, plain),
+      editor: hasRichText(fields, plain, options.schema.blocks),
       liveSite: true,
     },
     html`

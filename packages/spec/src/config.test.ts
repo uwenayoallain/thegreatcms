@@ -8,7 +8,16 @@ preview:
   paths:
     pages: { home: "/", "*": "/{slug}" }
     updates: "/updates/{slug}"
+    visit: "/visit/"
 `);
+
+  it("opens a region on the page it names, and anything else on the front page", () => {
+    expect(previewPath(config, { region: "visit" })).toBe("/visit/");
+    expect(previewPath(config, { region: "home.hero" })).toBe("/");
+    // A collection's pattern is not a page a region can be on.
+    expect(previewPath(config, { region: "updates" })).toBe("/");
+    expect(previewPath(config, { region: "constructor" })).toBe("/");
+  });
 
   it("opens an entry where the site shows it", () => {
     expect(previewPath(config, { collection: "updates", slug: "new-office" })).toBe(

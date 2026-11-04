@@ -108,7 +108,11 @@ if (window.top !== window.self) {
         const own = normalize([...element.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join(" "));
         if (own) remember(own, element);
       }
-      const deepest = (list) => list.filter((el) => !list.some((other) => other !== el && el.contains(other)));
+      // The same words in the nav and in the page are usually the page's: prefer what is in <main>.
+      const deepest = (list) => {
+        const inner = list.filter((el) => !list.some((other) => other !== el && el.contains(other)));
+        return [...inner.filter((el) => el.closest("main")), ...inner.filter((el) => !el.closest("main"))];
+      };
       const images = [...DOC.images];
       for (const field of fields) {
         let found = DOC.querySelector("[" + ATTR + '="' + CSS.escape(field.dotted) + '"]');

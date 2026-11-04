@@ -445,9 +445,11 @@ preview:
   paths:
     pages: { home: "/", "*": "/{slug}" }
     updates: "/updates/{slug}"
+    visit: "/visit/" # a region id, for a region shown on a page of its own
 ```
 
-A collection without an entry here previews at `/`. Regions preview at `/`.
+A collection without an entry here previews at `/`. A region previews at the
+path its id names here, which has no `{slug}`, and otherwise at `/`.
 
 Earlier configs may also contain `publish.branch`, `publish.draftBranchPrefix`,
 `publish.dispatchEvent` and `preview.urlTemplate`. They are still accepted, so

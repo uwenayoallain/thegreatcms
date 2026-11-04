@@ -6,7 +6,7 @@ import type { HtmlEscapedString } from "hono/utils/html";
 
 /** What `html` actually returns: sync unless an interpolation is a promise. */
 type Html = HtmlEscapedString | Promise<HtmlEscapedString>;
-import { fieldName, MEDIA_ROOT } from "../form.js";
+import { fieldName, MEDIA_ROOT, ZONE_SUFFIX } from "../form.js";
 import { removeBlockControl } from "./block-actions.js";
 import { summarize, variantField, variantLabel } from "./summary.js";
 import { icon } from "./icons.js";
@@ -60,6 +60,10 @@ function renderField(
     ${control}
   </div>`;
 }
+
+/** `2026-11-20T18:00:00+02:00` → date, wall time, offset; a bare date has neither of the last two. */
+const DATE_TIME =
+  /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 function renderControl(
   def: FieldDef,
@@ -218,8 +222,22 @@ ${asText(readRichText(value))}</textarea>
       `);
     }
 
-    case "date":
-      return shell(html`<input type="date" ${shared} value="${asText(value).slice(0, 10)}" />`);
+    case "date": {
+      const text = asText(value);
+      if (!def.time) {
+        return shell(html`<input type="date" ${shared} value="${text.slice(0, 10)}" />`);
+      }
+      // The box shows the value's own wall time; its offset rides along so a save keeps it.
+      const parsed = DATE_TIME.exec(text);
+      const local = parsed ? `${parsed[1]}T${parsed[2] ?? "00:00"}` : "";
+      const zone = fieldName([...path.slice(0, -1), `${String(path.at(-1))}${ZONE_SUFFIX}`]);
+      const kept = parsed
+        ? html`<input type="hidden" name="${zone}" value="${parsed[3] ?? "local"}" />`
+        : "";
+      return shell(
+        html`<input type="datetime-local" step="60" ${shared} value="${local}" />${kept}`,
+      );
+    }
 
     case "link": {
       const link = (value ?? {}) as { href?: string; label?: string };
@@ -588,14 +606,22 @@ ${asText(readRichText(value))}</textarea>
 export function hasRichText(
   fields: Record<string, FieldDef>,
   plain: ReadonlySet<string> = new Set(),
+  blocks: Record<string, BlockDef> = {},
+  seen: ReadonlySet<string> = new Set(),
 ): boolean {
   return Object.entries(fields).some(([name, def]) => {
     if (def.type === "richtext") return !plain.has(name);
-    if (def.type === "group") return hasRichText(def.fields, plain);
-    if (def.type === "list") return hasRichText({ item: def.of }, plain);
-    // A nested blocks field may hold rich text; its types are resolved elsewhere,
-    // so assume it can and let the editor mount.
-    if (def.type === "blocks") return true;
+    if (def.type === "group") return hasRichText(def.fields, plain, blocks, seen);
+    if (def.type === "list") return hasRichText({ item: def.of }, plain, blocks, seen);
+    // A nested blocks field holds rich text when a block it allows does; a block already
+    // being looked at is skipped, so a block that can contain itself still finishes.
+    if (def.type === "blocks") {
+      return def.allow.some(
+        (type) =>
+          !seen.has(type) &&
+          hasRichText(blocks[type]?.fields ?? {}, new Set(), blocks, new Set([...seen, type])),
+      );
+    }
     return false;
   });
 }

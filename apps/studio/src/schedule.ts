@@ -40,3 +40,15 @@ export function formatInZone(timestamp: number, timeZone: string): string {
     timeStyle: "short",
   }).format(new Date(timestamp));
 }
+
+const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, "0");
+
+/** `+02:00` for a wall time typed in `timeZone`, the suffix that makes it one instant everywhere. */
+export function offsetSuffix(local: string, timeZone: string): string {
+  const epoch = zonedToEpoch(local, timeZone);
+  if (epoch === null) return "";
+  const minutes = Math.round(offsetAt(epoch, timeZone) / 60_000);
+  if (minutes === 0) return "Z";
+  const sign = minutes < 0 ? "-" : "+";
+  return `${sign}${pad(Math.abs(minutes) / 60)}:${pad(Math.abs(minutes) % 60)}`;
+}

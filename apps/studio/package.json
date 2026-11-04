@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@greatcms/conformance": "workspace:*",
+    "@greatcms/reader": "workspace:*",
     "axe-core": "^4.13.0",
     "html-validate": "~11.17.0",
     "jsdom": "^30.0.1",

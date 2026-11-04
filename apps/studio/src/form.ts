@@ -1,9 +1,12 @@
 /** Form data ↔ content documents. */
 
+import { offsetSuffix, studioTimeZone } from "./schedule.js";
 import { sanitizeRichText } from "./sanitize.js";
 import type { FieldDef } from "@greatcms/spec";
 
 export const ROOT = "f";
+/** The hidden sibling of a date-and-time input that keeps the value's UTC offset: `f[date~zone]`. */
+export const ZONE_SUFFIX = "~zone";
 /** Namespace for file inputs, kept separate from text so decoding stays simple. */
 export const MEDIA_ROOT = "m";
 
@@ -83,10 +86,27 @@ function coerceFields(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, def] of Object.entries(fields)) {
-    const value = coerceField(def, raw[name], blockFields, name !== verbatim);
+    const typed =
+      def.type === "date" && def.time ? withZone(raw[name], raw[name + ZONE_SUFFIX]) : raw[name];
+    const value = coerceField(def, typed, blockFields, name !== verbatim);
     if (value !== undefined) out[name] = value;
   }
   return out;
+}
+
+/**
+ * A browser's date-and-time box sends wall time with no zone, which a site built
+ * on another machine would read in its own. The offset the value had goes back
+ * on, and a new value takes the studio's zone, so the instant is the one typed.
+ */
+function withZone(value: unknown, zone: unknown): unknown {
+  const local = asString(value);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return value;
+  const kept = asString(zone);
+  // A value saved without an offset stays that way: it was never this form's to reinterpret.
+  if (kept === "local") return local;
+  const suffix = /^(Z|[+-]\d{2}:\d{2})$/.test(kept) ? kept : offsetSuffix(local, studioTimeZone());
+  return `${local}:00${suffix}`;
 }
 
 function coerceField(

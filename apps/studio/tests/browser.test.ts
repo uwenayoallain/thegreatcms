@@ -14,6 +14,7 @@ vi.setConfig({ testTimeout: 45_000, hookTimeout: 45_000 });
 import { createApp } from "../src/app.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
+import { PREVIEW_CHROME } from "@greatcms/reader/vite";
 
 const require = createRequire(import.meta.url);
 const AXE = require.resolve("axe-core/axe.min.js");
@@ -83,6 +84,9 @@ let server: ReturnType<typeof serve>;
 let devServer: ReturnType<typeof createServer>;
 let origin: string;
 let root: string;
+const PLAIN_PAGE = "<!doctype html><title>Site</title><h1>Welcome</h1><p>Existing copy.</p>";
+/** What the fake dev server serves; a test may swap in a page that runs the inspector. */
+let sitePage = PLAIN_PAGE;
 
 const CONTENT = "content/cms/home.hero.json";
 const heroFile = () => readFileSync(join(root, CONTENT), "utf8");
@@ -109,7 +113,7 @@ beforeAll(async () => {
   // The site's own dev server, on another origin: the studio refuses to be framed, rightly.
   devServer = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "text/html" });
-    response.end("<!doctype html><title>Site</title><h1>Welcome</h1><p>Existing copy.</p>");
+    response.end(sitePage);
   });
   await new Promise<void>((resolve) => devServer.listen(0, "127.0.0.1", resolve));
   const previewAddress = devServer.address();
@@ -443,6 +447,30 @@ describe.skipIf(!browser)("pointing at the page", () => {
       window.parent.postMessage({ greatcms: "pick", path: "f[nothing]" }, "*");
     });
     expect(await page.evaluate(() => document.activeElement?.id)).toBe(before);
+  });
+
+  it("maps a click to the field whose words are in <main>, not to the nav that repeats them", async () => {
+    sitePage = `<!doctype html><title>Site</title>${PREVIEW_CHROME}<nav><a href="/">Welcome</a></nav><main><h1>Welcome</h1><p>Existing copy.</p></main>`;
+    try {
+      const page = await editor();
+      await page.waitForSelector("iframe[data-live-site]");
+      await page.locator("label:has(#live-select)").click();
+      const framed = page.frames().find((frame) => frame.parentFrame() !== null);
+      if (!framed) throw new Error("the preview frame did not load");
+      await framed.waitForSelector("main h1");
+      await expect
+        .poll(() => page.locator("#live-status").innerText(), {
+          timeout: 5000,
+        })
+        .toMatch(/field/);
+
+      await framed.locator("main h1").dispatchEvent("click");
+      await expect
+        .poll(() => page.evaluate(() => document.activeElement?.id), { timeout: 5000 })
+        .toBe("f-heading");
+    } finally {
+      sitePage = PLAIN_PAGE;
+    }
   });
 
   it("offers the select and section toggles only once JavaScript can drive them", async () => {

@@ -316,6 +316,12 @@ describe("block lists", () => {
     const { document } = new JSDOM(await response.text()).window;
     const headings = [...document.querySelectorAll("section.block h2")].map((h) => h.textContent);
     expect(headings).toEqual(["Text", "Hero"]);
+    // The live preview reads the draft, so it shows the new order before anything is published.
+    const draft = JSON.parse(site.read(".cms/draft/content/cms/home.body.json")) as {
+      blocks: Array<{ _type: string }>;
+    };
+    expect(draft.blocks.map((block) => block._type)).toEqual(["text", "hero"]);
+    expect(commits()).toHaveLength(0);
   });
 
   it("ignores a block type the schema does not allow", async () => {

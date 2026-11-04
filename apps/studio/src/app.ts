@@ -1266,6 +1266,15 @@ export function createApp(options: AppOptions) {
 
     if (action.startsWith("nested:")) {
       const updated = applyNestedBlockAction(context.schema, collection, document, action, form);
+      // The preview shows the draft, so a reordered or added section has to land there too.
+      if (updated.changed && requested !== "new") {
+        await client.writeLiveDraft({
+          context,
+          collection: { name, slug: requested },
+          document,
+          base: baseOf(entries),
+        });
+      }
       return c.html(
         renderEntry({
           slug: requested === "new" ? null : requested,
@@ -1532,7 +1541,7 @@ export function createApp(options: AppOptions) {
           draft: draft !== null,
           staleDraft: base?.stale,
           others: here(c, site.id, `regions/${regionId}`),
-          previewUrl: site.devUrl ?? undefined,
+          previewUrl: regionPreview(site, context.config, regionId),
           errors: new Map(),
           headSha: base?.base ?? context.headSha,
           mediaPreviews: committedPreviews(site.id, context.config, document),
@@ -1586,7 +1595,7 @@ export function createApp(options: AppOptions) {
         regionId,
         region,
         file: regionFilePath(context.config, regionId),
-        previewUrl: site.devUrl ?? undefined,
+        previewUrl: regionPreview(site, context.config, regionId),
         ...view,
         pendingMedia: pendingToken,
         mediaPreviews: {
@@ -1631,6 +1640,9 @@ export function createApp(options: AppOptions) {
 
     if (action.startsWith("nested:")) {
       const updated = applyNestedBlockAction(context.schema, region, document, action, form);
+      if (updated.changed) {
+        await client.writeLiveDraft({ context, regionId, document, base: baseOf(entries) });
+      }
       return c.html(
         renderRegion({
           document,
@@ -1655,6 +1667,14 @@ export function createApp(options: AppOptions) {
         String(form.get("addType") ?? ""),
         region.allow,
       );
+      if (updated.changed) {
+        await client.writeLiveDraft({
+          context,
+          regionId,
+          document: { blocks },
+          base: baseOf(entries),
+        });
+      }
       return c.html(
         renderRegion({
           document: { blocks },
@@ -1859,6 +1879,13 @@ function describeError(error: unknown): string {
 }
 
 /** Where the preview should open for an entry: the page it is on, when the site's config says where that is. */
+/** The page a region is seen on, from `preview.paths`, so its editor frames that page. */
+function regionPreview(site: Site, config: CmsConfig, region: string): string | undefined {
+  if (!site.devUrl) return undefined;
+  const path = previewPath(config, { region });
+  return path === "/" ? site.devUrl : new URL(path, site.devUrl).href;
+}
+
 function entryPreview(
   site: Site,
   config: CmsConfig,
