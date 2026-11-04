@@ -86,6 +86,23 @@ export class SiteNotConfiguredError extends Error {
   }
 }
 
+/**
+ * Parsed schemas and configs by their exact text: every request reads the files, and parsing
+ * the YAML again was half of what an editor page cost. Read-only; nothing changes a parsed one.
+ */
+const parsed = new Map<string, unknown>();
+const MAX_PARSED = 64;
+
+function parsedOnce<T>(file: { path: string; content: string }, parse: () => T): T {
+  const key = `${file.path}\0${file.content}`;
+  if (parsed.has(key)) return parsed.get(key) as T;
+  // A schema that does not parse throws here, and nothing is remembered for it.
+  const value = parse();
+  if (parsed.size >= MAX_PARSED) parsed.clear();
+  parsed.set(key, value);
+  return value;
+}
+
 export class SiteClient {
   private readonly repo: LocalRepository;
 
@@ -116,8 +133,12 @@ export class SiteClient {
     if (!schemaFile) throw new SiteNotConfiguredError(this.site);
 
     return {
-      schema: parseSchema(schemaFile.content, { file: schemaFile.path }),
-      config: configFile ? parseConfig(configFile.content, configFile.path) : DEFAULT_CONFIG,
+      schema: parsedOnce(schemaFile, () =>
+        parseSchema(schemaFile.content, { file: schemaFile.path }),
+      ),
+      config: configFile
+        ? parsedOnce(configFile, () => parseConfig(configFile.content, configFile.path))
+        : DEFAULT_CONFIG,
       headSha,
     };
   }

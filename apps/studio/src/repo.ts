@@ -15,6 +15,18 @@ const SAFE_GIT = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"
 /** The publish in flight per site folder, so two never interleave writes, staging, or commits. */
 const publishing = new Map<string, Promise<unknown>>();
 
+/**
+ * What git said about a site folder at one commit: history and changes cannot differ until the
+ * branch moves, so every page after the first is answered without starting a process.
+ */
+const answers = new Map<
+  string,
+  { head: string; values: Map<string, { value: Promise<unknown>; until: number }> }
+>();
+const MAX_ANSWERS = 500;
+/** Folders where reading `.git` gave the same commit as git did, so it can stand in for it. */
+const headFromFiles = new Map<string, boolean>();
+
 export interface FileChange {
   /** Repo-relative path, e.g. `content/cms/home.hero.json`. */
   path: string;
@@ -151,8 +163,36 @@ export class LocalRepository implements Repository {
   }
 
   async getHead(): Promise<string> {
-    const sha = await this.tryGit(["rev-parse", "HEAD"]);
-    return sha?.trim() || "working-copy";
+    // Two small reads instead of a process, once git has agreed with them for this folder.
+    const trusted = headFromFiles.get(this.root);
+    if (trusted !== false) {
+      const fromFiles = await readHeadFiles(this.root);
+      if (trusted && fromFiles) return fromFiles;
+      const sha = (await this.tryGit(["rev-parse", "HEAD"]))?.trim() || "working-copy";
+      if (trusted === undefined) headFromFiles.set(this.root, fromFiles === sha);
+      return sha;
+    }
+    return (await this.tryGit(["rev-parse", "HEAD"]))?.trim() || "working-copy";
+  }
+
+  /** A read-only git answer, kept until the branch moves (or `ttl` passes, for upstream state). */
+  private async remembered<T>(key: string, compute: () => Promise<T>, ttl = Infinity): Promise<T> {
+    const head = await this.getHead();
+    if (head === "working-copy") return compute();
+    let entry = answers.get(this.root);
+    if (!entry || entry.head !== head) {
+      entry = { head, values: new Map() };
+      answers.set(this.root, entry);
+    }
+    const now = Date.now();
+    const cached = entry.values.get(key);
+    if (cached && cached.until > now) return cached.value as Promise<T>;
+    if (entry.values.size >= MAX_ANSWERS) entry.values.clear();
+    const value = compute();
+    const values = entry.values;
+    values.set(key, { value, until: now + ttl });
+    value.catch(() => values.delete(key));
+    return value;
   }
 
   async commitFiles(request: CommitRequest): Promise<CommitResult> {
@@ -162,6 +202,7 @@ export class LocalRepository implements Repository {
     try {
       return await current;
     } finally {
+      answers.delete(this.root);
       if (publishing.get(this.root) === current) publishing.delete(this.root);
     }
   }
@@ -256,6 +297,11 @@ export class LocalRepository implements Repository {
 
   /** The branch's upstream and how many commits have not reached it, or null without one. */
   async syncState(): Promise<SyncState | null> {
+    // A fetch moves the upstream without moving HEAD, so this one is also asked again shortly.
+    return this.remembered("sync", () => this.readSyncState(), 10_000);
+  }
+
+  private async readSyncState(): Promise<SyncState | null> {
     const upstream = (
       await this.tryGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
     )?.trim();
@@ -275,6 +321,7 @@ export class LocalRepository implements Repository {
     try {
       return await current;
     } finally {
+      answers.delete(this.root);
       if (publishing.get(this.root) === current) publishing.delete(this.root);
     }
   }
@@ -329,6 +376,10 @@ export class LocalRepository implements Repository {
 
   /** Commits that touched a file, newest first; empty outside a Git repository. */
   async history(path: string, limit = 30): Promise<HistoryEntry[]> {
+    return this.remembered(`history:${limit}:${path}`, () => this.readHistory(path, limit));
+  }
+
+  private async readHistory(path: string, limit: number): Promise<HistoryEntry[]> {
     const out = await this.tryGit([
       "log",
       `-n${limit}`,
@@ -351,6 +402,12 @@ export class LocalRepository implements Repository {
   async changes(paths: string[], limit = 200): Promise<Change[]> {
     if (paths.length === 0) return [];
     for (const path of paths) this.absolute(path);
+    return this.remembered(`changes:${limit}:${paths.join("\0")}`, () =>
+      this.readChanges(paths, limit),
+    );
+  }
+
+  private async readChanges(paths: string[], limit: number): Promise<Change[]> {
     const out = await this.tryGit([
       "log",
       `-n${limit}`,
@@ -506,6 +563,39 @@ export class LocalRepository implements Repository {
     }
     return target;
   }
+}
+
+/**
+ * The commit HEAD names, read from the `.git` folder the way git finds it: up from the site
+ * folder. Null for anything unusual (a worktree's `.git` file, a missing ref), where git answers.
+ */
+async function readHeadFiles(root: string): Promise<string | null> {
+  for (let folder = root; ; folder = dirname(folder)) {
+    const git = join(folder, ".git");
+    // oxlint-disable-next-line no-await-in-loop -- each folder up is only read if this one had none
+    const head = await readFile(join(git, "HEAD"), "utf8").then(
+      (text) => text.trim(),
+      (error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? undefined : null),
+    );
+    if (head === null) return null;
+    if (head !== undefined) return resolveRef(git, head);
+    if (dirname(folder) === folder) return null;
+  }
+}
+
+async function resolveRef(git: string, head: string): Promise<string | null> {
+  if (isCommitId(head) && head.length >= 40) return head;
+  const ref = /^ref: (refs\/[\w./-]+)$/.exec(head)?.[1];
+  if (!ref || ref.includes("..")) return null;
+  const loose = await readFile(join(git, ref), "utf8").then(
+    (text) => text.trim(),
+    () => null,
+  );
+  if (loose) return isCommitId(loose) ? loose : null;
+  const packed = await readFile(join(git, "packed-refs"), "utf8").catch(() => "");
+  const line = packed.split("\n").find((entry) => entry.endsWith(` ${ref}`));
+  const sha = line?.slice(0, line.indexOf(" "));
+  return sha && isCommitId(sha) ? sha : null;
 }
 
 /** The path itself or its closest ancestor that exists, which is what a link would redirect. */
