@@ -1,6 +1,6 @@
 ---
 title: The examples
-summary: Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
+summary: Six sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
 order: 70
 ---
 
@@ -50,6 +50,26 @@ that preference.
 
 `deploy/` beside it is the complete self-hosted stack for a site like this.
 
+## A ceramics studio, made the way you would make yours
+
+```sh
+pnpm --filter @greatcms/example-ceramics-astro dev
+```
+
+`examples/ceramics-astro` is Ibumba, a pottery studio in Kigali that sells its
+work and teaches classes. It began as `npm create astro` and `greatcms init`,
+the path a new site takes, so it shows what that produces once someone designs
+it. A home page of reorderable sections (a statement on two backgrounds, the
+steps from clay to kiln, the next few workshops, a quote), a visiting page with
+opening hours, and a `workshops` collection whose entries carry a date and
+time, a level, a price in Rwandan francs and a fully-booked switch that hides
+the booking. The booking form posts to the studio's inbox.
+
+Times are stored with their offset and shown in Kigali's zone, so a build on a
+server in another zone prints the same hour. `preview.paths` names the page
+each region lives on, so editing the visiting hours frames `/visit/`, not the
+front page. No page ships a script.
+
 ## A bakery on Next.js
 
 ```sh
@@ -67,9 +87,9 @@ card. The pre-order form is a checkbox group that posts to the studio's inbox,
 which keeps every box that was ticked.
 
 `next dev` renders on every request, so the studio's drafts appear on the next
-load. It does not watch content files, so the layout marks the page
-`data-greatcms-unwatched` and the studio reloads the preview after each draft.
-The preview script is added only under `next dev`. The tests check that an
+load. It does not watch content files, so `<GreatcmsPreview />` in the root
+layout tells the studio, which reloads the preview after each draft. The
+preview script is added only under `next dev`. The tests check that an
 exported page carries none of it, and keep the JavaScript Next.js brings under
 a budget.
 

@@ -610,7 +610,7 @@ your real components beside the form as you type.
 | [Accessibility](./apps/docs/content/docs/accessibility.md)                 | What the format enforces and what the tests enforce              |
 | [Any language](./apps/docs/content/docs/any-language.md)                   | Reading the standard without TypeScript; the conformance suite   |
 | [For coding agents](./apps/docs/content/docs/for-agents.md)                | `llms.txt`, JSON Schemas, the installable skill                  |
-| [The examples](./apps/docs/content/docs/examples.md)                       | Five sites on four frameworks, and what each one proves          |
+| [The examples](./apps/docs/content/docs/examples.md)                       | Six sites on four frameworks, and what each one proves           |
 | [Design decisions](./DESIGN.md)                                            | Why it works the way it does, and the tests that hold it to that |
 | [Contributing](./CONTRIBUTING.md)                                          | Developing this repository: commands, layout, toolchain          |
 
@@ -1794,7 +1794,7 @@ url: https://greatcms.dev/docs/examples
 
 # The examples
 
-> Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
+> Six sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
 
 Every example in the repository is also a test. They build in CI, run axe with
 zero violations allowed, and assert that their output contains no script tag.
@@ -1842,6 +1842,26 @@ that preference.
 
 `deploy/` beside it is the complete self-hosted stack for a site like this.
 
+## A ceramics studio, made the way you would make yours
+
+```sh
+pnpm --filter @greatcms/example-ceramics-astro dev
+```
+
+`examples/ceramics-astro` is Ibumba, a pottery studio in Kigali that sells its
+work and teaches classes. It began as `npm create astro` and `greatcms init`,
+the path a new site takes, so it shows what that produces once someone designs
+it. A home page of reorderable sections (a statement on two backgrounds, the
+steps from clay to kiln, the next few workshops, a quote), a visiting page with
+opening hours, and a `workshops` collection whose entries carry a date and
+time, a level, a price in Rwandan francs and a fully-booked switch that hides
+the booking. The booking form posts to the studio's inbox.
+
+Times are stored with their offset and shown in Kigali's zone, so a build on a
+server in another zone prints the same hour. `preview.paths` names the page
+each region lives on, so editing the visiting hours frames `/visit/`, not the
+front page. No page ships a script.
+
 ## A bakery on Next.js
 
 ```sh
@@ -1859,9 +1879,9 @@ card. The pre-order form is a checkbox group that posts to the studio's inbox,
 which keeps every box that was ticked.
 
 `next dev` renders on every request, so the studio's drafts appear on the next
-load. It does not watch content files, so the layout marks the page
-`data-greatcms-unwatched` and the studio reloads the preview after each draft.
-The preview script is added only under `next dev`. The tests check that an
+load. It does not watch content files, so `<GreatcmsPreview />` in the root
+layout tells the studio, which reloads the preview after each draft. The
+preview script is added only under `next dev`. The tests check that an
 exported page carries none of it, and keep the JavaScript Next.js brings under
 a budget.
 

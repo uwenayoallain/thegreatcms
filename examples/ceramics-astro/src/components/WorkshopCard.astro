@@ -1,0 +1,18 @@
+---
+import { francs, when, type Workshop } from "../lib/cms";
+interface Props { workshop: Workshop; headingLevel?: 2 | 3 }
+const { workshop, headingLevel = 3 } = Astro.props;
+const Heading = headingLevel === 2 ? "h2" : "h3";
+const date = when(workshop.date);
+---
+<article class="card" data-full={workshop.full ? "" : undefined}>
+  <p class="card__date"><time datetime={workshop.date}>{date.day}, {date.time}</time></p>
+  <Heading class="card__title"><a href={`/workshops/${workshop.slug}/`}>{workshop.title}</a></Heading>
+  <p class="card__summary">{workshop.summary}</p>
+  <dl class="facts">
+    <div><dt>Length</dt><dd>{workshop.length}</dd></div>
+    <div><dt>Level</dt><dd>{workshop.level}</dd></div>
+    <div><dt>Price</dt><dd>{francs(workshop.price)}</dd></div>
+  </dl>
+  {workshop.full && <p class="badge">Fully booked</p>}
+</article>

@@ -1,0 +1,57 @@
+---
+/** Renders home.sections: one case per block type the schema allows, in the order the studio set. */
+import WorkshopCard from "./WorkshopCard.astro";
+import { upcoming } from "../lib/cms";
+import type { HomeSectionsRegion } from "../cms";
+
+interface Props { blocks: HomeSectionsRegion["blocks"] }
+const { blocks } = Astro.props;
+const next = upcoming();
+---
+{blocks.map((block) => {
+  switch (block._type) {
+    case "statement":
+      return (
+        <section class:list={["statement", `statement--${block._variant ?? "plain"}`]}>
+          {block.eyebrow && <p class="eyebrow">{block.eyebrow}</p>}
+          <p class="statement__text">{block.text}</p>
+        </section>
+      );
+    case "process":
+      return (
+        <section class="process" aria-labelledby="process-heading">
+          <h2 id="process-heading">{block.heading}</h2>
+          <ol class="steps">
+            {(block.steps ?? []).map((step, index) => (
+              <li class="step">
+                <span class="step__number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      );
+    case "upcoming":
+      return (
+        <section class="upcoming" aria-labelledby="upcoming-heading">
+          <div class="section-head">
+            <h2 id="upcoming-heading">{block.heading}</h2>
+            {block.link?.href && <a class="more" href={block.link.href}>{block.link.label ?? "More"}</a>}
+          </div>
+          <div class="cards">
+            {next.slice(0, block.count ?? 3).map((workshop) => <WorkshopCard workshop={workshop} />)}
+          </div>
+        </section>
+      );
+    case "quote":
+      return (
+        <figure class="quote">
+          <blockquote><p>{block.quote}</p></blockquote>
+          <figcaption><strong>{block.name}</strong>{block.detail && <span>{block.detail}</span>}</figcaption>
+        </figure>
+      );
+    default:
+      return null;
+  }
+})}

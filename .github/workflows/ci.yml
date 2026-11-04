@@ -56,6 +56,7 @@ jobs:
           (cd examples/bakery-next && node ../../packages/cli/bin/greatcms.mjs check)
           (cd examples/changelog-nuxt && node ../../packages/cli/bin/greatcms.mjs check)
           (cd examples/journal-sveltekit && node ../../packages/cli/bin/greatcms.mjs check)
+          (cd examples/ceramics-astro && node ../../packages/cli/bin/greatcms.mjs check)
 
       # Types generated from a schema that has since changed describe a site
       # that does not exist, and nothing else would notice.
@@ -63,6 +64,7 @@ jobs:
         run: |
           (cd apps/docs && node ../../packages/cli/bin/greatcms.mjs types --out src/cms.d.ts --check)
           (cd examples/site-astro && node ../../packages/cli/bin/greatcms.mjs types --out src/cms.d.ts --check)
+          (cd examples/ceramics-astro && node ../../packages/cli/bin/greatcms.mjs types --out src/cms.d.ts --check)
 
       # The standard has to be usable outside JavaScript, so CI proves it every
       # run: a Python reader written from SPEC.md must pass the same suite.

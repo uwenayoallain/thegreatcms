@@ -1,0 +1,47 @@
+---
+import Base from "../layouts/Base.astro";
+import { cms, formAction, upcoming, when } from "../lib/cms";
+
+const booking = cms.region("booking");
+const open = upcoming().filter((workshop) => !workshop.full);
+---
+<Base title={booking.heading} description={booking.text}>
+  <section class="page-head">
+    <p class="eyebrow">Workshops</p>
+    <h1>{booking.heading}</h1>
+    {booking.text && <p class="lede">{booking.text}</p>}
+  </section>
+  <form class="booking" method="POST" action={formAction("booking")}>
+    <input type="hidden" name="_redirect" value="/book/thanks/" />
+    <div class="field">
+      <label for="workshop">Workshop</label>
+      <select id="workshop" name="workshop" required>
+        {open.map((workshop) => <option value={workshop.title}>{workshop.title}, {when(workshop.date).short}</option>)}
+        <option value="Next available date">Whichever comes next</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="name">Your name</label>
+        <input id="name" name="name" autocomplete="name" required />
+      </div>
+      <div class="field">
+        <label for="people">How many of you</label>
+        <input id="people" name="people" type="number" min="1" max="12" value="1" inputmode="numeric" required />
+      </div>
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required />
+    </div>
+    <div class="field">
+      <label for="message">Anything we should know <span class="optional">(optional)</span></label>
+      <textarea id="message" name="message" rows="4"></textarea>
+    </div>
+    <div class="honeypot" aria-hidden="true">
+      <label for="company">Company</label>
+      <input id="company" name="company" tabindex="-1" autocomplete="off" />
+    </div>
+    <button class="button" type="submit">{booking.button}</button>
+  </form>
+</Base>

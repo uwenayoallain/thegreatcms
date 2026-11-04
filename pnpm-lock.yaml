@@ -178,6 +178,43 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(jsdom@30.0.1)(vite@8.3.5(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
 
+  examples/ceramics-astro:
+    dependencies:
+      '@fontsource-variable/fraunces':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@greatcms/reader':
+        specifier: workspace:*
+        version: link:../../packages/reader
+      astro:
+        specifier: ^7.4.4
+        version: 7.4.4(@types/node@26.2.0)(db0@0.3.4)(esbuild@0.28.2)(ioredis@5.11.1(supports-color@10.2.2))(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+      marked:
+        specifier: ^15.0.12
+        version: 15.0.12
+    devDependencies:
+      '@astrojs/check':
+        specifier: ^0.9.10
+        version: 0.9.10(prettier@3.9.6)(typescript@6.0.3)
+      '@greatcms/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@types/jsdom':
+        specifier: ^30.0.0
+        version: 30.0.0
+      axe-core:
+        specifier: ^4.13.0
+        version: 4.13.0
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(jsdom@30.0.1)(vite@8.3.5(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+
   examples/changelog-nuxt:
     dependencies:
       '@fontsource-variable/bricolage-grotesque':
@@ -971,6 +1008,9 @@ packages:
 
   '@fontsource-variable/bricolage-grotesque@5.3.0':
     resolution: {integrity: sha512-TLi9Q4hJjS2UvoTMRSS2nHu6c4R56lAw60NR9QYtVRCHn0XtsFpiEhNffZ8Glsoxu6wEEwLKBP8lb94J52PNBA==}
+
+  '@fontsource-variable/fraunces@5.3.0':
+    resolution: {integrity: sha512-9BYGySn4AHEJdgp9Z28tQ3X+laJMEOITXkQarZXeloWQZDq5oOvXJ3kDA8c7MGIfpogIaZfjrQBqmda8POOCKA==}
 
   '@fontsource-variable/newsreader@5.3.0':
     resolution: {integrity: sha512-rrzYi43qMpbzwuFtf9OkWH8sxAPVPcQQQEwXpPtwaKYeJ8yVg5aLs5kawmo1f2Q1t1M38TLmEKCkGVDsYwgdFw==}
@@ -6247,6 +6287,8 @@ snapshots:
   '@exodus/bytes@1.15.1': {}
 
   '@fontsource-variable/bricolage-grotesque@5.3.0': {}
+
+  '@fontsource-variable/fraunces@5.3.0': {}
 
   '@fontsource-variable/newsreader@5.3.0': {}
 

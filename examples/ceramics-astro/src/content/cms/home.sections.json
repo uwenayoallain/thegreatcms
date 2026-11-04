@@ -1,0 +1,54 @@
+{
+  "blocks": [
+    {
+      "_type": "statement",
+      "_variant": "plain",
+      "eyebrow": "Why ibumba",
+      "text": "Ibumba is the Kinyarwanda word for clay. Ours is dug near Gatagara, where potters have worked the same banks for generations, and every piece we sell began there."
+    },
+    {
+      "_type": "process",
+      "heading": "From clay to kiln",
+      "steps": [
+        {
+          "_type": "step",
+          "title": "Wedge",
+          "text": "The clay is kneaded until it is even all the way through, so it holds together on the wheel and in the fire."
+        },
+        {
+          "_type": "step",
+          "title": "Throw",
+          "text": "On the wheel the lump is centred, opened and pulled up into a wall, a little thinner with every pass."
+        },
+        {
+          "_type": "step",
+          "title": "Trim and dry",
+          "text": "Once it is leather-hard the foot is cut, and the piece dries slowly for a week under cloth."
+        },
+        {
+          "_type": "step",
+          "title": "Fire",
+          "text": "Two firings: one to harden it, and one to melt the glaze into glass. The kiln decides the rest."
+        }
+      ]
+    },
+    {
+      "_type": "upcoming",
+      "heading": "Next at the studio",
+      "count": 3,
+      "link": { "href": "/workshops/", "label": "Every workshop" }
+    },
+    {
+      "_type": "quote",
+      "quote": "I came for one evening and stayed for the whole season. My kitchen is full of slightly wonky bowls and I love every one of them.",
+      "name": "Aline Uwase",
+      "detail": "Saturday wheel class, 2025"
+    },
+    {
+      "_type": "statement",
+      "_variant": "clay",
+      "eyebrow": "Commissions",
+      "text": "Restaurants and cafes in Kigali serve on our plates. If you need a set made for your table, write to us and we will throw a sample."
+    }
+  ]
+}

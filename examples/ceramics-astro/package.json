@@ -1,0 +1,28 @@
+{
+  "name": "@greatcms/example-ceramics-astro",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "types": "greatcms types --out src/cms.d.ts",
+    "typecheck": "greatcms check && greatcms types --out src/cms.d.ts --check && astro check",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@greatcms/reader": "workspace:*",
+    "astro": "^7.4.4",
+    "marked": "^15.0.12"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@greatcms/cli": "workspace:*",
+    "@types/jsdom": "^30.0.0",
+    "axe-core": "^4.13.0",
+    "jsdom": "^30.0.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  }
+}

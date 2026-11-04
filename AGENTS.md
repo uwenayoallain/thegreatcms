@@ -48,9 +48,9 @@ packages/reader/        build-time reader for JS frameworks
 packages/cli/           greatcms init / setup / add / types / check / doctor
 packages/conformance/   fixtures + verifier proving a reader is correct
 packages/deploy/        greatcms-deploy: builds each commit, swaps the live folder
-examples/               five sites (minimal Astro, the Paraline showcase with its self-hosting
-                        stack, a bakery on Next.js, a journal on SvelteKit, a changelog on Nuxt)
-                        and a Python reader
+examples/               six sites (minimal Astro, the Paraline showcase with its self-hosting
+                        stack, the Ibumba ceramics studio on Astro, a bakery on Next.js, a
+                        journal on SvelteKit, a changelog on Nuxt) and a Python reader
 skills/greatcms/        the installable skill that teaches an agent to use GreatCMS on a site
 docs/                   generated agent surface: never edit by hand
 ```

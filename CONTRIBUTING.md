@@ -63,7 +63,7 @@ packages/conformance/   Fixtures and the verifier any implementation must pass
 packages/deploy/        Clones, builds and swaps releases: the one piece that runs site code
 apps/studio/            The CMS: a Hono server, server-rendered, every mutation a form POST
 apps/docs/              The website, itself managed by GreatCMS
-examples/               Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader
+examples/               Six sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader
 skills/greatcms/        An installable skill for agents working inside a site
 docs/                   Generated agent docs; never edit by hand
 ```

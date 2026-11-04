@@ -1,0 +1,17 @@
+{
+  "heading": "Visit the studio",
+  "address": "KG 9 Avenue, Kimihurura\nKigali, Rwanda",
+  "hours": [
+    "Tuesday to Friday, 10:00 to 18:00",
+    "Saturday, 9:00 to 16:00",
+    "Sunday and Monday, closed"
+  ],
+  "directions": {
+    "href": "https://www.openstreetmap.org/search?query=Kimihurura%20Kigali",
+    "label": "Open in a map",
+    "external": true
+  },
+  "note": {
+    "html": "<p>The shop is open whenever the studio is. <strong>Workshops need booking</strong>, so we can have your clay ready.</p>"
+  }
+}

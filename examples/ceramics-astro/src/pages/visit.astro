@@ -1,0 +1,27 @@
+---
+import Base from "../layouts/Base.astro";
+import { cms } from "../lib/cms";
+
+const visit = cms.region("visit");
+const hours = visit.hours ?? [];
+---
+<Base title="Visit" description="Where to find the Ibumba studio and shop in Kigali, and when we are open.">
+  <section class="page-head">
+    <p class="eyebrow">Studio and shop</p>
+    <h1>{visit.heading}</h1>
+  </section>
+  <div class="visit">
+    <div>
+      <h2>Find us</h2>
+      <address class="visit__address">{visit.address.split("\n").map((line) => <span>{line}</span>)}</address>
+      {visit.directions?.href && <a class="more" href={visit.directions.href}>{visit.directions.label ?? "Directions"}</a>}
+    </div>
+    {hours.length > 0 && (
+      <div>
+        <h2>Opening hours</h2>
+        <ul class="hours">{hours.map((line) => <li>{line}</li>)}</ul>
+      </div>
+    )}
+  </div>
+  {visit.note?.html && <div class="prose note" set:html={visit.note.html} />}
+</Base>

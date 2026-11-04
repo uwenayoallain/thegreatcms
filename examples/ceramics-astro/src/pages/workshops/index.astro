@@ -1,0 +1,17 @@
+---
+import Base from "../../layouts/Base.astro";
+import WorkshopCard from "../../components/WorkshopCard.astro";
+import { upcoming } from "../../lib/cms";
+
+const list = upcoming();
+---
+<Base title="Workshops" description="Wheel, hand-building and glaze workshops at Ibumba in Kigali.">
+  <section class="page-head">
+    <p class="eyebrow">Learn with us</p>
+    <h1>Workshops</h1>
+    <p class="lede">Small groups, real clay, and everything fired in our own kiln. Prices include materials and firing.</p>
+  </section>
+  {list.length > 0
+    ? <div class="cards cards--wide">{list.map((workshop) => <WorkshopCard workshop={workshop} headingLevel={2} />)}</div>
+    : <p class="empty">New dates are on their way. Write to us and we will tell you first.</p>}
+</Base>

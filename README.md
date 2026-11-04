@@ -70,7 +70,7 @@ your real components beside the form as you type.
 | [Accessibility](./apps/docs/content/docs/accessibility.md)                 | What the format enforces and what the tests enforce              |
 | [Any language](./apps/docs/content/docs/any-language.md)                   | Reading the standard without TypeScript; the conformance suite   |
 | [For coding agents](./apps/docs/content/docs/for-agents.md)                | `llms.txt`, JSON Schemas, the installable skill                  |
-| [The examples](./apps/docs/content/docs/examples.md)                       | Five sites on four frameworks, and what each one proves          |
+| [The examples](./apps/docs/content/docs/examples.md)                       | Six sites on four frameworks, and what each one proves           |
 | [Design decisions](./DESIGN.md)                                            | Why it works the way it does, and the tests that hold it to that |
 | [Contributing](./CONTRIBUTING.md)                                          | Developing this repository: commands, layout, toolchain          |
 

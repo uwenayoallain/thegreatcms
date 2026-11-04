@@ -1,0 +1,57 @@
+---
+import "@fontsource-variable/fraunces";
+import "../styles/site.css";
+import { cms } from "../lib/cms";
+
+interface Props { title?: string; description?: string }
+const { title, description } = Astro.props;
+const identity = cms.region("site.identity");
+const visit = cms.region("visit");
+const pageTitle = title ? `${title} · ${identity.name}` : `${identity.name}: ${identity.tagline ?? "ceramics"}`;
+const here = Astro.url.pathname;
+const nav = [
+  { href: "/workshops/", label: "Workshops" },
+  { href: "/visit/", label: "Visit" },
+  { href: "/book/", label: "Book a place" },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{pageTitle}</title>
+    {(description ?? identity.tagline) && <meta name="description" content={description ?? identity.tagline} />}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="masthead">
+      <a class="wordmark" href="/" aria-label={`${identity.name}, home`}>
+        <span class="mark" aria-hidden="true">I</span>
+        <span class="wordmark__name">{identity.name}</span>
+      </a>
+      <nav aria-label="Main">
+        <ul>
+          {nav.map((item) => (
+            <li><a href={item.href} aria-current={here.startsWith(item.href) ? "page" : undefined}>{item.label}</a></li>
+          ))}
+        </ul>
+      </nav>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="colophon">
+      <div>
+        <p class="colophon__name">{identity.name}</p>
+        {identity.tagline && <p>{identity.tagline}</p>}
+      </div>
+      <address>
+        {visit.address.split("\n").map((line) => <span>{line}</span>)}
+        {identity.email && <a href={`mailto:${identity.email}`}>{identity.email}</a>}
+      </address>
+    </footer>
+  </body>
+</html>

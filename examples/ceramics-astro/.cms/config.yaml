@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/config.schema.json
+#
+# Where content lives in this repository, and what happens when you publish.
+
+version: 1
+
+content:
+  # Chosen for Astro: files here are read at build time.
+  regions: src/content/cms
+  media: public/media
+
+# The URL your site serves committed media from.
+mediaUrlPrefix: /media
+
+publish:
+  # The studio commits on whatever branch is checked out; pushing it is your deploy.
+  commitMessage: "content: update {summary}"
+
+preview:
+  paths:
+    workshops: "/workshops/{slug}/"
+    visit: "/visit/"
+    booking: "/book/"

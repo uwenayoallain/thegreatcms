@@ -35,6 +35,13 @@ const sites = [
     port: 4323,
   },
   {
+    id: "ibumba",
+    name: "Ibumba Ceramics (Astro)",
+    dir: "examples/ceramics-astro",
+    pkg: "@greatcms/example-ceramics-astro",
+    port: 4327,
+  },
+  {
     id: "bakery",
     name: "Hearth (Next.js)",
     dir: "examples/bakery-next",

@@ -1,0 +1,32 @@
+---
+import Base from "../../layouts/Base.astro";
+import { francs, when, workshops, type Workshop } from "../../lib/cms";
+
+export function getStaticPaths() {
+  return workshops().map((workshop) => ({ params: { slug: workshop.slug }, props: { workshop } }));
+}
+
+const { workshop } = Astro.props as { workshop: Workshop };
+const date = when(workshop.date);
+---
+<Base title={workshop.title} description={workshop.summary}>
+  <article class="workshop">
+    <header class="page-head">
+      <p class="eyebrow"><a href="/workshops/">Workshops</a></p>
+      <h1>{workshop.title}</h1>
+      <p class="lede">{workshop.summary}</p>
+    </header>
+    <dl class="facts facts--large">
+      <div><dt>When</dt><dd><time datetime={workshop.date}>{date.day}, {date.time}</time></dd></div>
+      <div><dt>Length</dt><dd>{workshop.length}</dd></div>
+      <div><dt>Level</dt><dd>{workshop.level}</dd></div>
+      <div><dt>Price</dt><dd>{francs(workshop.price)}</dd></div>
+      <div><dt>Group</dt><dd>Up to {workshop.seats}</dd></div>
+    </dl>
+    {workshop.image?.src && <img class="workshop__image" src={workshop.image.src} alt={workshop.image.alt ?? ""} width={workshop.image.width} height={workshop.image.height} loading="lazy" />}
+    <div class="prose" set:html={workshop.html} />
+    {workshop.full
+      ? <p class="badge badge--large">This one is fully booked. <a href="/book/">Ask about the next date</a>.</p>
+      : <a class="button" href={`/book/?workshop=${workshop.slug}`}>Book a place</a>}
+  </article>
+</Base>

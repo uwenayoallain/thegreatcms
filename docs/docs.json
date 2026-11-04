@@ -118,7 +118,7 @@
     },
     {
       "title": "The examples",
-      "description": "Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.",
+      "description": "Six sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.",
       "source": "apps/docs/content/docs/examples.md",
       "url": "/docs/examples",
       "markdownUrl": "/docs/examples.md"

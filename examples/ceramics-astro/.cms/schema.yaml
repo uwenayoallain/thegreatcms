@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=../../../packages/spec/json-schema/schema.schema.json
+#
+# Ibumba, a ceramics studio in Kigali. Every word on the site is here or in
+# src/content/; the layout and the clay are the site's own CSS.
+
+version: 1
+
+site:
+  name: Ibumba Ceramics
+  locale: en
+
+blocks:
+  step:
+    label: Step
+    fields:
+      title: { type: text, required: true, max: 40 }
+      text: { type: text, multiline: true, required: true, max: 220 }
+
+  process:
+    label: From clay to kiln
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      steps: { type: blocks, allow: [step], min: 2, max: 6 }
+
+  statement:
+    label: Statement
+    variants: [{ value: plain, label: On the page }, { value: clay, label: On a clay panel }]
+    fields:
+      eyebrow: { type: text, max: 40 }
+      text: { type: text, multiline: true, required: true, max: 320 }
+
+  upcoming:
+    label: Upcoming workshops
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      count:
+        { type: number, integer: true, min: 1, max: 6, default: 3, description: How many to show }
+      link: { type: link, description: Usually the workshop list }
+
+  quote:
+    label: Quote
+    fields:
+      quote: { type: text, multiline: true, required: true, max: 300 }
+      name: { type: text, required: true, max: 60 }
+      detail: { type: text, max: 80, description: "Who they are, e.g. Saturday wheel class, 2025" }
+
+regions:
+  site.identity:
+    label: Studio
+    fields:
+      name: { type: text, required: true, max: 40 }
+      tagline: { type: text, max: 90 }
+      email: { type: text, max: 80, description: Where people can write }
+    default:
+      name: Ibumba
+      tagline: Hand-thrown ceramics and clay classes in Kigali
+
+  home.hero:
+    label: Home hero
+    fields:
+      eyebrow: { type: text, max: 40 }
+      heading: { type: text, required: true, max: 80 }
+      lede: { type: text, multiline: true, max: 260 }
+      action: { type: link }
+      image: { type: image }
+
+  home.sections:
+    label: Home sections
+    type: blocks
+    allow: [process, statement, upcoming, quote]
+
+  visit:
+    label: Visiting
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      address: { type: text, multiline: true, required: true, max: 160 }
+      hours: { type: list, max: 7, of: { type: text, max: 60 } }
+      directions: { type: link, description: A map link }
+      note: { type: richtext, allow: [bold, italic, link] }
+
+  booking:
+    label: Booking form
+    fields:
+      heading: { type: text, required: true, max: 60 }
+      text: { type: text, multiline: true, max: 240 }
+      button: { type: text, required: true, max: 24 }
+    default:
+      heading: Book a place
+      text: Tell us which workshop and how many of you are coming. We reply within a day.
+      button: Send request
+
+collections:
+  workshops:
+    label: Workshops
+    entryLabel: workshop
+    path: src/content/workshops
+    format: markdown
+    body: details
+    slug: title
+    fields:
+      title: { type: text, required: true, max: 70 }
+      summary: { type: text, multiline: true, required: true, max: 200 }
+      date: { type: date, required: true, time: true }
+      length: { type: text, required: true, max: 30, description: "e.g. 3 hours, or 4 Saturdays" }
+      level:
+        type: select
+        required: true
+        options: [first time, some experience, everyone]
+        default: everyone
+      price: { type: number, required: true, min: 0, integer: true, description: In Rwandan francs }
+      seats: { type: number, required: true, min: 1, max: 20, integer: true }
+      full: { type: boolean, description: No places left; the page says so and hides the form. }
+      image: { type: image }
+      details: { type: richtext }

@@ -1,0 +1,25 @@
+---
+import Base from "../layouts/Base.astro";
+import Sections from "../components/Sections.astro";
+import Vessels from "../components/Vessels.astro";
+import { cms } from "../lib/cms";
+
+const hero = cms.region("home.hero");
+const sections = cms.region("home.sections");
+---
+<Base>
+  <section class="hero">
+    <div class="hero__text">
+      {hero.eyebrow && <p class="eyebrow">{hero.eyebrow}</p>}
+      <h1>{hero.heading}</h1>
+      {hero.lede && <p class="lede">{hero.lede}</p>}
+      {hero.action?.href && <a class="button" href={hero.action.href}>{hero.action.label ?? "Find out more"}</a>}
+    </div>
+    <div class="hero__art">
+      {hero.image?.src
+        ? <img src={hero.image.src} alt={hero.image.alt ?? ""} width={hero.image.width} height={hero.image.height} fetchpriority="high" />
+        : <Vessels />}
+    </div>
+  </section>
+  <Sections blocks={sections.blocks ?? []} />
+</Base>

@@ -37,7 +37,7 @@
   - Markdown: https://greatcms.dev/docs/any-language.md
 - [For coding agents](https://greatcms.dev/docs/for-agents): Every surface an agent needs to wire a site up unattended, and the skill that teaches it.
   - Markdown: https://greatcms.dev/docs/for-agents.md
-- [The examples](https://greatcms.dev/docs/examples): Five sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
+- [The examples](https://greatcms.dev/docs/examples): Six sites on Astro, Next.js, SvelteKit and Nuxt, and a Python reader, each built to prove one thing.
   - Markdown: https://greatcms.dev/docs/examples.md
 
 ## Machine-readable entrypoints
