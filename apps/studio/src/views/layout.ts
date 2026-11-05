@@ -658,7 +658,7 @@ a.status.open-site svg { width: .85rem; height: .85rem; flex: none; }
 @media (max-width: 42rem) {
   .workspace-meta { grid-template-columns: minmax(0, 1fr); }
   .workspace-meta > div + div { border-left: 0; border-top: 1px solid var(--line); }
-  .card-topline { display: block; }
+  .card-topline:has(.status) { display: block; }
   .card-topline .status { margin-top: .3rem; }
   table { display: block; overflow-x: auto; white-space: nowrap; }
 }
@@ -705,7 +705,7 @@ fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding:
 /* The legend sits inside the box as its heading, not astride the border. */
 legend { float: left; width: 100%; padding: 0; margin: 0 0 .55rem; font-weight: 650; font-size: .86rem; color: var(--ink); letter-spacing: -.01em; }
 legend + * { clear: both; }
-fieldset > .hint:first-of-type { margin-top: -.35rem; margin-bottom: .85rem; }
+fieldset > legend + .hint { margin-top: -.35rem; margin-bottom: .85rem; }
 /* One level in, the box becomes a rule: boxes inside boxes read as clutter, and worse on a phone. */
 fieldset fieldset { box-shadow: none; background: transparent; border: 0; border-left: 2px solid var(--line); border-radius: 0; padding: .1rem 0 .1rem 1rem; margin: .25rem 0 1rem; }
 fieldset fieldset legend { font-size: .8rem; margin-bottom: .45rem; }
@@ -801,9 +801,10 @@ main:has(> .split) h1 { font-size: 1.4rem; }
 @media (min-width: 72rem) {
   .split { grid-template-columns: minmax(0, 1fr) auto minmax(20rem, var(--live-width, 46%)); gap: 1.25rem; }
   /* Placed by hand: a hidden handle takes no cell, and the preview must not slide into its column. */
-  .split > form { grid-column: 1; }
-  .split > .split-handle { grid-column: 2; }
-  .split > .live { grid-column: 3; }
+  .split > form { grid-column: 1; grid-row: 1; }
+  .split > .split-handle { grid-column: 2; grid-row: 1 / span 2; }
+  .split > .live { grid-column: 3; grid-row: 1 / span 2; }
+  .split > .danger-zone { grid-column: 1; grid-row: 2; }
   .split-handle:not([hidden]) { display: block; position: sticky; top: 3.5rem; height: calc(100vh - 4.5rem); }
   .live { position: sticky; top: 3.5rem; height: calc(100vh - 4.5rem); display: flex; flex-direction: column; }
   .live-stage { flex: 1 1 auto; min-height: 16rem; }
@@ -986,6 +987,7 @@ main:has(> .split) h1 { font-size: 1.4rem; }
 .danger-zone h2 { margin: 0 0 .3rem; font-size: .95rem; color: var(--danger); }
 .danger-zone p { margin: 0 0 .8rem; font-size: .88rem; color: var(--ink-2); overflow-wrap: anywhere; }
 .danger-zone form { margin: 0; }
+.split > .danger-zone { margin-top: 0; }
 .danger-confirm > summary, .inline-confirm > summary { width: max-content; color: var(--danger); cursor: pointer; font-weight: 600; font-size: .85rem; text-decoration: underline; text-underline-offset: .2em; list-style: none; }
 .danger-confirm > summary::-webkit-details-marker, .inline-confirm > summary::-webkit-details-marker { display: none; }
 .inline-confirm { display: flex; align-items: center; gap: .5rem; }

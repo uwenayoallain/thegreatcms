@@ -245,25 +245,24 @@ export function editEntryPage(options: {
             }
           </p>`,
         })}
+        ${
+          slug
+            ? html`
+                <section class="danger-zone" aria-labelledby="delete">
+                  <h2 id="delete">Delete</h2>
+                  <p>Removes <code>${slug}</code> from the repository in one commit.</p>
+                  <details class="danger-confirm">
+                    <summary>Delete this entry</summary>
+                    <p>This creates a commit that removes <code>${slug}</code>.</p>
+                    <form method="POST" action="${action}/delete">
+                      <button class="danger" type="submit">Confirm delete this entry</button>
+                    </form>
+                  </details>
+                </section>
+              `
+            : ""
+        }
       </div>
-
-      ${
-        slug
-          ? html`
-              <section class="danger-zone" aria-labelledby="delete">
-                <h2 id="delete">Delete</h2>
-                <p>Removes <code>${slug}</code> from the repository in one commit.</p>
-                <details class="danger-confirm">
-                  <summary>Delete this entry</summary>
-                  <p>This creates a commit that removes <code>${slug}</code>.</p>
-                  <form method="POST" action="${action}/delete">
-                    <button class="danger" type="submit">Confirm delete this entry</button>
-                  </form>
-                </details>
-              </section>
-            `
-          : ""
-      }
     `,
   );
 }

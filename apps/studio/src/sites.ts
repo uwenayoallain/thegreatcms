@@ -77,6 +77,20 @@ export interface SiteContext {
   headSha: string;
 }
 
+/** What an entry is called in a list: its slug field, a title or name, or the slug itself. */
+export function entryTitle(
+  collection: CollectionDef | undefined,
+  data: Record<string, unknown>,
+  slug: string,
+): string {
+  for (const key of [collection?.slug ?? "title", "title", "name"]) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return slug;
+}
+
 export class SiteNotConfiguredError extends Error {
   constructor(site: Site) {
     super(
@@ -363,12 +377,12 @@ export class SiteClient {
     const lists = await Promise.all(names.map((name) => this.listEntries(context, name)));
     return Object.fromEntries(
       names.map((name, index) => {
-        const titleField = context.schema.collections[name]?.slug ?? "title";
+        const collection = context.schema.collections[name];
         return [
           name,
           (lists[index] ?? []).map((entry) => ({
             slug: entry.slug,
-            title: String(entry.data[titleField] ?? entry.data.title ?? entry.slug),
+            title: entryTitle(collection, entry.data, entry.slug),
           })),
         ];
       }),

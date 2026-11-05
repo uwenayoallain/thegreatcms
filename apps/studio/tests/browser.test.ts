@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { serve } from "@hono/node-server";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -517,6 +517,41 @@ describe.skipIf(!browser)("accessibility with real layout", () => {
     });
 
     expect(violations).toEqual([]);
+  });
+
+  it("keeps an entry's image hints and delete card clear of what sits beside them", async () => {
+    const entry = join(root, "content/pages/layout-check.json");
+    mkdirSync(dirname(entry), { recursive: true });
+    writeFileSync(
+      entry,
+      JSON.stringify({
+        title: "Layout check",
+        sections: [{ _type: "feature", heading: "Pictured", image: { src: "", alt: "" } }],
+      }),
+    );
+    try {
+      const page = await context.newPage();
+      opened.push({ page, own: null });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(origin + "/sites/site-1/collections/pages/layout-check", {
+        waitUntil: "networkidle",
+      });
+      const layout = await page.evaluate(() => {
+        for (const details of document.querySelectorAll("details")) details.open = true;
+        const width = document.querySelector<HTMLInputElement>("input[name$='[width]']")!;
+        const hint = width.closest(".row")!.nextElementSibling!;
+        return {
+          inputBottom: width.getBoundingClientRect().bottom,
+          hintTop: hint.getBoundingClientRect().top,
+          dangerRight: document.querySelector(".danger-zone")!.getBoundingClientRect().right,
+          liveLeft: document.querySelector(".live")!.getBoundingClientRect().left,
+        };
+      });
+      expect(layout.hintTop).toBeGreaterThanOrEqual(layout.inputBottom);
+      expect(layout.dangerRight).toBeLessThanOrEqual(layout.liveLeft);
+    } finally {
+      rmSync(entry);
+    }
   });
 
   it("keeps the workspace and every navigation action inside a narrow screen", async () => {

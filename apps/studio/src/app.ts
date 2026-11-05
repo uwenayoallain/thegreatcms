@@ -71,7 +71,7 @@ import {
   SPAM_THRESHOLD,
   toCsv,
 } from "./submissions.js";
-import { SiteClient, type SiteContext } from "./sites.js";
+import { SiteClient, type SiteContext, entryTitle } from "./sites.js";
 import { type Author, ConflictError } from "./repo.js";
 import { type Viewer, withViewer } from "./views/viewer.js";
 import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
@@ -1132,12 +1132,7 @@ export function createApp(options: AppOptions) {
           entryLabel: collection.entryLabel,
           entries: entries.map((entry) => ({
             slug: entry.slug,
-            title: String(
-              entry.data[collection.slug ?? "title"] ??
-                entry.data.title ??
-                entry.data.name ??
-                entry.slug,
-            ),
+            title: entryTitle(collection, entry.data, entry.slug),
             summary: (entry.data.summary ?? entry.data.description) as string | undefined,
             draft: drafted.has(`collections/${name}/${encodeURIComponent(entry.slug)}`),
             edited: activity.edited.get(`collections/${name}/${encodeURIComponent(entry.slug)}`),
