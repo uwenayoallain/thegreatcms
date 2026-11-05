@@ -1203,6 +1203,18 @@ main {
   border-bottom: 0;
 }
 
+.prose td code {
+  white-space: nowrap;
+}
+
+/* A table too wide for a phone scrolls inside its own box, and the page stays still. */
+@media (max-width: 40rem) {
+  .prose table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 .prose th {
   font-size: 0.74rem;
   font-weight: 650;
