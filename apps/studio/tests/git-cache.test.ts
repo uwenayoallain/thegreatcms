@@ -4,8 +4,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LocalRepository } from "../src/repo.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocalRepository, LocalRepositoryError } from "../src/repo.js";
 
 let root: string;
 const git = (...args: string[]) =>
@@ -67,5 +67,41 @@ describe("history", () => {
       files: [{ path: "a.json", content: '{"published":true}' }],
     });
     expect((await repo.history("a.json"))[0]?.subject).toBe("content: update a");
+  });
+});
+
+describe("a machine with no git identity", () => {
+  beforeEach(() => {
+    const config = join(root, "..", `${root.split("/").pop()}.gitconfig`);
+    // Nothing configured, and no guessing one from the host name: what a fresh CI runner has.
+    writeFileSync(config, "[user]\n\tuseConfigOnly = true\n");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", config);
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+    for (const name of ["NAME", "EMAIL"]) {
+      vi.stubEnv(`GIT_COMMITTER_${name}`, undefined);
+      vi.stubEnv(`GIT_AUTHOR_${name}`, undefined);
+    }
+    vi.stubEnv("EMAIL", undefined);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("still publishes, committed by the editor who made the change", async () => {
+    await new LocalRepository(root).commitFiles({
+      message: "content: update a",
+      author: { name: "Editor", email: "editor@example.com" },
+      files: [{ path: "a.json", content: '{"published":true}' }],
+    });
+    expect(git("log", "-1", "--format=%an <%ae>|%cn <%ce>")).toBe(
+      "Editor <editor@example.com>|Editor <editor@example.com>",
+    );
+  });
+
+  it("says how to give git an identity when there is no editor to commit as", async () => {
+    const publish = new LocalRepository(root).commitFiles({
+      message: "content: update a",
+      files: [{ path: "a.json", content: '{"published":true}' }],
+    });
+    await expect(publish).rejects.toBeInstanceOf(LocalRepositoryError);
+    await expect(publish).rejects.toThrow(/fix: Nothing was committed\. Give git an identity/);
   });
 });

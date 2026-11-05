@@ -278,7 +278,18 @@ export class LocalRepository implements Repository {
     const author = request.author
       ? ["--author", `${clean(request.author.name)} <${clean(request.author.email)}>`]
       : [];
-    await this.git(["commit", "--no-verify", ...author, "-m", request.message, "--", ...staged]);
+    // A machine with no git identity still publishes: the editor commits as themselves.
+    const committer =
+      request.author && !(await this.tryGit(["var", "GIT_COMMITTER_IDENT"]))
+        ? {
+            GIT_COMMITTER_NAME: clean(request.author.name),
+            GIT_COMMITTER_EMAIL: clean(request.author.email),
+          }
+        : undefined;
+    await this.git(
+      ["commit", "--no-verify", ...author, "-m", request.message, "--", ...staged],
+      committer,
+    );
     return { commitSha: await this.getHead(), url };
   }
 
@@ -514,18 +525,21 @@ export class LocalRepository implements Repository {
   }
 
   /** Runs git where a failure is something the editor must see. */
-  private async git(args: string[]): Promise<string> {
+  private async git(args: string[], env?: Record<string, string>): Promise<string> {
     try {
       const { stdout } = await run("git", [...SAFE_GIT, ...args], {
         cwd: this.root,
         maxBuffer: 8 * 1024 * 1024,
+        ...(env ? { env: { ...process.env, ...env } } : {}),
       });
       return stdout;
     } catch (error) {
       const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
       throw new LocalRepositoryError(
         `git ${args[0]} failed: ${stderr || String(error)}`,
-        "Nothing was committed. Fix the repository, then publish again.",
+        /identity unknown|tell me who you are/i.test(stderr)
+          ? "Nothing was committed. Give git an identity on the studio's machine (git config --global user.name and user.email, or GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL), then publish again."
+          : "Nothing was committed. Fix the repository, then publish again.",
       );
     }
   }
