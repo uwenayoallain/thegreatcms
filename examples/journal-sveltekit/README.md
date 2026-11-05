@@ -27,10 +27,14 @@ pnpm --filter @greatcms/example-journal-sveltekit build # then `test`
 ## How SvelteKit meets GreatCMS
 
 - **Prerendered, with no client runtime.** `csr = false` in the root layout
-  means no hydration, so a built page has no `<script>` and no module preloads.
-  `trailingSlash = "always"` writes each page as a folder, so links work on any
-  static host, and the 404 page is a real route rather than the SPA fallback,
+  means no hydration, so a built page has no JavaScript and no module preloads.
+  `trailingSlash = "always"` writes each page as a folder, and every link names
+  that folder with its trailing slash, so a static host never answers a click
+  with a redirect. The 404 page is a real route rather than the SPA fallback,
   which would bring the runtime back.
+- **Speculation rules, as data.** `app.html` carries one
+  `<script type="speculationrules">`, which the browser reads as JSON, not
+  code: it prerenders a page as the pointer settles on its link.
 - **The Vite plugin for reloads.** `greatcmsWatch()` reloads the page when
   content changes, the studio's unsaved drafts included.
 - **A hook for the preview.** SvelteKit renders pages itself rather than
@@ -40,6 +44,7 @@ pnpm --filter @greatcms/example-journal-sveltekit build # then `test`
 
 ## Budgets the tests hold
 
-axe-clean pages, one `h1` each, no script or module preload in any built page,
-every essay listed newest first and rendered from its Markdown, and a labelled
-form that posts to the studio.
+axe-clean pages, one `h1` each, no script but the speculation rules and no
+module preload in any built page, every internal link pointing at a page that
+was built at exactly that address, every essay listed newest first and rendered
+from its Markdown, and a labelled form that posts to the studio.
