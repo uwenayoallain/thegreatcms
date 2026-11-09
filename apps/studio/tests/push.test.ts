@@ -5,6 +5,7 @@ import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { useRemoteAuth } from "../src/repo.js";
 import { get, makeSite, post, SITE_ID, type Fixture } from "./site.js";
 
 const SCHEMA = `version: 1
@@ -64,6 +65,28 @@ describe("push after publish", () => {
     expect(remoteHead()).toBe(site.head());
     expect(body).toContain("pushed to origin/main");
     expect(site.store.getSite(SITE_ID)?.pushAfterPublish).toBe(true);
+  });
+
+  it("hands git the sign-in for the remote it pushes to, for that one push", async () => {
+    await enablePush();
+    const asked: string[] = [];
+    // Config that sends the push somewhere else proves git received it.
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", elsewhere]);
+    useRemoteAuth(async (url) => {
+      asked.push(url);
+      return [[`url.${elsewhere}.insteadOf`, remote]];
+    });
+    try {
+      await publish("Signed in");
+    } finally {
+      useRemoteAuth(undefined);
+    }
+
+    expect(asked).toEqual([remote]);
+    expect(
+      execFileSync("git", ["rev-parse", "main"], { cwd: elsewhere, encoding: "utf8" }).trim(),
+    ).toBe(site.head());
+    expect(process.env.GIT_CONFIG_COUNT).toBeUndefined();
   });
 
   it("keeps the commit and says what went wrong when the remote refuses it", async () => {

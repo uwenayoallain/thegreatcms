@@ -9,6 +9,7 @@ import { mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } f
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { Site } from "./db.js";
+import { withGitConfig } from "./repo.js";
 
 /** A folder path as typed: `~` is this machine's home, and anything else must be absolute. */
 export function folderPath(input: string): { path: string } | { error: string } {
@@ -29,6 +30,30 @@ export interface Folder {
   state: FolderState;
   /** The site already using this folder, when there is one. */
   siteId?: string;
+}
+
+/** Where a folder's `origin` remote points, or null; reading config runs nothing of the repository's. */
+export function originOf(path: string): Promise<string | null> {
+  return new Promise((resolvePromise) =>
+    execFile(
+      "git",
+      ["-c", "core.hooksPath=/dev/null", "-C", path, "remote", "get-url", "origin"],
+      { timeout: 5000 },
+      (error, stdout) => resolvePromise(error ? null : stdout.trim() || null),
+    ),
+  );
+}
+
+/** One spelling for a repository's address, https or SSH, with or without `.git`. */
+export function sameRepository(url: string): string {
+  return url
+    .trim()
+    .toLowerCase()
+    .replace(/^(?:ssh:\/\/)?git@([^:/]+)[:/]/, "https://$1/")
+    .replace(/^https?:\/\/[^@/]+@/, "https://")
+    .replace(/^http:/, "https:")
+    .replace(/\/+$/, "")
+    .replace(/\.git$/, "");
 }
 
 /** Never sites, and slow to look into. */
@@ -134,7 +159,10 @@ export class Clones {
 
   constructor(
     private readonly root: string,
-    private readonly git: (args: string[]) => Promise<void> = runGit,
+    private readonly git: (
+      args: string[],
+      config: Array<[string, string]>,
+    ) => Promise<void> = runGit,
   ) {}
 
   list(): CloneState[] {
@@ -147,7 +175,13 @@ export class Clones {
   }
 
   /** Starts a clone; the promise is for tests, the page does not wait for it. */
-  start(url: string, folder: string, branch: string): Promise<void> {
+  /** `config` signs this one clone in, such as a GitHub App's token; it is not kept anywhere. */
+  start(
+    url: string,
+    folder: string,
+    branch: string,
+    config: Array<[string, string]> = [],
+  ): Promise<void> {
     const path = join(this.root, folder);
     this.jobs.set(folder, { state: "cloning", folder, url });
     // Cloned beside its final name and renamed when complete, so a half-copied folder is never listed.
@@ -170,7 +204,7 @@ export class Clones {
       url,
       temporary,
     ];
-    return this.git(args)
+    return this.git(args, config)
       .then(() => {
         renameSync(temporary, path);
         this.jobs.set(folder, { state: "done", folder, url, path });
@@ -206,7 +240,7 @@ export function cloneFailure(error: Error & { stderr?: string }): string {
   return text.at(-1) ?? "git could not clone the repository.";
 }
 
-function runGit(args: string[]): Promise<void> {
+function runGit(args: string[], config: Array<[string, string]>): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     execFile(
       "git",
@@ -215,7 +249,10 @@ function runGit(args: string[]): Promise<void> {
         timeout: 10 * 60_000,
         maxBuffer: 4 * 1024 * 1024,
         // A missing credential fails at once instead of waiting for someone to type a password.
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+        env: withGitConfig(
+          { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+          config,
+        ),
       },
       (error, _stdout, stderr) => {
         if (error) reject(Object.assign(error, { stderr }));

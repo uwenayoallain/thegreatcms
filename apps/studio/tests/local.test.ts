@@ -631,7 +631,8 @@ describe("editors", () => {
     expect(
       (await editor.post("/git-access/token", { host: "github.com", token: "x" })).status,
     ).toBe(403);
-    expect((await editor.post("/git-access/key", {})).status).toBe(403);
+    expect((await editor.post("/git-access/github", {})).status).toBe(403);
+    expect((await editor.get("/git-access/github/created?code=x&state=y")).status).toBe(403);
     expect((await editor.get("/sites/local-1/regions/home.hero")).status).toBe(200);
   });
 

@@ -1,15 +1,11 @@
 /**
- * How this studio signs in to Git hosts, for private repositories: an SSH key it creates, and
- * access tokens per host in git's own credential store. Both reach every git the studio runs
- * through environment config, so cloning and pushing after a publish use them alike.
+ * Access tokens for Git hosts other than GitHub, which connects through its app instead: kept in
+ * git's own credential store, and reaching every git the studio runs through environment config,
+ * so cloning and pushing after a publish use them alike.
  */
 
-import { execFile } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { promisify } from "node:util";
-
-const run = promisify(execFile);
 
 export interface SavedToken {
   host: string;
@@ -46,34 +42,8 @@ export class GitAccess {
     this.apply();
   }
 
-  private get keyFile() {
-    return join(this.dir, "ssh", "id_ed25519");
-  }
-
   private get credentialsFile() {
     return join(this.dir, "git-credentials");
-  }
-
-  publicKey(): string | null {
-    try {
-      return readFileSync(`${this.keyFile}.pub`, "utf8").trim();
-    } catch {
-      return null;
-    }
-  }
-
-  async createKey(label: string): Promise<void> {
-    if (this.publicKey()) return;
-    mkdirSync(join(this.dir, "ssh"), { recursive: true, mode: 0o700 });
-    rmSync(this.keyFile, { force: true });
-    await run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-C", label, "-f", this.keyFile]);
-    this.apply();
-  }
-
-  removeKey(): void {
-    rmSync(this.keyFile, { force: true });
-    rmSync(`${this.keyFile}.pub`, { force: true });
-    this.apply();
   }
 
   tokens(): SavedToken[] {
@@ -108,17 +78,11 @@ export class GitAccess {
     this.write(this.lines().filter((line) => hostOf(line) !== host));
   }
 
-  /** Points every git this process starts at the key and the tokens, when there are any. */
+  /** Points every git this process starts at the tokens, when there are any. */
   apply(): void {
     const entries = [...this.base];
     if (this.lines().length > 0) {
       entries.push(["credential.helper", `store --file=${quote(this.credentialsFile)}`]);
-    }
-    if (existsSync(this.keyFile)) {
-      entries.push([
-        "core.sshCommand",
-        `ssh -i ${quote(this.keyFile)} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=${quote(join(this.dir, "ssh", "known_hosts"))}`,
-      ]);
     }
     for (let index = 0; index < Math.max(entries.length, this.applied); index++) {
       delete this.env[`GIT_CONFIG_KEY_${index}`];

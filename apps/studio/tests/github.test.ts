@@ -1,0 +1,378 @@
+/** Connecting GitHub through the studio's own GitHub App, against a stand-in for GitHub's API. */
+
+import { execFileSync } from "node:child_process";
+import { createVerify, generateKeyPairSync } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { JSDOM } from "jsdom";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createApp } from "../src/app.js";
+import { Store } from "../src/db.js";
+import { GitHub, PERMISSIONS } from "../src/github.js";
+import { withGitConfig } from "../src/repo.js";
+import { PASSWORD, SECRET, signedIn } from "./site.js";
+
+const keys = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: "pkcs1", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+});
+
+let dir: string;
+let file: string;
+let calls: Array<{ method: string; path: string; auth: string }>;
+let repositoryCount: number;
+let tokenNumber: number;
+
+function json(body: unknown, status = 200) {
+  return new Response(status === 204 ? null : JSON.stringify(body), { status });
+}
+
+/** GitHub's API, as much of it as the studio uses. */
+const fakeGitHub: typeof fetch = async (input, init) => {
+  const url = new URL(String(input));
+  const method = init?.method ?? "GET";
+  const auth = String((init?.headers as Record<string, string>)?.authorization ?? "");
+  calls.push({ method, path: url.pathname + url.search, auth });
+  if (url.pathname === "/app-manifests/good-code/conversions") {
+    return json({
+      id: 7,
+      slug: "greatcms-studio-ab12",
+      client_id: "Iv1.abc",
+      pem: keys.privateKey,
+      html_url: "https://github.com/apps/greatcms-studio-ab12",
+      owner: { login: "acme", type: "Organization" },
+    });
+  }
+  if (url.pathname === "/app/installations" && method === "GET") {
+    return json([{ id: 11, account: { login: "Acme" } }]);
+  }
+  if (url.pathname === "/app/installations/11/access_tokens") {
+    tokenNumber++;
+    return json({
+      token: `ghs_token${tokenNumber}`,
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    });
+  }
+  if (url.pathname === "/app/installations/11" && method === "DELETE") return json(null, 204);
+  if (url.pathname === "/installation/repositories") {
+    const page = Number(url.searchParams.get("page"));
+    const start = (page - 1) * 100;
+    const count = Math.max(0, Math.min(100, repositoryCount - start));
+    return json({
+      repositories: Array.from({ length: count }, (_, index) => ({
+        full_name: `acme/site-${start + index}`,
+        name: `site-${start + index}`,
+        owner: { login: "acme" },
+        clone_url: `https://github.com/acme/site-${start + index}.git`,
+        private: true,
+        default_branch: "main",
+      })),
+    });
+  }
+  return json({ message: "Not Found" }, 404);
+};
+
+/** A GitHub that has made its app, as after the owner came back from GitHub. */
+async function connected() {
+  const github = new GitHub(file, undefined, fakeGitHub);
+  const { action } = github.creation("https://studio.example.com");
+  const state = new URL(action).searchParams.get("state") as string;
+  await github.finishCreation("good-code", state);
+  return github;
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "greatcms-github-"));
+  file = join(dir, "git", "github-app.json");
+  calls = [];
+  repositoryCount = 2;
+  tokenNumber = 0;
+});
+
+afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+describe("making the app", () => {
+  it("asks GitHub for an app that can touch file contents and nothing else", () => {
+    const github = new GitHub(file, undefined, fakeGitHub);
+    const { action, manifest } = github.creation("https://studio.example.com");
+    const parsed = JSON.parse(manifest);
+
+    expect(action).toMatch(/^https:\/\/github\.com\/settings\/apps\/new\?state=[\w-]{20,}$/);
+    expect(parsed.default_permissions).toEqual(PERMISSIONS);
+    expect(parsed.default_events).toEqual([]);
+    expect(parsed.public).toBe(false);
+    expect(parsed.hook_attributes.active).toBe(false);
+    expect(parsed.redirect_url).toBe("https://studio.example.com/git-access/github/created");
+    expect(parsed.setup_url).toBe("https://studio.example.com/git-access/github/installed");
+    expect(parsed.name.length).toBeLessThanOrEqual(34);
+  });
+
+  it("makes it for an organization, or on GitHub Enterprise Server, when asked", () => {
+    expect(new GitHub(file).creation("https://s.example.com", "acme").action).toMatch(
+      /^https:\/\/github\.com\/organizations\/acme\/settings\/apps\/new\?state=/,
+    );
+    const server = new GitHub(file, "https://git.example.com/");
+    expect(server.api).toBe("https://git.example.com/api/v3");
+    expect(server.creation("https://s.example.com").action).toMatch(
+      /^https:\/\/git\.example\.com\/settings\/apps\/new/,
+    );
+  });
+
+  it("keeps the app's key readable by the studio alone", async () => {
+    const github = await connected();
+    expect(github.config()?.slug).toBe("greatcms-studio-ab12");
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(github.installUrl()).toBe(
+      "https://github.com/apps/greatcms-studio-ab12/installations/new",
+    );
+    expect(github.settingsUrl()).toBe(
+      "https://github.com/organizations/acme/settings/apps/greatcms-studio-ab12",
+    );
+  });
+
+  it("refuses a return from GitHub it did not send there, and a state used twice", async () => {
+    const github = new GitHub(file, undefined, fakeGitHub);
+    await expect(github.finishCreation("good-code", "made-up")).rejects.toThrow("expired");
+    const state = new URL(github.creation("https://s.example.com").action).searchParams.get(
+      "state",
+    ) as string;
+    await github.finishCreation("good-code", state);
+    await expect(github.finishCreation("good-code", state)).rejects.toThrow("expired");
+  });
+
+  it("signs as the app with a short-lived token GitHub can check", async () => {
+    const github = await connected();
+    const now = 1_800_000_000;
+    const [header, body, signature] = github.appJwt(now).split(".") as [string, string, string];
+    const claims = JSON.parse(Buffer.from(body, "base64url").toString());
+
+    expect(JSON.parse(Buffer.from(header, "base64url").toString())).toEqual({
+      alg: "RS256",
+      typ: "JWT",
+    });
+    expect(claims).toEqual({ iat: now - 60, exp: now + 540, iss: "Iv1.abc" });
+    expect(
+      createVerify("RSA-SHA256")
+        .update(`${header}.${body}`)
+        .verify(keys.publicKey, signature, "base64url"),
+    ).toBe(true);
+  });
+});
+
+describe("signing git in", () => {
+  it("gives a repository the app reaches an hour's token, over https even for an SSH address", async () => {
+    const github = await connected();
+    const configs = await Promise.all(
+      [
+        "https://github.com/acme/site.git",
+        "git@github.com:ACME/site.git",
+        "ssh://git@github.com/acme/site",
+      ].map((url) => github.gitConfigFor(url)),
+    );
+    for (const config of configs) {
+      expect(config).toEqual([
+        [
+          "http.https://github.com/.extraheader",
+          `AUTHORIZATION: basic ${Buffer.from("x-access-token:ghs_token1").toString("base64")}`,
+        ],
+        ["url.https://github.com/.insteadOf", "git@github.com:"],
+        ["url.https://github.com/.insteadOf", "ssh://git@github.com/"],
+      ]);
+    }
+    // One token, reused until shortly before it expires.
+    expect(calls.filter((call) => call.path.endsWith("/access_tokens"))).toHaveLength(1);
+  });
+
+  it("gives nothing for an account the app is not installed on, or another host", async () => {
+    const github = await connected();
+    expect(await github.gitConfigFor("https://github.com/someone-else/site.git")).toEqual([]);
+    expect(await github.gitConfigFor("https://gitlab.com/acme/site.git")).toEqual([]);
+    expect(await new GitHub(join(dir, "none.json")).gitConfigFor("https://github.com/a/b")).toEqual(
+      [],
+    );
+  });
+
+  it("is read by git as config, from the environment rather than the command line", async () => {
+    const github = await connected();
+    const env = withGitConfig(
+      {
+        PATH: process.env.PATH,
+        HOME: dir,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "a.b",
+        GIT_CONFIG_VALUE_0: "c",
+      },
+      await github.gitConfigFor("https://github.com/acme/site.git"),
+    );
+    const read = (args: string[]) =>
+      execFileSync("git", ["config", ...args], { env, encoding: "utf8", cwd: dir }).trim();
+
+    expect(
+      read(["--get-urlmatch", "http.extraheader", "https://github.com/acme/site.git"]),
+    ).toMatch(/^AUTHORIZATION: basic /);
+    expect(read(["--get", "a.b"])).toBe("c");
+  });
+
+  it("lists every repository it was given, page by page", async () => {
+    repositoryCount = 230;
+    const github = await connected();
+    const repositories = await github.repositories();
+    expect(repositories).toHaveLength(230);
+    expect(repositories[0]).toMatchObject({ fullName: "acme/site-0", private: true });
+    await github.repositories();
+    expect(calls.filter((call) => call.path.startsWith("/installation/repositories"))).toHaveLength(
+      3,
+    );
+  });
+
+  it("says plainly when GitHub no longer knows the app", async () => {
+    const github = await connected();
+    const gone = new GitHub(file, undefined, async () => new Response("{}", { status: 401 }));
+    expect(github.config()).not.toBeNull();
+    await expect(gone.installations()).rejects.toThrow("may have been deleted");
+  });
+
+  it("uninstalls everywhere and forgets the key when disconnected", async () => {
+    const github = await connected();
+    await github.disconnect();
+    expect(calls).toContainEqual(
+      expect.objectContaining({ method: "DELETE", path: "/app/installations/11" }),
+    );
+    expect(existsSync(file)).toBe(false);
+    expect(github.config()).toBeNull();
+  });
+});
+
+function post(target: ReturnType<typeof createApp>, path: string, fields: Record<string, string>) {
+  return target.request(path, {
+    method: "POST",
+    headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(fields),
+  });
+}
+
+describe("the pages", () => {
+  let root: string;
+  let cloned: Array<{ args: string[]; config: Array<[string, string]> }>;
+
+  beforeEach(() => {
+    root = join(dir, "sites");
+    mkdirSync(root);
+    cloned = [];
+  });
+
+  function app(github: GitHub) {
+    return createApp({
+      store: new Store(":memory:"),
+      password: PASSWORD,
+      secret: SECRET,
+      sitesRoot: root,
+      github,
+      cloneGit: async (args, config) => {
+        cloned.push({ args, config });
+      },
+    });
+  }
+  it("sends the owner to GitHub with the manifest, allowing that one form to leave the studio", async () => {
+    const target = app(new GitHub(file, undefined, fakeGitHub));
+    const response = await post(target, "/git-access/github", {});
+    const { document } = new JSDOM(await response.text()).window;
+    const form = document.querySelector<HTMLFormElement>("form[action^='https://github.com']");
+
+    expect(form?.method).toBe("post");
+    expect(
+      JSON.parse(form?.querySelector<HTMLInputElement>("[name=manifest]")?.value ?? ""),
+    ).toHaveProperty("default_permissions");
+    expect(response.headers.get("content-security-policy")).toContain(
+      "form-action 'self' https://github.com",
+    );
+    const elsewhere = await target.request("/git-access", { headers: signedIn });
+    expect(elsewhere.headers.get("content-security-policy")).not.toContain("github.com");
+  });
+
+  it("refuses an organization name GitHub would not have", async () => {
+    const response = await post(
+      app(new GitHub(file, undefined, fakeGitHub)),
+      "/git-access/github",
+      {
+        organization: "../evil",
+      },
+    );
+    expect(response.status).toBe(422);
+  });
+
+  it("goes on to choosing repositories after GitHub makes the app", async () => {
+    const github = new GitHub(file, undefined, fakeGitHub);
+    const target = app(github);
+    const { action } = github.creation("http://localhost");
+    const state = new URL(action).searchParams.get("state") as string;
+
+    const bad = await target.request("/git-access/github/created?code=good-code&state=nope", {
+      headers: signedIn,
+    });
+    expect(bad.status).toBe(400);
+    const good = await target.request(`/git-access/github/created?code=good-code&state=${state}`, {
+      headers: signedIn,
+    });
+    expect(good.status).toBe(303);
+    expect(good.headers.get("location")).toBe(
+      "https://github.com/apps/greatcms-studio-ab12/installations/new",
+    );
+  });
+
+  it("says when an organization's owners still have to approve", async () => {
+    const target = app(await connected());
+    const response = await target.request(
+      "/git-access/github/installed?installation_id=11&setup_action=request",
+      { headers: signedIn },
+    );
+    const { document } = new JSDOM(await response.text()).window;
+    expect(document.querySelector(".flash")?.textContent).toContain(
+      "organization's owners to approve",
+    );
+  });
+
+  it("lists the app's repositories to copy with a click, signed in for that copy alone", async () => {
+    const target = app(await connected());
+    const { document } = new JSDOM(
+      await (await target.request("/sites/new", { headers: signedIn })).text(),
+    ).window;
+    const rows = [...document.querySelectorAll("#github ~ .folders li")];
+    expect(rows.map((row) => row.querySelector("strong")?.textContent)).toEqual([
+      "acme/site-0",
+      "acme/site-1",
+    ]);
+
+    const url = rows[0]?.querySelector<HTMLInputElement>("input[name=url]")?.value ?? "";
+    expect((await post(target, "/sites/clone", { url })).status).toBe(303);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(cloned[0]?.args).toContain("https://github.com/acme/site-0.git");
+    expect(cloned[0]?.config[0]?.[0]).toBe("http.https://github.com/.extraheader");
+  });
+
+  it("marks a repository already copied here by its origin, whatever the folder is called", async () => {
+    const copy = join(root, "renamed");
+    mkdirSync(copy);
+    execFileSync("git", ["init", "-q", copy]);
+    execFileSync("git", ["-C", copy, "remote", "add", "origin", "git@github.com:acme/site-1.git"]);
+    const target = app(await connected());
+    const { document } = new JSDOM(
+      await (await target.request("/sites/new", { headers: signedIn })).text(),
+    ).window;
+    const row = [...document.querySelectorAll("#github ~ .folders li")].find((li) =>
+      li.textContent?.includes("acme/site-1"),
+    );
+    expect(row?.textContent).toContain("in the sites folder");
+    expect(row?.querySelector("form")).toBeNull();
+  });
+
+  it("offers to connect GitHub where it is not connected yet", async () => {
+    const target = app(new GitHub(file, undefined, fakeGitHub));
+    const body = await (await target.request("/sites/new", { headers: signedIn })).text();
+    expect(
+      new JSDOM(body).window.document.querySelector("#github ~ p a")?.getAttribute("href"),
+    ).toBe("/git-access");
+  });
+});

@@ -1,0 +1,347 @@
+/**
+ * Connecting GitHub through a GitHub App the studio creates for itself. GitHub's manifest flow
+ * makes the app in two clicks and hands its key straight back; the owner then chooses which
+ * repositories it may reach. Every clone and push gets a token that lasts an hour, sent in that
+ * one command's environment, so no credential is written into a repository or onto a command line.
+ */
+
+import { createSign, randomBytes } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+
+export interface GitHubAppConfig {
+  id: number;
+  slug: string;
+  clientId: string;
+  pem: string;
+  /** The app's page on GitHub, e.g. https://github.com/apps/greatcms-studio-ab12. */
+  htmlUrl: string;
+  /** The account that owns the app, and whether it is an organization. */
+  owner: string;
+  ownerType: "User" | "Organization";
+}
+
+export interface Installation {
+  id: number;
+  account: string;
+}
+
+export interface Repository {
+  fullName: string;
+  name: string;
+  owner: string;
+  cloneUrl: string;
+  private: boolean;
+  defaultBranch: string;
+}
+
+function encode(value: object): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+export class GitHubError extends Error {
+  constructor(
+    message: string,
+    readonly status = 0,
+  ) {
+    super(message);
+    this.name = "GitHubError";
+  }
+}
+
+/** The least an app needs to clone and push: file contents, and metadata GitHub always grants. */
+export const PERMISSIONS = { contents: "write", metadata: "read" } as const;
+
+export class GitHub {
+  /** Where GitHub's API lives: api.github.com, or /api/v3 on GitHub Enterprise Server. */
+  readonly api: string;
+  private readonly states = new Map<string, number>();
+  private readonly tokens = new Map<number, { token: Promise<string>; until: number }>();
+  private listed: { at: number; value: Promise<Repository[]> } | undefined;
+  private installed: { at: number; value: Promise<Installation[]> } | undefined;
+
+  constructor(
+    private readonly file: string,
+    /** Where people use GitHub: https://github.com, or a GitHub Enterprise Server address. */
+    readonly web = "https://github.com",
+    private readonly fetcher: typeof fetch = fetch,
+  ) {
+    this.web = web.replace(/\/+$/, "");
+    this.api = this.web === "https://github.com" ? "https://api.github.com" : `${this.web}/api/v3`;
+  }
+
+  config(): GitHubAppConfig | null {
+    try {
+      return JSON.parse(readFileSync(this.file, "utf8")) as GitHubAppConfig;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * What the browser posts to GitHub to create the app: the form's address and the manifest.
+   * `origin` is where browsers reach this studio, which GitHub sends them back to.
+   */
+  creation(origin: string, organization?: string): { action: string; manifest: string } {
+    const state = randomBytes(24).toString("base64url");
+    const now = Date.now();
+    for (const [key, until] of this.states) if (until < now) this.states.delete(key);
+    this.states.set(state, now + 60 * 60_000);
+    const host = new URL(origin).hostname;
+    const manifest = {
+      // App names are unique across GitHub; the suffix keeps two studios from colliding.
+      name: `GreatCMS ${host}`.slice(0, 28) + ` ${randomBytes(2).toString("hex")}`,
+      url: origin,
+      description: "Lets a GreatCMS studio copy and publish to the repositories you choose.",
+      redirect_url: `${origin}/git-access/github/created`,
+      setup_url: `${origin}/git-access/github/installed`,
+      setup_on_update: true,
+      public: false,
+      default_permissions: PERMISSIONS,
+      default_events: [],
+      hook_attributes: { url: `${origin}/git-access/github`, active: false },
+    };
+    const owner = organization
+      ? `/organizations/${encodeURIComponent(organization)}/settings/apps/new`
+      : "/settings/apps/new";
+    return {
+      action: `${this.web}${owner}?state=${encodeURIComponent(state)}`,
+      manifest: JSON.stringify(manifest),
+    };
+  }
+
+  /** GitHub sent the browser back with a code: trade it for the app's key, once, within the hour. */
+  async finishCreation(code: string, state: string): Promise<GitHubAppConfig> {
+    const until = this.states.get(state);
+    this.states.delete(state);
+    if (!until || until < Date.now()) {
+      throw new GitHubError("That GitHub link has expired or was not started here. Start again.");
+    }
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(code)) throw new GitHubError("GitHub sent no usable code.");
+    const made = (await this.request(`/app-manifests/${code}/conversions`, {
+      method: "POST",
+    })) as {
+      id: number;
+      slug: string;
+      client_id: string;
+      pem: string;
+      html_url: string;
+      owner?: { login?: string; type?: string };
+    };
+    const config: GitHubAppConfig = {
+      id: made.id,
+      slug: made.slug,
+      clientId: made.client_id,
+      pem: made.pem,
+      htmlUrl: made.html_url,
+      owner: made.owner?.login ?? "",
+      ownerType: made.owner?.type === "Organization" ? "Organization" : "User",
+    };
+    mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 });
+    writeFileSync(this.file, JSON.stringify(config), { mode: 0o600 });
+    chmodSync(this.file, 0o600);
+    this.forget();
+    return config;
+  }
+
+  /** Where the owner picks the accounts and repositories the app may reach. */
+  installUrl(): string | null {
+    const config = this.config();
+    return config ? `${config.htmlUrl}/installations/new` : null;
+  }
+
+  /** Where the app itself is deleted on GitHub, which only its owner can do. */
+  settingsUrl(): string | null {
+    const config = this.config();
+    if (!config) return null;
+    return config.ownerType === "Organization"
+      ? `${this.web}/organizations/${config.owner}/settings/apps/${config.slug}`
+      : `${this.web}/settings/apps/${config.slug}`;
+  }
+
+  /** The accounts the app is installed on; asked again after a minute. */
+  installations(): Promise<Installation[]> {
+    if (this.installed && Date.now() - this.installed.at < 60_000) return this.installed.value;
+    const value = this.request("/app/installations?per_page=100", { app: true }).then((found) =>
+      (found as Array<{ id: number; account?: { login?: string } }>).map((entry) => ({
+        id: entry.id,
+        account: entry.account?.login ?? "",
+      })),
+    );
+    this.installed = { at: Date.now(), value };
+    value.catch(() => (this.installed = undefined));
+    return value;
+  }
+
+  /** Every repository the app was given, across accounts; asked again after a minute. */
+  repositories(): Promise<Repository[]> {
+    if (this.listed && Date.now() - this.listed.at < 60_000) return this.listed.value;
+    const value = this.listRepositories();
+    this.listed = { at: Date.now(), value };
+    value.catch(() => (this.listed = undefined));
+    return value;
+  }
+
+  private async listRepositories(): Promise<Repository[]> {
+    const lists = await Promise.all(
+      (await this.installations()).map((installation) =>
+        this.installationRepositories(installation),
+      ),
+    );
+    return lists.flat().toSorted((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+
+  private async installationRepositories(installation: Installation): Promise<Repository[]> {
+    const token = await this.token(installation.id);
+    const all: Repository[] = [];
+    for (let page = 1; page <= 50; page++) {
+      // oxlint-disable-next-line no-await-in-loop -- each page is only asked for if the last was full
+      const answer = (await this.request(`/installation/repositories?per_page=100&page=${page}`, {
+        token,
+      })) as {
+        repositories: Array<{
+          full_name: string;
+          name: string;
+          owner: { login: string };
+          clone_url: string;
+          private: boolean;
+          default_branch: string;
+        }>;
+      };
+      for (const repo of answer.repositories) {
+        all.push({
+          fullName: repo.full_name,
+          name: repo.name,
+          owner: repo.owner.login,
+          cloneUrl: repo.clone_url,
+          private: repo.private,
+          defaultBranch: repo.default_branch,
+        });
+      }
+      if (answer.repositories.length < 100) break;
+    }
+    return all;
+  }
+
+  /**
+   * Git config that signs one command in to a repository on this GitHub, or none when the app
+   * cannot reach it. SSH addresses are fetched over https instead, where the token works.
+   */
+  async gitConfigFor(remoteUrl: string): Promise<Array<[string, string]>> {
+    if (!this.config()) return [];
+    const owner = this.ownerOf(remoteUrl);
+    if (!owner) return [];
+    const installation = (await this.installations()).find(
+      (entry) => entry.account.toLowerCase() === owner.toLowerCase(),
+    );
+    if (!installation) return [];
+    const token = await this.token(installation.id);
+    const host = new URL(this.web).host;
+    const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+    return [
+      [`http.${this.web}/.extraheader`, `AUTHORIZATION: basic ${basic}`],
+      [`url.${this.web}/.insteadOf`, `git@${host}:`],
+      [`url.${this.web}/.insteadOf`, `ssh://git@${host}/`],
+    ];
+  }
+
+  /** The account a repository address belongs to, when it is on this GitHub. */
+  ownerOf(remoteUrl: string): string | null {
+    const host = new URL(this.web).host.replace(/[.]/g, "\\.");
+    const match =
+      new RegExp(`^https?://(?:[^@/]+@)?${host}/([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(
+        remoteUrl,
+      ) ??
+      new RegExp(`^(?:ssh://)?git@${host}[:/]([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(remoteUrl);
+    return match?.[1] ?? null;
+  }
+
+  /** Removes the app from every account it was installed on, then forgets it here. */
+  async disconnect(): Promise<void> {
+    if (this.config()) {
+      const installations = await this.installations().catch(() => []);
+      await Promise.all(
+        installations.map((entry) =>
+          this.request(`/app/installations/${entry.id}`, { method: "DELETE", app: true }).catch(
+            () => undefined,
+          ),
+        ),
+      );
+    }
+    rmSync(this.file, { force: true });
+    this.forget();
+  }
+
+  /** Drops what was asked of GitHub, after a change there such as a new installation. */
+  forget(): void {
+    this.tokens.clear();
+    this.listed = undefined;
+    this.installed = undefined;
+  }
+
+  /** An installation token, reused until five minutes before it expires; one request at a time. */
+  private token(installationId: number): Promise<string> {
+    const cached = this.tokens.get(installationId);
+    if (cached && cached.until > Date.now()) return cached.token;
+    const token = this.request(`/app/installations/${installationId}/access_tokens`, {
+      method: "POST",
+      app: true,
+    }).then((made) => {
+      const { token: value, expires_at } = made as { token: string; expires_at: string };
+      this.tokens.set(installationId, {
+        token: Promise.resolve(value),
+        until: new Date(expires_at).getTime() - 5 * 60_000,
+      });
+      return value;
+    });
+    // Asked for again by everyone at once while it is on its way, and dropped if it fails.
+    this.tokens.set(installationId, { token, until: Date.now() + 60_000 });
+    token.catch(() => this.tokens.delete(installationId));
+    return token;
+  }
+
+  /** A JSON Web Token proving the request comes from the app, good for nine minutes. */
+  appJwt(now = Math.floor(Date.now() / 1000)): string {
+    const config = this.config();
+    if (!config) throw new GitHubError("GitHub is not connected.");
+    // A minute back, because GitHub's clock and this machine's are never quite the same.
+    const body = `${encode({ alg: "RS256", typ: "JWT" })}.${encode({ iat: now - 60, exp: now + 540, iss: config.clientId })}`;
+    const signature = createSign("RSA-SHA256").update(body).sign(config.pem, "base64url");
+    return `${body}.${signature}`;
+  }
+
+  private async request(
+    path: string,
+    options: { method?: string; app?: boolean; token?: string } = {},
+  ): Promise<unknown> {
+    const headers: Record<string, string> = {
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "greatcms-studio",
+    };
+    if (options.app) headers.authorization = `Bearer ${this.appJwt()}`;
+    if (options.token) headers.authorization = `token ${options.token}`;
+    let response: Response;
+    try {
+      response = await this.fetcher(`${this.api}${path}`, {
+        method: options.method ?? "GET",
+        headers,
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch {
+      throw new GitHubError(`This studio could not reach ${new URL(this.api).host}.`);
+    }
+    if (response.status === 204) return null;
+    const body = (await response.json().catch(() => ({}))) as { message?: string };
+    if (!response.ok) {
+      const message =
+        response.status === 401
+          ? "GitHub no longer accepts this studio's app: it may have been deleted. Disconnect and connect again."
+          : response.status === 404 && options.app
+            ? "GitHub no longer has this app, or it was removed from that account."
+            : `GitHub answered ${response.status}${body.message ? `: ${body.message}` : ""}.`;
+      throw new GitHubError(message, response.status);
+    }
+    return body;
+  }
+}

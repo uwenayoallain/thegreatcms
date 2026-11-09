@@ -116,6 +116,8 @@ export function newSitePage(
     cloneError?: string;
     /** Whether the Git access page exists, to point a private repository there. */
     gitAccess?: boolean;
+    /** The repositories the GitHub App reaches, when GitHub can be connected. */
+    github?: GitHubRepositories;
   } = {},
 ): string {
   const { editing, fieldErrors = {} } = options;
@@ -329,6 +331,7 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
     cloneValues = {},
     cloneError,
     gitAccess,
+    github,
   } = options ?? {};
   if (!sitesRoot) return "";
   const working = clones.filter((clone) => clone.state === "cloning");
@@ -380,6 +383,8 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
           : html`<p class="muted">Nothing here yet. Copy a site from Git below.</p>`
       }
     </section>
+
+    ${github ? githubList(github) : ""}
 
     <section class="connect-section" aria-labelledby="clone">
       <h2 id="clone">Copy from Git</h2>
@@ -448,6 +453,93 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
       </form>
     </section>
   `;
+}
+
+export interface GitHubRepositories {
+  connected: boolean;
+  installUrl?: string;
+  error?: string;
+  repositories?: Array<{
+    fullName: string;
+    cloneUrl: string;
+    private: boolean;
+    /** The folder it would be copied to; empty when that name is taken by another folder. */
+    folder: string;
+    state: Folder["state"] | null;
+    siteId?: string;
+  }>;
+}
+
+/** The repositories the GitHub App was given, each a click from being copied here. */
+function githubList(github: GitHubRepositories) {
+  if (!github.connected) {
+    return html`<section class="connect-section" aria-labelledby="github">
+      <h2 id="github">From GitHub</h2>
+      <p>
+        <a href="/git-access">Connect GitHub</a> to pick from your repositories, private ones
+        included, instead of typing an address.
+      </p>
+    </section>`;
+  }
+  const repositories = github.repositories ?? [];
+  return html`<section class="connect-section" aria-labelledby="github">
+    <h2 id="github">From GitHub</h2>
+    <p>
+      The repositories this studio's GitHub App may use.
+      ${
+        github.installUrl
+          ? html`Missing one? <a href="${github.installUrl}">Choose repositories on GitHub</a>.`
+          : ""
+      }
+    </p>
+    ${
+      github.error
+        ? html`<p class="error-text">${github.error}</p>`
+        : repositories.length
+          ? html`<ul class="folders" role="list">
+              ${repositories.map(
+                (repo) => html`<li>
+                  <div>
+                    <strong>${repo.fullName}</strong>
+                    <span class="muted"
+                      >${repo.private ? "Private" : "Public"}${
+                        repo.state === "connected"
+                          ? " · connected"
+                          : repo.state
+                            ? " · in the sites folder"
+                            : ""
+                      }</span
+                    >
+                  </div>
+                  ${
+                    repo.state === "connected"
+                      ? html`<a class="button secondary" href="/sites/${repo.siteId}"
+                          >Open<span class="visually-hidden"> ${repo.fullName}</span></a
+                        >`
+                      : repo.state
+                        ? ""
+                        : html`<form method="POST" action="/sites/clone">
+                            <input type="hidden" name="url" value="${repo.cloneUrl}" />
+                            ${
+                              repo.folder
+                                ? ""
+                                : html`<input
+                                    type="hidden"
+                                    name="folder"
+                                    value="${repo.fullName.replace("/", "-")}"
+                                  />`
+                            }
+                            <button type="submit">
+                              Copy<span class="visually-hidden"> ${repo.fullName}</span>
+                            </button>
+                          </form>`
+                  }
+                </li>`,
+              )}
+            </ul>`
+          : html`<p class="muted">The app was not given any repositories yet.</p>`
+    }
+  </section>`;
 }
 
 function folderRow(folder: Folder) {

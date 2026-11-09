@@ -78,7 +78,13 @@ import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { errorsByPath } from "./views/fields.js";
 import { page, type PageOptions } from "./views/layout.js";
 import { asset, compressed, icon, ICONS } from "./assets.js";
-import { editorsPage, gitAccessPage, sharePage, signInPage } from "./views/account-pages.js";
+import {
+  editorsPage,
+  gitAccessPage,
+  githubCreatePage,
+  sharePage,
+  signInPage,
+} from "./views/account-pages.js";
 import { collectionPage, editEntryPage } from "./views/collection-pages.js";
 import { inboxPage } from "./views/inbox-page.js";
 import { editRegionPage } from "./views/region-page.js";
@@ -95,7 +101,10 @@ import {
   isInside,
   listFolders,
   nameFromFolder,
+  originOf,
   PreviewAddresses,
+  sameRepository,
+  type Folder,
   previewEntries,
   writePreviewList,
 } from "./connect.js";
@@ -104,6 +113,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { LocalRepository } from "./repo.js";
 import type { GitAccess } from "./git-access.js";
+import type { GitHub } from "./github.js";
+import { useRemoteAuth } from "./repo.js";
 import { siteTile } from "./views/pixel.js";
 import { findSiteIcon } from "./site-icon.js";
 import { Liveness } from "./liveness.js";
@@ -151,10 +162,12 @@ export interface AppOptions {
   previewsFile?: string;
   /** `STUDIO_PREVIEW_PROBE`: where this server reaches the preview service, to say whether it is up. */
   previewProbe?: string;
-  /** The studio's own SSH key and host tokens, for private repositories. */
+  /** Tokens for Git hosts other than GitHub. */
   gitAccess?: GitAccess;
+  /** The GitHub App this studio connects GitHub through. */
+  github?: GitHub;
   /** Replaces git for clones, in tests. */
-  cloneGit?: (args: string[]) => Promise<void>;
+  cloneGit?: (args: string[], config: Array<[string, string]>) => Promise<void>;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
@@ -178,7 +191,13 @@ const MEDIA_TYPES: Record<string, string> = {
 };
 const MAX_SUBMISSION_FIELDS = 64;
 
-type Variables = { actor: string; viewer: Viewer; session: string };
+type Variables = {
+  actor: string;
+  viewer: Viewer;
+  session: string;
+  /** Another origin this one page may post a form to, such as GitHub. */
+  formTarget?: string;
+};
 
 export function createApp(options: AppOptions) {
   const { store, password, secret } = options;
@@ -189,6 +208,12 @@ export function createApp(options: AppOptions) {
     previews?.nameOf(site.devUrl) ? options.previewProbe : undefined,
   );
   const clones = options.sitesRoot ? new Clones(options.sitesRoot, options.cloneGit) : undefined;
+  // Pushes to a repository the GitHub App reaches sign in with a token minted for that push.
+  useRemoteAuth(
+    options.github
+      ? (url) => (options.github as GitHub).gitConfigFor(url).catch(() => [])
+      : undefined,
+  );
   /** Keeps the preview service's list in step with the sites, after every change to them. */
   const sitesChanged = () => {
     if (!previews || !options.previewsFile) return;
@@ -271,7 +296,7 @@ export function createApp(options: AppOptions) {
         "frame-src 'self' http: https:",
         "img-src 'self' data: http: https:",
         "connect-src 'self'",
-        formAction,
+        c.get("formTarget") ? `${formAction} ${c.get("formTarget")}` : formAction,
         "frame-ancestors 'none'",
         "base-uri 'none'",
         "object-src 'none'",
@@ -845,18 +870,58 @@ export function createApp(options: AppOptions) {
     return c.redirect("/inbox", 303);
   });
 
+  /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
+  const githubRepositories = async (folders: Folder[]) => {
+    const github = options.github;
+    if (!github || !options.sitesRoot) return undefined;
+    if (!github.config()) return { connected: false };
+    const installUrl = github.installUrl() ?? undefined;
+    try {
+      const repositories = await github.repositories();
+      // A folder is a repository's copy when its origin says so, whatever the folder is called.
+      const origins = await Promise.all(folders.map((folder) => originOf(folder.path)));
+      const copyOf = new Map(
+        folders.flatMap((folder, index) => {
+          const origin = origins[index];
+          return origin ? [[sameRepository(origin), folder] as const] : [];
+        }),
+      );
+      const names = new Set(folders.map((folder) => folder.name.toLowerCase()));
+      return {
+        connected: true,
+        installUrl,
+        repositories: repositories.map((repo) => {
+          const copy = copyOf.get(sameRepository(repo.cloneUrl));
+          return {
+            fullName: repo.fullName,
+            cloneUrl: repo.cloneUrl,
+            private: repo.private,
+            folder: names.has(repo.name.toLowerCase()) ? "" : repo.name,
+            state: copy?.state ?? null,
+            siteId: copy?.siteId,
+          };
+        }),
+      };
+    } catch (error) {
+      return { connected: true, installUrl, error: describeError(error) };
+    }
+  };
+
   /** The connect page, with the sites folder's contents when there is one. */
-  const connectPage = (extra: Parameters<typeof newSitePage>[0] = {}) =>
-    newSitePage({
+  const connectPage = async (extra: Parameters<typeof newSitePage>[0] = {}) => {
+    const folders = options.sitesRoot ? listFolders(options.sitesRoot, store.listSites()) : [];
+    return newSitePage({
       sitesRoot: options.sitesRoot,
-      folders: options.sitesRoot ? listFolders(options.sitesRoot, store.listSites()) : [],
+      folders,
       clones: clones?.list() ?? [],
       previewTemplate: options.previewUrl,
-      gitAccess: Boolean(options.gitAccess),
+      gitAccess: Boolean(options.gitAccess || options.github),
+      github: await githubRepositories(folders),
       ...extra,
     });
+  };
 
-  app.get("/sites/new", (c) => c.html(connectPage()));
+  app.get("/sites/new", async (c) => c.html(await connectPage()));
 
   /**
    * Connects a folder that has a schema: checked by reading it, stored only if that works.
@@ -866,6 +931,11 @@ export function createApp(options: AppOptions) {
     c: Context<{ Variables: Variables }>,
     values: { name: string; path: string; devUrl: string },
   ) => {
+    // A repository the GitHub App can push to publishes straight to GitHub, as its host expects.
+    const origin = options.github?.config() ? await originOf(values.path) : null;
+    const pushes = origin
+      ? (await options.github?.gitConfigFor(origin).catch(() => []))?.length
+      : 0;
     const site: Site = {
       id: crypto.randomUUID(),
       name: values.name || nameFromFolder(basename(values.path)),
@@ -873,7 +943,7 @@ export function createApp(options: AppOptions) {
       devUrl:
         values.devUrl ||
         (previews ? previews.suggest(basename(values.path), store.listSites()) : ""),
-      pushAfterPublish: false,
+      pushAfterPublish: Boolean(pushes),
       deployRoot: "",
       createdAt: new Date().toISOString(),
     };
@@ -891,7 +961,7 @@ export function createApp(options: AppOptions) {
     try {
       await new SiteClient(site).context();
     } catch (error) {
-      return c.html(connectPage({ error: describeError(error), values }), 422);
+      return c.html(await connectPage({ error: describeError(error), values }), 422);
     }
     store.addSite(site);
     sitesChanged();
@@ -920,7 +990,7 @@ export function createApp(options: AppOptions) {
     }
 
     if (!values.path) {
-      return c.html(connectPage({ error: "Give the folder's path.", values }), 422);
+      return c.html(await connectPage({ error: "Give the folder's path.", values }), 422);
     }
     const resolved = folderPath(values.path);
     const problem =
@@ -1009,8 +1079,8 @@ export function createApp(options: AppOptions) {
       branch: String(form.get("branch") ?? "").trim(),
       folder: String(form.get("folder") ?? "").trim(),
     };
-    const again = (cloneError: string) =>
-      c.html(connectPage({ error: "Nothing was copied.", cloneError, cloneValues }), 422);
+    const again = async (cloneError: string) =>
+      c.html(await connectPage({ error: "Nothing was copied.", cloneError, cloneValues }), 422);
     if (!isCloneUrl(cloneValues.url)) {
       return again("Use an https:// or SSH address, such as git@github.com:you/site.git.");
     }
@@ -1025,38 +1095,119 @@ export function createApp(options: AppOptions) {
     if (!isInside(options.sitesRoot, target) || existsSync(target)) {
       return again(`${target} already exists: choose another folder name.`);
     }
-    void clones.start(cloneValues.url, folder, cloneValues.branch);
+    let config: Array<[string, string]> = [];
+    try {
+      config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
+    } catch (error) {
+      return again(describeError(error));
+    }
+    void clones.start(cloneValues.url, folder, cloneValues.branch, config);
     return c.redirect("/sites/new", 303);
   });
 
   const gitAccess = options.gitAccess;
-  const gitAccessView = (extra: Partial<Parameters<typeof gitAccessPage>[0]> = {}) =>
+  const github = options.github;
+  /** What GitHub reports, or why it could not, for the pages that show it. */
+  const githubState = async () => {
+    if (!github?.config()) return { connected: false as const };
+    try {
+      return {
+        connected: true as const,
+        installations: await github.installations(),
+        repositories: await github.repositories(),
+      };
+    } catch (error) {
+      return { connected: true as const, error: describeError(error) };
+    }
+  };
+  const gitAccessView = async (extra: Partial<Parameters<typeof gitAccessPage>[0]> = {}) =>
     gitAccessPage({
-      publicKey: gitAccess?.publicKey() ?? null,
       tokens: gitAccess?.tokens() ?? [],
+      github: github
+        ? {
+            config: github.config(),
+            installUrl: github.installUrl(),
+            settingsUrl: github.settingsUrl(),
+            state: await githubState(),
+          }
+        : undefined,
       ...extra,
     });
 
-  app.get("/git-access", (c) => (gitAccess ? c.html(gitAccessView()) : c.notFound()));
+  app.get("/git-access", async (c) =>
+    gitAccess || github ? c.html(await gitAccessView()) : c.notFound(),
+  );
 
-  app.post("/git-access/key", async (c) => {
-    if (!gitAccess) return c.notFound();
-    try {
-      await gitAccess.createKey(`greatcms-studio@${new URL(publicOrigin(c)).hostname}`);
-    } catch (error) {
+  /** The page that sends the browser to GitHub with the app's manifest, ready to create. */
+  app.post("/git-access/github", async (c) => {
+    if (!github) return c.notFound();
+    const form = await c.req.formData();
+    const organization = String(form.get("organization") ?? "").trim();
+    if (organization && !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(organization)) {
       return c.html(
-        gitAccessView({
-          flash: { kind: "error", message: `No key was made: ${describeError(error)}` },
+        await gitAccessView({
+          flash: { kind: "error", message: "That is not a GitHub organization name." },
         }),
-        500,
+        422,
       );
     }
-    return c.redirect("/git-access", 303);
+    const { action, manifest } = github.creation(publicOrigin(c), organization || undefined);
+    c.set("formTarget", new URL(action).origin);
+    return c.html(githubCreatePage({ action, manifest, organization }));
   });
 
-  app.post("/git-access/key/delete", (c) => {
-    gitAccess?.removeKey();
-    return c.redirect("/git-access", 303);
+  app.get("/git-access/github/created", async (c) => {
+    if (!github) return c.notFound();
+    try {
+      await github.finishCreation(c.req.query("code") ?? "", c.req.query("state") ?? "");
+    } catch (error) {
+      return c.html(
+        await gitAccessView({ flash: { kind: "error", message: describeError(error) } }),
+        400,
+      );
+    }
+    // Straight on to choosing repositories: an app installed nowhere reaches nothing.
+    return c.redirect(github.installUrl() ?? "/git-access", 303);
+  });
+
+  app.get("/git-access/github/installed", async (c) => {
+    if (!github) return c.notFound();
+    github.forget();
+    if (c.req.query("setup_action") === "request") {
+      return c.html(
+        await gitAccessView({
+          flash: {
+            kind: "success",
+            message:
+              "GitHub asked the organization's owners to approve the app. Its repositories appear here once they do.",
+          },
+        }),
+      );
+    }
+    return c.redirect("/sites/new#github", 303);
+  });
+
+  app.post("/git-access/github/refresh", (c) => {
+    github?.forget();
+    return c.redirect(
+      c.req.header("referer")?.includes("/sites/new") ? "/sites/new#github" : "/git-access",
+      303,
+    );
+  });
+
+  app.post("/git-access/github/delete", async (c) => {
+    if (!github) return c.notFound();
+    const settings = github.settingsUrl();
+    await github.disconnect();
+    return c.html(
+      await gitAccessView({
+        flash: {
+          kind: "success",
+          message: "GitHub is disconnected and the app is removed from every account.",
+          detail: settings ? [`Delete the app itself on GitHub: ${settings}`] : undefined,
+        },
+      }),
+    );
   });
 
   app.post("/git-access/token", async (c) => {

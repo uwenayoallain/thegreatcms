@@ -212,15 +212,30 @@ export function editorsPage(options: {
   );
 }
 
-/** The studio's own key and tokens, so it can copy and push private repositories. */
+/** What the Git access page shows about GitHub. */
+export interface GitHubView {
+  config: { slug: string; owner: string; htmlUrl: string } | null;
+  installUrl: string | null;
+  settingsUrl: string | null;
+  state:
+    | { connected: false }
+    | {
+        connected: true;
+        error?: string;
+        installations?: Array<{ id: number; account: string }>;
+        repositories?: Array<{ fullName: string }>;
+      };
+}
+
+/** How the studio signs in to Git hosts: GitHub through its own app, other hosts by token. */
 export function gitAccessPage(options: {
-  publicKey: string | null;
   tokens: Array<{ host: string; username: string }>;
+  github?: GitHubView;
   flash?: PageOptions["flash"];
   tokenError?: string;
   host?: string;
 }): string {
-  const { publicKey, tokens, tokenError } = options;
+  const { tokens, tokenError, github } = options;
   return page(
     {
       title: "Git access",
@@ -236,43 +251,16 @@ export function gitAccessPage(options: {
         <h1>Git access</h1>
         <p class="lede">
           How this studio signs in to Git hosts, to copy private repositories and to push after
-          publishing. Every site shares it. Use either one: an SSH key, or a token per host.
+          publishing. Every site shares it.
         </p>
       </div>
 
-      <section class="connect-section" aria-labelledby="ssh-key">
-        <h2 id="ssh-key">SSH key</h2>
-        ${
-          publicKey
-            ? html`<p>
-                  Add this public key where the repositories are: to your GitHub or GitLab account,
-                  or a machine account, to reach every repository it can; or as a deploy key on one
-                  repository, with write access if publishes are pushed. Then copy with the SSH
-                  address, such as <code>git@github.com:you/site.git</code>.
-                </p>
-                <pre class="public-key">${publicKey}</pre>
-                <details class="danger-confirm">
-                  <summary>Remove this key</summary>
-                  <p>Repositories reached with it stop working until another key is added.</p>
-                  <form method="POST" action="/git-access/key/delete">
-                    <button class="danger" type="submit">Confirm remove the key</button>
-                  </form>
-                </details>`
-            : html`<p>
-                  The studio makes its own key pair and keeps the private half in its data folder.
-                  You add the public half to the host.
-                </p>
-                <form method="POST" action="/git-access/key">
-                  <button type="submit">Create a key</button>
-                </form>`
-        }
-      </section>
-
+      ${github ? githubSection(github) : ""}
       <section class="connect-section" aria-labelledby="tokens">
-        <h2 id="tokens">Access tokens</h2>
+        <h2 id="tokens">Other Git hosts</h2>
         <p>
-          For https addresses. On GitHub, a fine-grained token with read and write access to
-          Contents on the repositories this studio manages. Tokens are never shown again.
+          GitLab, Bitbucket, or a Git server of your own: save an access token that can read and
+          write the repositories this studio manages. Tokens are never shown again.
         </p>
         ${
           tokens.length
@@ -302,7 +290,7 @@ export function gitAccessPage(options: {
               id="token-host"
               name="host"
               value="${options.host ?? ""}"
-              placeholder="github.com"
+              placeholder="gitlab.com"
               autocomplete="off"
               spellcheck="false"
               required
@@ -340,6 +328,117 @@ export function gitAccessPage(options: {
           </div>
         </form>
       </section>
+    `,
+  );
+}
+
+function githubSection(github: GitHubView) {
+  const { config, state } = github;
+  if (!config) {
+    return html`<section class="connect-section" aria-labelledby="github">
+      <h2 id="github">GitHub</h2>
+      <p>
+        The studio makes a GitHub App of its own, in two clicks on GitHub. You then choose the
+        repositories it may use, and it asks GitHub for a sign-in that lasts an hour each time it
+        copies or pushes: no password or key is kept. It can read and write those repositories'
+        files, and nothing else.
+      </p>
+      <form method="POST" action="/git-access/github" class="card-form">
+        <div class="field">
+          <label for="organization">Organization <span class="tag">optional</span></label>
+          <input
+            type="text"
+            id="organization"
+            name="organization"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="organization-hint"
+          />
+          <span class="hint" id="organization-hint"
+            >Empty to own the app with your own account. An organization's owners can make it belong
+            to the organization instead.</span
+          >
+        </div>
+        <div class="form-actions">
+          <button type="submit">Connect GitHub</button>
+        </div>
+      </form>
+    </section>`;
+  }
+  const accounts = state.connected ? (state.installations ?? []) : [];
+  const repositories = state.connected ? (state.repositories ?? []) : [];
+  return html`<section class="connect-section" aria-labelledby="github">
+    <h2 id="github">GitHub</h2>
+    <p>
+      Connected through the app <a href="${config.htmlUrl}">${config.slug}</a>${
+        config.owner ? html`, owned by ${config.owner}` : ""
+      }.
+      ${
+        state.connected && state.error
+          ? html`<span class="error-text">${state.error}</span>`
+          : accounts.length
+            ? html`It reaches ${repositories.length}
+              ${repositories.length === 1 ? "repository" : "repositories"} in
+              ${accounts.map((entry) => entry.account).join(", ")}.`
+            : html`It is not installed anywhere yet, so it reaches no repositories.`
+      }
+    </p>
+    <div class="form-actions">
+      ${
+        github.installUrl
+          ? html`<a class="button" href="${github.installUrl}">Choose repositories on GitHub</a>`
+          : ""
+      }
+      <form method="POST" action="/git-access/github/refresh">
+        <button class="secondary" type="submit">Check again</button>
+      </form>
+    </div>
+    <details class="danger-confirm">
+      <summary>Disconnect GitHub</summary>
+      <p>
+        Uninstalls the app from every account and forgets it here. Copies already made stay, but
+        nothing is pushed to GitHub until it is connected again.
+      </p>
+      <form method="POST" action="/git-access/github/delete">
+        <button class="danger" type="submit">Confirm disconnect GitHub</button>
+      </form>
+    </details>
+  </section>`;
+}
+
+/** One step on GitHub's own page: the manifest goes there, and GitHub makes the app. */
+export function githubCreatePage(options: {
+  action: string;
+  manifest: string;
+  organization: string;
+}): string {
+  return page(
+    {
+      title: "Connect GitHub",
+      section: "sites",
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: "/git-access", label: "Git access" },
+        { href: "/git-access", label: "Connect GitHub" },
+      ],
+    },
+    html`
+      <div class="page-head">
+        <h1>Connect GitHub</h1>
+        <p class="lede">
+          GitHub opens with the app filled
+          in${options.organization ? html` for ${options.organization}` : ""}: you may rename it,
+          then create it. GitHub brings you back here, and on to choosing which repositories it may
+          use.
+        </p>
+      </div>
+      <form method="POST" action="${options.action}" class="page-form">
+        <input type="hidden" name="manifest" value="${options.manifest}" />
+        <div class="form-actions">
+          <button type="submit">Continue to GitHub</button>
+          <a class="button secondary" href="/git-access">Cancel</a>
+        </div>
+      </form>
     `,
   );
 }

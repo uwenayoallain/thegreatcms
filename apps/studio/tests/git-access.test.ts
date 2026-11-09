@@ -1,6 +1,6 @@
-/** The studio's own way into private repositories: a key it makes and tokens per host. */
+/** Tokens for Git hosts other than GitHub, kept where git reads them and never shown again. */
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,10 +11,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { Store } from "../src/db.js";
 import { GitAccess, tokenUser } from "../src/git-access.js";
+import { GitHub } from "../src/github.js";
 import { PASSWORD, SECRET, signedIn } from "./site.js";
 
 const TOKEN = "github_pat_11ABCDEFG0123456789_secretpart";
-const hasKeygen = spawnSync("ssh-keygen", ["-?"]).error === undefined;
 
 let dir: string;
 let env: NodeJS.ProcessEnv;
@@ -83,26 +83,6 @@ describe("tokens", () => {
   });
 });
 
-describe.skipIf(!hasKeygen)("an SSH key", () => {
-  it("is made once, used by every git, and removed cleanly", async () => {
-    const access = new GitAccess(dir, env);
-    await access.createKey("greatcms-studio@test");
-    const key = access.publicKey();
-
-    expect(key).toMatch(/^ssh-ed25519 \S+ greatcms-studio@test$/);
-    expect(env.GIT_CONFIG_KEY_1).toBe("core.sshCommand");
-    expect(env.GIT_CONFIG_VALUE_1).toContain(join(dir, "ssh", "id_ed25519"));
-    expect(env.GIT_CONFIG_VALUE_1).toContain("StrictHostKeyChecking=accept-new");
-
-    await access.createKey("again");
-    expect(access.publicKey()).toBe(key);
-
-    access.removeKey();
-    expect(access.publicKey()).toBeNull();
-    expect(env.GIT_CONFIG_COUNT).toBe("1");
-  });
-});
-
 function post(target: ReturnType<typeof createApp>, path: string, fields: Record<string, string>) {
   return target.request(path, {
     method: "POST",
@@ -118,6 +98,7 @@ describe("the Git access page", () => {
       password: PASSWORD,
       secret: SECRET,
       gitAccess: new GitAccess(dir, env),
+      github: new GitHub(join(dir, "github-app.json")),
     });
   }
   it("saves a token and lists its host, never the token itself", async () => {
@@ -141,20 +122,17 @@ describe("the Git access page", () => {
     expect(document.querySelector("#token-error")?.textContent).toContain("token");
   });
 
-  it.skipIf(!hasKeygen)("makes a key and shows its public half", async () => {
+  it.each([
+    ["with a token on it", "GET", "/git-access"],
+    ["on the way to GitHub", "POST", "/git-access/github"],
+  ])("is valid, accessible HTML %s", async (_name, method, path) => {
     const target = app();
-    expect((await post(target, "/git-access/key", {})).status).toBe(303);
-    const { document } = new JSDOM(
-      await (await target.request("/git-access", { headers: signedIn })).text(),
-    ).window;
-    expect(document.querySelector(".public-key")?.textContent).toMatch(/^ssh-ed25519 /);
-  });
-
-  it("is valid, accessible HTML with a key and a token on it", async () => {
-    const target = app();
-    if (hasKeygen) await post(target, "/git-access/key", {});
     await post(target, "/git-access/token", { host: "github.com", token: TOKEN });
-    const body = await (await target.request("/git-access", { headers: signedIn })).text();
+    const body = await (
+      method === "GET"
+        ? await target.request(path, { headers: signedIn })
+        : await post(target, path, { organization: "acme" })
+    ).text();
 
     const report = await new HtmlValidate({
       extends: ["html-validate:standard"],

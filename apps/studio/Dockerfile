@@ -15,8 +15,8 @@ RUN pnpm --filter @greatcms/studio... build
 
 # The server is one bundled file and the browser code a few more: no node_modules ship.
 FROM node:24-alpine
-# Publishing is a git commit, and a push when the site asks for it; Git access makes its own key.
-RUN apk add --no-cache git openssh-client openssh-keygen
+# Publishing is a git commit, and a push when the site asks for it.
+RUN apk add --no-cache git openssh-client
 WORKDIR /app/apps/studio
 
 COPY --from=build /app/apps/studio/dist ./dist

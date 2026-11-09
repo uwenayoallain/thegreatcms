@@ -12,6 +12,33 @@ const run = promisify(execFile);
 // The studio never executes anything from a managed repository, git hooks included.
 const SAFE_GIT = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
 
+/** Config for one git command that reaches a remote, such as a GitHub App's short-lived token. */
+export type RemoteAuth = (remoteUrl: string) => Promise<Array<[string, string]>>;
+let remoteAuth: RemoteAuth | undefined;
+
+/** Sets how pushes sign in; the studio sets it once at start. */
+export function useRemoteAuth(auth: RemoteAuth | undefined): void {
+  remoteAuth = auth;
+}
+
+/**
+ * The environment plus git config entries, after those it already carries. In the environment
+ * rather than on the command line, so a token is never visible in the process list.
+ */
+export function withGitConfig(
+  env: NodeJS.ProcessEnv,
+  entries: Array<[string, string]>,
+): NodeJS.ProcessEnv {
+  if (entries.length === 0) return env;
+  const start = Number(env.GIT_CONFIG_COUNT ?? 0) || 0;
+  const next: NodeJS.ProcessEnv = { ...env, GIT_CONFIG_COUNT: String(start + entries.length) };
+  entries.forEach(([key, value], index) => {
+    next[`GIT_CONFIG_KEY_${start + index}`] = key;
+    next[`GIT_CONFIG_VALUE_${start + index}`] = value;
+  });
+  return next;
+}
+
 /** The publish in flight per site folder, so two never interleave writes, staging, or commits. */
 const publishing = new Map<string, Promise<unknown>>();
 
@@ -364,10 +391,15 @@ export class LocalRepository implements Repository {
       };
     }
     try {
+      const remote = await this.pushUrl();
+      const auth = remote && remoteAuth ? await remoteAuth(remote) : [];
       await run("git", [...SAFE_GIT, "push", "--porcelain"], {
         cwd: this.root,
         timeout: 60_000,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+        env: withGitConfig(
+          { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+          auth,
+        ),
       });
       return { ok: true, upstream: state.upstream };
     } catch (error) {
@@ -378,12 +410,31 @@ export class LocalRepository implements Repository {
           reason: `${state.upstream} has commits this copy does not.\n  fix: run \`git pull --rebase\` in the site's folder, then push again.`,
         };
       }
+      if (
+        /could not read Username|Authentication failed|Permission to .* denied|Repository not found|returned error: 40[134]|Permission denied \(publickey/i.test(
+          output,
+        )
+      ) {
+        return {
+          ok: false,
+          reason: `${state.upstream} refused this studio's sign-in.\n  fix: on Git access, connect GitHub and give it this repository, or save a token for its host.`,
+        };
+      }
       const detail = output
         .split("\n")
         .map((line) => line.trim())
         .findLast(Boolean);
       return { ok: false, reason: `git push failed: ${detail ?? String(error)}` };
     }
+  }
+
+  /** Where the current branch pushes to, so the right credentials go with it. */
+  private async pushUrl(): Promise<string | null> {
+    const branch = (await this.tryGit(["symbolic-ref", "--short", "HEAD"]))?.trim();
+    const name =
+      branch && (await this.tryGit(["config", "--get", `branch.${branch}.remote`]))?.trim();
+    if (!name) return null;
+    return (await this.tryGit(["remote", "get-url", "--push", name]))?.trim() || null;
   }
 
   /** Writes an unsaved edit where the site's dev server will read it, with the commit it started from. */
