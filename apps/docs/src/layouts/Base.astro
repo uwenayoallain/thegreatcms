@@ -1,7 +1,7 @@
 ---
-import "@fontsource/space-grotesk/latin-400.css";
-import "@fontsource/space-grotesk/latin-500.css";
-import "@fontsource/space-grotesk/latin-700.css";
+import regular from "@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2?url";
+import medium from "@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2?url";
+import bold from "@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2?url";
 import "../styles/site.css";
 import { cms } from "../lib/cms";
 import { pixelWord } from "../lib/pixel";
@@ -29,6 +29,7 @@ const nav = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    {[regular, medium, bold].map((font) => <link rel="preload" href={font} as="font" type="font/woff2" crossorigin />)}
     {description && <meta name="description" content={description} />}
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />

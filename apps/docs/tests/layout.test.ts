@@ -1,10 +1,10 @@
-/** Layout in a browser: no page of the website makes a phone scroll sideways. */
+/** Layout in a browser: no page scrolls sideways, nothing shared moves between pages, nothing shifts as a page loads. */
 
 import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, join, normalize, relative } from "node:path";
-import type { Browser } from "playwright";
+import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const DIST = join(new URL("..", import.meta.url).pathname, "dist");
@@ -15,6 +15,7 @@ const TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".woff2": "font/woff2",
+  ".webp": "image/webp",
 };
 
 /** Every built page, as the address a visitor opens. */
@@ -28,9 +29,12 @@ function pages(dir = DIST): string[] {
 
 async function launch(): Promise<Browser | null> {
   const { chromium } = await import("playwright");
+  // Scrollbars take room, as they do on most desktops, so a page that gains one would show it.
+  const options = { ignoreDefaultArgs: ["--hide-scrollbars"] };
   return chromium
-    .launch()
-    .catch(() => chromium.launch({ channel: "chrome" }))
+    .launch(options)
+    .catch(() => chromium.launch({ ...options, channel: "chromium" }))
+    .catch(() => chromium.launch({ ...options, channel: "chrome" }))
     .catch(() => {
       console.warn(
         "No Chromium available: layout tests skipped. `pnpm exec playwright install chromium`.",
@@ -82,6 +86,114 @@ describe.skipIf(!browser)("on a phone", () => {
       expect(overflow, `${path} scrolls sideways by ${overflow}px`).toBe(0);
     } finally {
       await page.close();
+    }
+  });
+});
+
+const WIDTHS = [375, 768, 1024, 1280, 1600];
+
+/** Adds up layout shifts from the first paint on, for the page to report once it has settled. */
+const recordShifts = () => {
+  const shifts = { total: 0 };
+  Object.assign(window, { layoutShifts: shifts });
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries() as (PerformanceEntry & { value: number })[]) {
+      shifts.total += entry.value;
+    }
+  }).observe({ type: "layout-shift", buffered: true });
+};
+
+/** Where the shared pieces landed, and how far anything moved on the way. */
+const measure = () => {
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- this runs in the page, which sees nothing outside
+  const box = (selector: string) => {
+    const rect = document.querySelector(selector)?.getBoundingClientRect();
+    return rect && [rect.x, rect.y, rect.width, rect.height].map((n) => Math.round(n * 10) / 10);
+  };
+  const footer = box(".colophon");
+  return {
+    shift: (window as unknown as { layoutShifts: { total: number } }).layoutShifts.total,
+    header: box(".masthead"),
+    nav: box(".masthead nav"),
+    // The footer sits lower on a longer page; only its size and left edge are shared.
+    footer: footer && [footer[0], footer[2], footer[3]],
+    docsNav: box(".docs-nav"),
+    content: box(".docs > .prose")?.slice(0, 3),
+  };
+};
+
+type Measured = ReturnType<typeof measure>;
+
+async function settle(page: Page, path: string, wait: number): Promise<Measured> {
+  await page.goto(origin + path, { waitUntil: "load" });
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(wait);
+  return page.evaluate(measure);
+}
+
+/** Every page in turn in one tab, as a reader clicking through would see them. */
+async function walkAll(width: number): Promise<Map<string, Measured>> {
+  const context = await browser!.newContext({ viewport: { width, height: 1200 } });
+  const page = await context.newPage();
+  await page.addInitScript(recordShifts);
+  const results = new Map<string, Measured>();
+  try {
+    // The not-found page is short enough not to scroll at all, which is the case a scrollbar would give away.
+    for (const path of [...pages(), "/404.html"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one tab, one page after another, like a reader
+      results.set(path, await settle(page, path, 150));
+    }
+  } finally {
+    await context.close();
+  }
+  return results;
+}
+
+/** One value for every page; a page that disagrees with the first is named. */
+function expectShared(results: Map<string, Measured>, key: keyof Measured, what: string) {
+  const found = [...results].filter(([, result]) => result[key] !== undefined);
+  for (const [path, result] of found.slice(1)) {
+    expect(result[key], `${what} on ${path} differs from ${found[0]![0]}`).toEqual(
+      found[0]![1][key],
+    );
+  }
+  return found.length;
+}
+
+describe.skipIf(!browser)("between pages", () => {
+  it.each(WIDTHS)(
+    "at %ipx the chrome and the docs columns stay put, and nothing shifts while loading",
+    async (width) => {
+      const results = await walkAll(width);
+      expectShared(results, "header", "the header");
+      expectShared(results, "nav", "the site navigation");
+      expectShared(results, "footer", "the footer");
+      expectShared(results, "docsNav", "the docs sidebar");
+      expect(expectShared(results, "content", "the article column")).toBeGreaterThan(10);
+      for (const [path, result] of results) {
+        expect(result.shift, `${path} shifts by ${result.shift}`).toBe(0);
+      }
+    },
+    60_000,
+  );
+
+  // A slow font is where a swap would move text: the face is optional, so it never swaps in late.
+  it.each([375, 1280])("at %ipx nothing shifts when the fonts arrive late", async (width) => {
+    const context = await browser!.newContext({ viewport: { width, height: 1200 } });
+    const page = await context.newPage();
+    await page.addInitScript(recordShifts);
+    await page.route("**/*.woff2", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await route.continue();
+    });
+    try {
+      for (const path of ["/", "/docs/", "/docs/the-command-line/", "/spec/"]) {
+        // oxlint-disable-next-line no-await-in-loop -- each page has to load alone for its fonts to be late
+        const { shift } = await settle(page, path, 550);
+        expect(shift, `${path} shifts by ${shift}`).toBe(0);
+      }
+    } finally {
+      await context.close();
     }
   });
 });
