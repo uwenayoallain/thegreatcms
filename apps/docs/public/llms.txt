@@ -23,6 +23,8 @@
   - Markdown: https://greatcms.uwe.rw/docs/the-hybrid-model.md
 - [Publishing](https://greatcms.uwe.rw/docs/publishing): One commit in your working copy, or nothing at all.
   - Markdown: https://greatcms.uwe.rw/docs/publishing.md
+- [Managing content](https://greatcms.uwe.rw/docs/managing-content): A site's owner and editors, day to day in the studio, and what each button becomes in Git.
+  - Markdown: https://greatcms.uwe.rw/docs/managing-content.md
 - [Running the studio](https://greatcms.uwe.rw/docs/running-the-studio): One process, one SQLite file, one password. Nothing it manages depends on it.
   - Markdown: https://greatcms.uwe.rw/docs/running-the-studio.md
 - [Self-hosting](https://greatcms.uwe.rw/docs/self-hosting): One server, three containers; an editor publishes and the site is live in seconds.

@@ -108,7 +108,9 @@
 
 html {
   scroll-padding-top: 5rem;
-  scrollbar-gutter: stable;
+  /* A short page keeps a scrollbar too, so the page is the same width on every page. An empty
+     stable gutter would show the canvas beside the dark header instead. */
+  overflow-y: scroll;
 }
 
 body {
@@ -1259,6 +1261,15 @@ main {
   text-transform: uppercase;
   color: var(--ink-3);
   background: var(--surface-2);
+}
+
+/* Sized by the build from the file, so nothing moves as one loads. */
+.prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 .index-list {

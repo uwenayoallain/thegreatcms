@@ -20,6 +20,15 @@
     },
     {
       "_type": "proof",
+      "title": "The studio, as an editor sees it",
+      "body": "Screenshots of the studio editing one of the examples: the form, the visual editor, and the site itself beside them, showing each edit before it is published.",
+      "link": {
+        "href": "/docs/managing-content/",
+        "label": "Managing content"
+      }
+    },
+    {
+      "_type": "proof",
       "title": "This page",
       "body": "The headline, the claims and the proofs are JSON in this repository, edited in the studio, built by Astro, with no script tag in the output.",
       "link": {

@@ -68,6 +68,13 @@
       "markdownUrl": "/docs/publishing.md"
     },
     {
+      "title": "Managing content",
+      "description": "A site's owner and editors, day to day in the studio, and what each button becomes in Git.",
+      "source": "apps/docs/content/docs/managing-content.md",
+      "url": "/docs/managing-content",
+      "markdownUrl": "/docs/managing-content.md"
+    },
+    {
       "title": "Running the studio",
       "description": "One process, one SQLite file, one password. Nothing it manages depends on it.",
       "source": "apps/docs/content/docs/running-the-studio.md",
