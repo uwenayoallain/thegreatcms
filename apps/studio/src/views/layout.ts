@@ -366,6 +366,9 @@ const DARK = `
     --focus: #43c99a;
     --ring: rgba(67, 201, 154, .3);
     --shadow: 0 1px 0 rgba(0, 0, 0, .3);
+    --code-tag: #43c99a;
+    --code-attr: #b9a3f5;
+    --code-value: #f0b36b;
     --shadow-lift: 0 2px 6px -2px rgba(0, 0, 0, .4);
 `;
 
@@ -401,6 +404,10 @@ const STYLES = `
   --sans: "Inter", "SF Pro Text", "Segoe UI Variable Text", "Helvetica Neue", system-ui, sans-serif;
   --display: "Space Grotesk", var(--sans);
   --shadow: 0 1px 2px rgba(21, 23, 26, .04);
+  /* Code in the brand's green, one cool and one warm hue beside it, each at least 4.5:1 on a surface. */
+  --code-tag: #0d7a5f;
+  --code-attr: #6a4bb8;
+  --code-value: #9a5508;
   --shadow-lift: 0 2px 6px -2px rgba(21, 23, 26, .08);
   --pop: 0 8px 24px -12px rgba(0, 0, 0, .25);
 }
@@ -1035,6 +1042,10 @@ code { font-family: var(--mono); font-size: .86em; }
 :not(pre) > code { white-space: normal; overflow-wrap: anywhere; }
 pre { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .9rem 1rem; overflow-x: auto; font-size: .82rem; line-height: 1.55; }
 pre code { font-family: var(--mono); }
+.code .tok-tag { color: var(--code-tag); }
+.code .tok-attr { color: var(--code-attr); }
+.code .tok-value { color: var(--code-value); }
+.code .tok-punct { color: var(--ink-3); }
 
 /* Inbox. */
 .filter-bar { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem 1rem; margin: 0 0 1.25rem; padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }

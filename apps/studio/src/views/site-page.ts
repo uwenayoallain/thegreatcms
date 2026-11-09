@@ -7,6 +7,7 @@ import type { Scheduled, Site } from "../db.js";
 import { formatInZone } from "../schedule.js";
 import type { LiveSite } from "../deploys.js";
 import type { BranchState, SyncState } from "../repo.js";
+import { highlightHtml } from "./code.js";
 import type { Activity, ContentChange, UnsavedDraft } from "../sites.js";
 import { page, type PageOptions } from "./layout.js";
 import { icon } from "./icons.js";
@@ -396,14 +397,14 @@ export function sitePage(options: {
                   <a href="/inbox?site=${encodeURIComponent(site.id)}">inbox</a>. The last part of
                   the address names the form, so one site can have several.
                 </p>
-                <pre><code>&lt;form method="POST" action="${formsEndpoint}/contact"&gt;
-  &lt;label for="email"&gt;Email&lt;/label&gt;
-  &lt;input id="email" name="email" type="email" required&gt;
-  &lt;label for="message"&gt;Message&lt;/label&gt;
-  &lt;textarea id="message" name="message" required&gt;&lt;/textarea&gt;
-  &lt;input type="hidden" name="_redirect" value="/thanks/"&gt;
-  &lt;button&gt;Send&lt;/button&gt;
-&lt;/form&gt;</code></pre>
+                ${highlightHtml(`<form method="POST" action="${formsEndpoint}/contact">
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required>
+  <label for="message">Message</label>
+  <textarea id="message" name="message" required></textarea>
+  <input type="hidden" name="_redirect" value="/thanks/">
+  <button>Send</button>
+</form>`)}
               </section>
             `
           : ""
