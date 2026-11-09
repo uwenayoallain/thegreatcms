@@ -7,7 +7,7 @@ import { html } from "hono/html";
 import type { Site } from "../db.js";
 import { fieldName } from "../form.js";
 import { type ErrorsByPath, hasRichText, renderFields } from "./fields.js";
-import { page, type PageOptions } from "./layout.js";
+import { page, type PageOptions, splitWidth } from "./layout.js";
 import { icon } from "./icons.js";
 import { removeBlockControl } from "./block-actions.js";
 import { summarize, variantField, variantLabel } from "./summary.js";
@@ -102,7 +102,7 @@ export function editRegionPage(options: EditPageOptions): string {
         </p>
       </div>
 
-      <div class="split">
+      <div class="split" ${splitWidth()}>
         <form
           method="POST"
           action="/sites/${site.id}/regions/${regionId}"
