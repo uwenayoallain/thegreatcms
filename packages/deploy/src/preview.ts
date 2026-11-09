@@ -202,6 +202,19 @@ export function upgrade(options: PreviewOptions) {
       socket.on("error", () => upstreamSocket.destroy());
       upstreamSocket.on("error", () => socket.destroy());
     });
+    // A refusal, such as Vite's answer to a socket without its token, goes back as it came:
+    // left unanswered, the browser would wait on it forever.
+    upstream.on("response", (answer) => {
+      const lines = [`HTTP/1.1 ${answer.statusCode ?? 502} ${answer.statusMessage ?? ""}`.trim()];
+      for (const [name, value] of Object.entries(answer.headers)) {
+        if (name === "connection" || name === "keep-alive") continue;
+        for (const each of Array.isArray(value) ? value : [value]) lines.push(`${name}: ${each}`);
+      }
+      lines.push("connection: close");
+      socket.write(`${lines.join("\r\n")}\r\n\r\n`);
+      answer.pipe(socket);
+      socket.on("error", () => answer.destroy());
+    });
     upstream.on("error", () => socket.destroy());
     upstream.end();
   };
