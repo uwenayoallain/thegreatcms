@@ -62,6 +62,11 @@ describe.each(PAGES)("%s", (file) => {
     expect(read(file)).not.toContain("data-greatcms");
   });
 
+  it("names each element that carries over between pages once, so a page change knows what became what", () => {
+    const names = [...read(file).matchAll(/view-transition-name:\s*([\w-]+)/g)].map((m) => m[1]);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
   it("links every internal page at its built address without a redirect", () => {
     for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
       const href = link.getAttribute("href")!.split("#")[0]!.split("?")[0]!;

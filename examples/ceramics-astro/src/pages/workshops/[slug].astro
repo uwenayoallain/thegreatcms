@@ -13,7 +13,7 @@ const date = when(workshop.date);
   <article class="workshop">
     <header class="page-head">
       <p class="eyebrow"><a href="/workshops/">Workshops</a></p>
-      <h1>{workshop.title}</h1>
+      <h1 class="workshop__title" style={`view-transition-name: workshop-${workshop.slug}`}>{workshop.title}</h1>
       <p class="lede">{workshop.summary}</p>
     </header>
     <dl class="facts facts--large">

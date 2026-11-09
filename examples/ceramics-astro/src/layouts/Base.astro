@@ -1,6 +1,7 @@
 ---
-import "@fontsource-variable/fraunces";
 import "../styles/site.css";
+// The headings' face, fetched with the page rather than discovered in the stylesheet.
+import serif from "@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2?url";
 import { cms } from "../lib/cms";
 
 interface Props { title?: string; description?: string }
@@ -24,6 +25,7 @@ const nav = [
     <title>{pageTitle}</title>
     {(description ?? identity.tagline) && <meta name="description" content={description ?? identity.tagline} />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />
     <script type="speculationrules" is:inline>
       {"prerender":[{"where":{"href_matches":"/*"},"eagerness":"moderate"}]}
     </script>

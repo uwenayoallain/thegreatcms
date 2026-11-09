@@ -7,7 +7,7 @@ const date = when(workshop.date);
 ---
 <article class="card" data-full={workshop.full ? "" : undefined}>
   <p class="card__date"><time datetime={workshop.date}>{date.day}, {date.time}</time></p>
-  <Heading class="card__title"><a href={`/workshops/${workshop.slug}/`}>{workshop.title}</a></Heading>
+  <Heading class="card__title" style={`view-transition-name: workshop-${workshop.slug}`}><a href={`/workshops/${workshop.slug}/`}>{workshop.title}</a></Heading>
   <p class="card__summary">{workshop.summary}</p>
   <dl class="facts">
     <div><dt>Length</dt><dd>{workshop.length}</dd></div>

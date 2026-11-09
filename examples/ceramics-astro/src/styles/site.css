@@ -1,3 +1,37 @@
+/* Fraunces from the package, set to `optional`: preloaded, it is there for the first paint, and if
+   it is late the page keeps the fallback rather than reflowing when it lands. */
+@font-face {
+  font-family: "Fraunces Variable";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Fraunces Variable";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/fraunces/files/fraunces-latin-ext-wght-normal.woff2")
+    format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+/* Times-metric serif scaled to Fraunces, so a page that keeps the fallback is set to the same size. */
+@font-face {
+  font-family: "Fraunces fallback";
+  src: local("Times New Roman"), local("Liberation Serif"), local("Tinos");
+  size-adjust: 117.6%;
+  ascent-override: 83.2%;
+  descent-override: 21.7%;
+  line-gap-override: 0%;
+}
+
 :root {
   --cream: #f6efe4;
   --paper: #fbf7f0;
@@ -10,7 +44,7 @@
   --glaze-deep: #47645d;
   --line: #e2d5c3;
   --shadow: rgb(43 33 28 / 0.12);
-  --serif: "Fraunces Variable", Georgia, serif;
+  --serif: "Fraunces Variable", "Fraunces fallback", Georgia, serif;
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --measure: 68ch;
   --gutter: clamp(1rem, 4vw, 3rem);
@@ -33,6 +67,11 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* The scrollbar's room is kept on every page, so a short page and a long one share their edges. */
+html {
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -149,18 +188,25 @@ main,
   padding: 0;
 }
 .masthead nav a {
+  position: relative;
   color: var(--ink);
   text-decoration: none;
   font-weight: 500;
   padding-block: 0.4rem;
-  border-bottom: 2px solid transparent;
-  transition:
-    border-color 180ms ease,
-    color 180ms ease;
 }
-.masthead nav a:hover,
-.masthead nav a[aria-current="page"] {
-  border-color: var(--clay);
+/* A clay line under the page you are on, drawn from the left under the one you point at. */
+.masthead nav a::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -2px;
+  height: 2px;
+  background: var(--clay);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.masthead nav a:hover::after,
+.masthead nav a[aria-current="page"]::after {
+  transform: none;
 }
 
 main {
@@ -602,4 +648,69 @@ main {
 }
 .colophon p {
   margin: 0 0 0.4rem;
+}
+
+/* Motion: transform and opacity only, so nothing it moves can push the layout. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Pages change by crossfade under a masthead that stays put; a workshop's title carries over. */
+  @view-transition {
+    navigation: auto;
+  }
+  .masthead {
+    view-transition-name: masthead;
+  }
+  .masthead nav a[aria-current="page"]::after {
+    view-transition-name: nav-current;
+  }
+  .card__title,
+  .workshop__title {
+    view-transition-class: workshop-title;
+  }
+  ::view-transition-group(masthead) {
+    animation: none;
+  }
+  ::view-transition-group(*) {
+    animation-duration: 380ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  /* The title keeps its proportions as it grows, rather than stretching to the new box. */
+  ::view-transition-old(.workshop-title),
+  ::view-transition-new(.workshop-title) {
+    width: auto;
+    height: 100%;
+  }
+  ::view-transition-old(root) {
+    animation: 140ms ease-in both fade-out;
+  }
+  ::view-transition-new(root) {
+    animation: 260ms ease-out 100ms both fade-in;
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .masthead nav a::after {
+    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* Cards, steps and the quote come up off the bench as they scroll in; only their position moves. */
+  @supports (animation-timeline: view()) {
+    :is(.step, .card, .quote, .statement, .visit > div, .note) {
+      animation: set-down linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 80%;
+    }
+    @keyframes set-down {
+      from {
+        translate: 0 1.75rem;
+      }
+    }
+  }
 }
