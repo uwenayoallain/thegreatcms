@@ -8,6 +8,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { type IncomingMessage, type ServerResponse, createServer, request } from "node:http";
 import type { Duplex } from "node:stream";
+import { previewSitesMain } from "./previews.js";
 
 export interface PreviewOptions {
   /** The site's working copy, where the command runs. */
@@ -23,11 +24,13 @@ export interface PreviewOptions {
   /** Seconds the dev server may take to answer its first request. */
   startTimeout: number;
   log: (line: string) => void;
+  /** More environment for the dev server, such as the public name it answers to. */
+  env?: Record<string, string>;
 }
 
 export type PreviewState = "stopped" | "starting" | "running";
 
-const STATUS_PATH = "/__greatcms/preview";
+export const STATUS_PATH = "/__greatcms/preview";
 
 /** Keeps one dev server, started lazily and stopped when forgotten. */
 export class PreviewRunner {
@@ -59,7 +62,12 @@ export class PreviewRunner {
       detached: true,
       stdio: ["ignore", "inherit", "inherit"],
       // Only ever seen inside the studio: frameworks skip their dev toolbars, which cost round trips.
-      env: { ...process.env, PORT: String(options.upstreamPort), GREATCMS_PREVIEW_SERVER: "1" },
+      env: {
+        ...process.env,
+        ...options.env,
+        PORT: String(options.upstreamPort),
+        GREATCMS_PREVIEW_SERVER: "1",
+      },
     });
     this.child.on("exit", (code) => {
       options.log(`dev server exited (${code ?? "signal"})`);
@@ -143,7 +151,7 @@ ${
 </main></body></html>`;
 }
 
-function proxy(options: PreviewOptions, runner: PreviewRunner) {
+export function proxy(options: PreviewOptions, runner: PreviewRunner) {
   return (req: IncomingMessage, res: ServerResponse) => {
     const upstream = request(
       {
@@ -173,7 +181,7 @@ function proxy(options: PreviewOptions, runner: PreviewRunner) {
 }
 
 /** WebSockets carry the dev server's reloads; they are passed through socket to socket. */
-function upgrade(options: PreviewOptions) {
+export function upgrade(options: PreviewOptions) {
   return (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const upstream = request({
       host: "127.0.0.1",
@@ -228,6 +236,12 @@ Environment:
   PREVIEW_START_TIMEOUT  seconds it may take to answer                         (default: 300)
 
 Point the studio's dev URL (through your proxy) at PREVIEW_PORT. GET /__greatcms/preview reports the state.
+
+Many sites from one process, routed by the host each request names:
+  PREVIEW_SITES     the list the studio writes (STUDIO_PREVIEWS_FILE); replaces PREVIEW_SOURCE
+  PREVIEW_UPSTREAM  the first port a dev server is given; each site gets the next free one
+Each site's dev server is found from its package.json (Astro, Next.js, Nuxt, SvelteKit, Vite, or
+its "dev" script), with its dependencies installed first when it has no node_modules.
 `;
 
 export function previewOptionsFromEnv(env: NodeJS.ProcessEnv): PreviewOptions {
@@ -256,6 +270,7 @@ export async function previewMain(argv: string[], env: NodeJS.ProcessEnv): Promi
     process.stdout.write(PREVIEW_HELP);
     return 0;
   }
+  if (env.PREVIEW_SITES) return previewSitesMain(env);
   let options: PreviewOptions;
   try {
     options = previewOptionsFromEnv(env);

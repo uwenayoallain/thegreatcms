@@ -53,9 +53,10 @@ studio still executes nothing from a repository it manages; see
 
 ## Declaring sites up front
 
-A server should come up already managing its sites, under ids that do not
-change between restarts, because the id is part of the form address every
-contact form posts to. `STUDIO_SITES` does that:
+Sites are usually connected in the studio. A server can also come up already
+managing its sites, under ids that do not change between restarts, because
+the id is part of the form address every contact form posts to.
+`STUDIO_SITES` does that:
 
 ```sh
 STUDIO_SITES='[{"id":"my-site","path":"/srv/sites/my-site","devUrl":"https://preview.example.com","deployRoot":"/srv/www","pushAfterPublish":false}]'
@@ -173,6 +174,19 @@ draft still shows as you type. The example stack runs it this way, and a
 site that nobody edits all day costs a few megabytes of the proxy and nothing
 else.
 
+### Every site from one service
+
+For many sites, run one `greatcms-preview` with `PREVIEW_SITES` naming the
+list the studio writes to `STUDIO_PREVIEWS_FILE`. With
+`STUDIO_PREVIEW_URL=https://{site}-preview.example.com`, a site connected
+without a dev URL gets the next free name, and the service routes by host, so
+one `*.example.com` block proxying to it covers every site.
+`STUDIO_PREVIEW_PROBE` is where the studio checks the service is up.
+
+Each dev server is found from the site's `package.json` (Astro, Next.js, Nuxt,
+SvelteKit, Vite, or its `dev` script), after an install when `node_modules` is
+missing. That runs the site's code, so the service has its own container.
+
 ## Behind a Cloudflare Tunnel
 
 A studio on a machine with no public address, or with no ports you want open,
@@ -197,22 +211,22 @@ The preview a site's `devUrl` names is framed by the editor's browser, not by
 the server, so a `localhost` address works only on the machine running the dev
 server. The same compose file also runs the previews for editors anywhere:
 
-- `previews` runs every site's dev server, inside the compose network only.
+- `previews` is the preview service above, serving every connected site's dev
+  server inside the compose network only, each started when someone opens it.
   It sets `GREATCMS_PREVIEW_SERVER=1`, so the Astro integration and the Nuxt
   module leave the framework's dev toolbar out: nobody sees it inside the
   studio, and over a remote link each of its modules is a round trip.
-- `caddy` sits in front of them and asks the studio's `/auth/check` about each
+- `caddy` sits in front of it and asks the studio's `/auth/check` about each
   visitor, so a preview opens for someone signed in to the studio and for
   nobody else.
-- Set `PREVIEW_DOMAIN=example.com`, and site `my-site` previews at
-  `my-site-preview.example.com`. Give the tunnel one public hostname per
-  preview, pointing at `http://caddy:80`.
+- Set `PREVIEW_DOMAIN=example.com`, and a site connected from folder `my-site`
+  previews at `my-site-preview.example.com`. Give the tunnel one wildcard
+  hostname, `*.example.com` to `http://caddy:80`, after the studio's (or one
+  hostname per preview, if other names must not reach the tunnel).
 
-Each site in `STUDIO_SITES` then names both addresses: `devUrl` is
-`https://my-site-preview.example.com`, for browsers, and `probeUrl` is
-`http://previews:4322`, where the studio checks that the dev server is running.
-Signing in sets the preview cookie for `PREVIEW_DOMAIN` too, and the cookie
-opens the previews and nothing else.
+`SITES_DIR` is the sites folder the connect page lists and clones into;
+`SITES_ROOT` names another when `SITES_DIR` is a single repository. Signing in sets the preview cookie for
+`PREVIEW_DOMAIN` too, and the cookie opens the previews and nothing else.
 
 ## A complete example
 

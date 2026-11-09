@@ -21,6 +21,15 @@ nobody is editing costs nothing.
 PREVIEW_SOURCE=/srv/sites/my-site npx greatcms-preview
 ```
 
+For many sites, point it at the list the studio writes (`STUDIO_PREVIEWS_FILE`)
+instead. It routes each request by host to that site's dev server, found from
+its `package.json`, so a site connected in the studio previews with nothing
+else to configure.
+
+```sh
+PREVIEW_SITES=/previews/sites.json npx greatcms-preview
+```
+
 Both run as a separate process from the studio on purpose: the studio never
 executes code from a repository it manages. Run either with `--help` for the
 environment variables. A Dockerfile and a complete compose example are in the

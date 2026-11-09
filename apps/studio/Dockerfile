@@ -21,7 +21,8 @@ WORKDIR /app/apps/studio
 
 COPY --from=build /app/apps/studio/dist ./dist
 COPY --from=build /app/apps/studio/public ./public
-RUN mkdir -p /data && chown -R node:node /data /app
+# /previews holds the list of sites the preview service reads, written by the studio.
+RUN mkdir -p /data /previews && chown -R node:node /data /previews /app
 USER node
 
 ENV STUDIO_DB=/data/studio.sqlite

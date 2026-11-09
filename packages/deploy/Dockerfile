@@ -8,8 +8,11 @@ RUN pnpm install --frozen-lockfile --filter @greatcms/deploy...
 RUN pnpm --filter @greatcms/deploy... build
 
 # It has no dependencies of its own: the build output and two launchers are the whole program.
-FROM node:24-alpine
-RUN apk add --no-cache git && corepack enable
+# Debian rather than Alpine: as the preview service it runs dev servers from node_modules that
+# may have been installed on the host, whose native packages are built for glibc.
+FROM node:24-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/* && corepack enable
 WORKDIR /app/packages/deploy
 COPY --from=build /app/packages/deploy/dist ./dist
 COPY --from=build /app/packages/deploy/bin ./bin

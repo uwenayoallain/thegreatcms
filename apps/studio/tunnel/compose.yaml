@@ -3,9 +3,10 @@
 #   cp .env.example .env     # then fill it in
 #   COMPOSE_BAKE=false docker compose up -d --build   # bake refuses to build on the host network
 #
-# In Cloudflare, give the tunnel the public hostname STUDIO_HOST -> http://studio:8787, and one per
-# preview, <site>-preview.PREVIEW_DOMAIN -> http://caddy:80. No port is published, so the tunnel is
-# the only way in, and a preview is shown only to someone signed in to the studio.
+# In Cloudflare, give the tunnel the public hostname STUDIO_HOST -> http://studio:8787 and one
+# wildcard, *.PREVIEW_DOMAIN -> http://caddy:80, listed last: every site connected in the studio
+# previews at <site>-preview.PREVIEW_DOMAIN with nothing more to add. No port is published, so the
+# tunnel is the only way in, and a preview is shown only to someone signed in to the studio.
 
 name: greatcms-studio
 
@@ -26,6 +27,12 @@ services:
       # Signing in also opens the previews, which live on sibling names under this domain.
       STUDIO_COOKIE_DOMAIN: ${PREVIEW_DOMAIN:-}
       STUDIO_SITES: ${STUDIO_SITES:-}
+      # The connect page lists this folder's sites, and copies from Git land in it.
+      STUDIO_SITES_ROOT: ${SITES_ROOT:-${SITES_DIR}}
+      # Each new site previews at its own name; the preview service reads the list written here.
+      STUDIO_PREVIEW_URL: https://{site}-preview.${PREVIEW_DOMAIN}
+      STUDIO_PREVIEWS_FILE: /previews/sites.json
+      STUDIO_PREVIEW_PROBE: http://previews:4321
       GIT_AUTHOR_NAME: ${GIT_NAME:-Studio}
       GIT_AUTHOR_EMAIL: ${GIT_EMAIL:-studio@example.com}
       GIT_COMMITTER_NAME: ${GIT_NAME:-Studio}
@@ -36,7 +43,10 @@ services:
     volumes:
       # Mounted at the same path, so a site's folder is written the same way inside and out.
       - ${SITES_DIR:?set SITES_DIR in .env}:${SITES_DIR}
+      # The same folder again unless SITES_ROOT names another; Compose mounts a repeat once.
+      - ${SITES_ROOT:-${SITES_DIR}}:${SITES_ROOT:-${SITES_DIR}}
       - studio-data:/data
+      - previews:/previews
       # The website's releases: the studio shows what is live and can ask for a rollback.
       - website:/srv/www
     # The builder first, so its image, not this one, creates the shared folder and owns it.
@@ -48,24 +58,35 @@ services:
       timeout: 5s
       start_period: 10s
 
-  # Every site's dev server, so the editor frames the real site wherever the studio is opened.
+  # Every connected site's dev server, so the editor frames the real site wherever the studio is
+  # opened. Each starts on its first request and stops after a quiet spell; a site with no
+  # node_modules has its dependencies installed first. This is the one service that runs a site's
+  # code, in a container of its own: the studio still runs none.
   previews:
-    image: node:24-bookworm-slim
+    build:
+      context: ../../..
+      dockerfile: packages/deploy/Dockerfile
+      network: host
     restart: unless-stopped
     # The checkout's own user, so caches the dev servers write stay editable outside the container.
     user: "${PREVIEW_UID:-1000}:${PREVIEW_GID:-1000}"
-    working_dir: ${SITES_DIR}
-    command: ["node", "apps/studio/tunnel/previews.mjs"]
+    command: ["node", "bin/greatcms-preview.mjs"]
     environment:
-      SITES_DIR: ${SITES_DIR}
-      PREVIEW_DOMAIN: ${PREVIEW_DOMAIN:?set PREVIEW_DOMAIN in .env}
-      HOME: /tmp
+      PREVIEW_SITES: /previews/sites.json
+      PREVIEW_PORT: "4321"
+      PREVIEW_IDLE: "${PREVIEW_IDLE:-900}"
       ASTRO_TELEMETRY_DISABLED: "1"
       NEXT_TELEMETRY_DISABLED: "1"
       NUXT_TELEMETRY_DISABLED: "1"
     volumes:
       - ${SITES_DIR}:${SITES_DIR}
-    # Six dev servers; a ceiling keeps them from starving the rest of the machine.
+      - ${SITES_ROOT:-${SITES_DIR}}:${SITES_ROOT:-${SITES_DIR}}
+      - previews:/previews:ro
+      # pnpm's store and corepack's downloads, so a restart does not fetch every package again.
+      - previews-home:/home/node
+    # The studio first, so its image, not this one, creates the shared folder and owns it.
+    depends_on:
+      - studio
     mem_limit: ${PREVIEW_MEMORY:-3g}
 
   # The door to the previews, which asks the studio about each visitor, and the public website.
@@ -116,5 +137,7 @@ services:
 
 volumes:
   studio-data:
+  previews:
+  previews-home:
   website:
   website-pnpm:

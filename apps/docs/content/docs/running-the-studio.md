@@ -44,6 +44,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON to this `http(s)` URL. Slack and Discord webhooks work as is.   |
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
+| `STUDIO_SITES_ROOT`      | The folder holding sites. **Connect a site** lists its folders, and **Copy from Git** clones into it.            |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -53,11 +54,26 @@ directly: those headers are then the visitor's to forge.
 
 ## Connecting a site
 
-A site is a folder on the machine the studio runs on. Add it by path, and the
-studio reads `.cms/schema.yaml` from that working copy and builds the editor
-from it. There is no token and no network call. Give it your dev server's URL
-and the editor frames your real site beside the form; see
-[Previewing](/docs/previewing/).
+A site is a folder on the machine the studio runs on. **Connect a site** finds
+one three ways:
+
+- **In the sites folder.** With `STUDIO_SITES_ROOT` set, the page lists the
+  folders in it. One with a schema connects with a click, named after its
+  folder; one without offers **Set up**.
+- **Copy from Git.** Paste an https or SSH address, and the studio clones it
+  into the sites folder with this machine's Git access. It fetches files and
+  nothing else: no hooks, no submodules, no `file` or `ext` transport.
+- **By path.** Any other folder; `~` is the studio user's home.
+
+The studio reads `.cms/schema.yaml` from that working copy and builds the
+editor from it. There is no token and no network call. Give it your dev
+server's URL and the editor frames your real site beside the form; see
+[Previewing](/docs/previewing/). With `STUDIO_PREVIEW_URL` set, a site
+connected without one gets its own; see [Self-hosting](/docs/self-hosting/).
+
+A folder with no schema gets **Set up**: pick one of `greatcms init`'s
+starters, and the studio commits `.cms/schema.yaml` and `.cms/config.yaml`
+and connects the site. Nothing else in the folder changes.
 
 ## People
 

@@ -5,6 +5,8 @@ import { Deployer, readStatus, type DeployOptions } from "./deploy.js";
 export { Deployer, readStatus } from "./deploy.js";
 export { PreviewRunner, createPreviewServer, previewMain, waitingPage } from "./preview.js";
 export type { PreviewOptions, PreviewState } from "./preview.js";
+export { createPreviewSitesServer, devCommand, PreviewSites, SiteList } from "./previews.js";
+export type { PreviewSite, PreviewSitesOptions } from "./previews.js";
 export type { DeployOptions, Outcome, Release, Status } from "./deploy.js";
 
 const HELP = `greatcms-deploy: build a site on every new commit and swap it live.
