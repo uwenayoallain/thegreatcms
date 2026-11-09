@@ -108,7 +108,7 @@ import {
   previewEntries,
   writePreviewList,
 } from "./connect.js";
-import { planStarter, TEMPLATES, type TemplateId } from "@greatcms/cli";
+import { planStarter, TEMPLATES, type TemplateId } from "@greatcms/cli/starter";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { LocalRepository } from "./repo.js";

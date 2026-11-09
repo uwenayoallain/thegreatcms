@@ -37,6 +37,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./starter": {
+      "types": "./dist/starter.d.ts",
+      "default": "./dist/starter.js"
     }
   },
   "publishConfig": {

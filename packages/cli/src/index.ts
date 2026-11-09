@@ -68,7 +68,6 @@ import { plainUi, ui, useUi, type Ui } from "./ui.js";
 export { createUi, wantsColour, type Ui } from "./ui.js";
 export { parseFlags, type Flags } from "./commands.js";
 export { VERSION } from "./version.js";
-export { planStarter, TEMPLATES, type Template, type TemplateId } from "./init.js";
 
 const execFileAsync = promisify(execFile);
 
