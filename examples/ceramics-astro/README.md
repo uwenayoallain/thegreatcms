@@ -43,3 +43,12 @@ pnpm --filter @greatcms/example-ceramics-astro build    # then `test`
   drop out of its list.
 - **No JavaScript on any page.** The tests check every built page for a
   script tag and for the studio's preview, and run axe against each one.
+- **Motion from the stylesheet alone.** Pages change by crossfade under a
+  masthead that stays put, a workshop's title grows from its card into its
+  page, and cards come up as they scroll in. Only transform and opacity move,
+  and visitors who ask for less motion get none.
+- **A frame that never jumps.** Fraunces is preloaded and set to
+  `optional`, with a fallback sized to match, so a late font never reflows a
+  page, and the scrollbar's room is kept on every page. `tests/layout.test.ts` loads
+  each page at five widths, with the font on time and late, and fails on any
+  layout shift or a masthead, nav, column or footer out of place.

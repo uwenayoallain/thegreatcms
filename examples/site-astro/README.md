@@ -23,12 +23,19 @@ and a contact form that posts to the studio.
 - Every link points at the address its page is built at, and speculation rules
   let the browser prerender the next page as the pointer settles on a link.
   They are data the browser reads, not a script, so no page ships JavaScript.
+- Motion is stylesheet only: a page change is a crossfade under a header that
+  stays put, and cards settle in as they scroll into view. It moves only
+  transform and opacity, and stops for visitors who ask for less motion.
+- Nothing moves once it is drawn. The scrollbar's room is kept on every page,
+  and `tests/layout.test.ts` loads each page at five widths to check that the
+  header, nav, main column and footer sit in the same place and that no
+  layout shift is recorded.
 
 From the repository root:
 
 ```sh
 pnpm --filter @greatcms/example-site-astro dev    # http://localhost:4321
-pnpm --filter @greatcms/example-site-astro test   # axe, no-script, weight, contrast
+pnpm --filter @greatcms/example-site-astro test   # axe, no-script, weight, contrast, layout
 ```
 
 Connect this folder as a site in the studio, give it `http://localhost:4321`

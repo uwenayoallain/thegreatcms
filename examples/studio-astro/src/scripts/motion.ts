@@ -138,16 +138,15 @@ function standIn(): void {
     );
   }
 
+  // The stylesheet draws the figure from --count, in a box already as wide as its final value.
   for (const count of all(".count")) {
-    const value = count.querySelector<HTMLElement>(".count__value");
     const to = Number(count.dataset.count);
-    const pad = Number(count.dataset.pad);
-    if (!value || !Number.isFinite(to)) continue;
+    if (!Number.isFinite(to)) continue;
     inView(count, () => {
       const start = performance.now();
       const step = (now: number) => {
         const t = Math.min((now - start) / 1600, 1);
-        value.textContent = String(Math.round(to * (1 - (1 - t) ** 4))).padStart(pad, "0");
+        count.style.setProperty("--count", String(Math.round(to * (1 - (1 - t) ** 4))));
         if (t < 1) requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
