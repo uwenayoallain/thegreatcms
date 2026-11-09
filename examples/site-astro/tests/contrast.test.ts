@@ -34,6 +34,7 @@ async function launch(): Promise<Browser | null> {
   const { chromium } = await import("playwright");
   return chromium
     .launch()
+    .catch(() => chromium.launch({ channel: "chromium" }))
     .catch(() => chromium.launch({ channel: "chrome" }))
     .catch(() => {
       console.warn(
