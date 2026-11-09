@@ -1,3 +1,4 @@
+// @ts-check
 import greatcms from "@greatcms/reader/astro";
 import { defineConfig } from "astro/config";
 

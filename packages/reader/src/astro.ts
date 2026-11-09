@@ -1,6 +1,6 @@
 /** An Astro integration for the studio's live preview. */
 
-import { greatcmsWatch, PREVIEW_SCRIPT, type WatchOptions } from "./vite.js";
+import { greatcmsWatch, PREVIEW_SCRIPT, type VitePluginLike, type WatchOptions } from "./vite.js";
 
 interface AstroIntegration {
   name: string;
@@ -8,7 +8,8 @@ interface AstroIntegration {
     "astro:config:setup": (options: {
       command: "dev" | "build" | "preview" | "sync";
       updateConfig: (config: {
-        vite?: { plugins: unknown[] };
+        // The plugin as Vite describes one, not `unknown`: Astro's own type refuses anything looser.
+        vite?: { plugins: VitePluginLike[] };
         devToolbar?: { enabled: boolean };
       }) => unknown;
       injectScript: (stage: "page", content: string) => void;
