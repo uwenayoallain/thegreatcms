@@ -183,9 +183,9 @@ without a dev URL gets the next free name, and the service routes by host, so
 one `*.example.com` block proxying to it covers every site.
 `STUDIO_PREVIEW_PROBE` is where the studio checks the service is up.
 
-Each dev server is found from the site's `package.json` (Astro, Next.js, Nuxt,
-SvelteKit, Vite, or its `dev` script), after an install when `node_modules` is
-missing. That runs the site's code, so the service has its own container.
+Each dev server comes from the site's `package.json` (Astro, Next.js, Nuxt,
+SvelteKit, Vite, or a `dev` script), installed first if needed. That runs the
+site's code, so the service has its own container.
 
 ## Behind a Cloudflare Tunnel
 

@@ -62,8 +62,7 @@ one three ways:
   folder; one without offers **Set up**.
 - **From GitHub.** Connect GitHub once on **Git access**: the studio makes
   its own GitHub App, you choose the repositories it may use, and each copies
-  with a click. Every copy and push gets a token that lasts an hour; no key
-  is stored. These sites push each publish.
+  with a click, signing in with a token that lasts an hour.
 - **Copy from Git.** Paste any https or SSH address. Only files are fetched:
   no hooks or submodules. For a private repository elsewhere, save a token
   on **Git access**.
@@ -78,6 +77,9 @@ connected without one gets its own; see [Self-hosting](/docs/self-hosting/).
 A folder with no schema gets **Set up**: pick a `greatcms init` starter, and
 the studio commits `.cms/schema.yaml` and `.cms/config.yaml` and connects the
 site, changing nothing else.
+
+A new **Branch** in a site's settings keeps publishes off the live one, to
+review and merge on GitHub.
 
 ## People
 

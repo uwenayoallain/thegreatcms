@@ -502,6 +502,7 @@ body.plain { display: block; }
 :is(.editors, .folders) li > div { display: flex; flex-direction: column; flex: 1 1 14rem; }
 :is(.editors, .folders) li .muted { font-size: .8rem; }
 .folders li > form { margin: 0; }
+.notice.warn { margin: 0 0 .85rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--ink); font-size: .85rem; }
 .app-logo { display: flex; gap: .9rem; align-items: center; margin: 1rem 0; padding: .75rem .9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .app-logo img { flex: none; border-radius: 12px; }
 .app-logo p { margin: 0; font-size: .85rem; color: var(--ink-2); }

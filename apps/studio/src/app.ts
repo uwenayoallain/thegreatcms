@@ -72,7 +72,7 @@ import {
   toCsv,
 } from "./submissions.js";
 import { SiteClient, type SiteContext, entryTitle } from "./sites.js";
-import { type Author, ConflictError } from "./repo.js";
+import { type Author, type BranchState, ConflictError } from "./repo.js";
 import { type Viewer, withViewer } from "./views/viewer.js";
 import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { errorsByPath } from "./views/fields.js";
@@ -931,11 +931,6 @@ export function createApp(options: AppOptions) {
     c: Context<{ Variables: Variables }>,
     values: { name: string; path: string; devUrl: string },
   ) => {
-    // A repository the GitHub App can push to publishes straight to GitHub, as its host expects.
-    const origin = options.github?.config() ? await originOf(values.path) : null;
-    const pushes = origin
-      ? (await options.github?.gitConfigFor(origin).catch(() => []))?.length
-      : 0;
     const site: Site = {
       id: crypto.randomUUID(),
       name: values.name || nameFromFolder(basename(values.path)),
@@ -943,7 +938,8 @@ export function createApp(options: AppOptions) {
       devUrl:
         values.devUrl ||
         (previews ? previews.suggest(basename(values.path), store.listSites()) : ""),
-      pushAfterPublish: Boolean(pushes),
+      // Off until someone chooses where publishes go: pushing a default branch can put them live.
+      pushAfterPublish: false,
       deployRoot: "",
       createdAt: new Date().toISOString(),
     };
@@ -1252,7 +1248,8 @@ export function createApp(options: AppOptions) {
       .context()
       .then((context) => context.schema)
       .catch(() => undefined);
-    return c.html(newSitePage({ editing: site, schema }));
+    const branch = await new SiteClient(site).branchState().catch(() => null);
+    return c.html(newSitePage({ editing: site, schema, branch }));
   });
 
   app.post("/sites/:id/settings", async (c) => {
@@ -1264,12 +1261,16 @@ export function createApp(options: AppOptions) {
       path: site.path,
       devUrl: String(form.get("devUrl") ?? "").trim(),
       deployRoot: String(form.get("deployRoot") ?? "").trim(),
+      branch: String(form.get("branch") ?? "").trim(),
     };
+    const client = new SiteClient(site);
+    const branch = await client.branchState().catch(() => null);
     if (values.deployRoot && !values.deployRoot.startsWith("/")) {
       return c.html(
         newSitePage({
           editing: site,
           values,
+          branch,
           error: "Nothing was saved: check the builder folder.",
           fieldErrors: { deployRoot: "Give the absolute path, such as /srv/www." },
         }),
@@ -1281,6 +1282,7 @@ export function createApp(options: AppOptions) {
         newSitePage({
           editing: site,
           values,
+          branch,
           error: "Nothing was saved: check the dev server URL.",
           fieldErrors: { devUrl: DEV_URL_ERROR },
         }),
@@ -1288,7 +1290,27 @@ export function createApp(options: AppOptions) {
       );
     }
     if (!values.name) {
-      return c.html(newSitePage({ editing: site, values, error: "The site needs a name." }), 422);
+      return c.html(
+        newSitePage({ editing: site, values, branch, error: "The site needs a name." }),
+        422,
+      );
+    }
+    // A different branch first: if the folder cannot move, nothing else is saved either.
+    if (values.branch && branch?.branch !== values.branch) {
+      try {
+        await client.switchBranch(values.branch);
+      } catch (error) {
+        return c.html(
+          newSitePage({
+            editing: site,
+            values,
+            branch,
+            error: "Nothing was saved: the branch was not changed.",
+            fieldErrors: { branch: describeError(error) },
+          }),
+          422,
+        );
+      }
     }
     store.updateSite(site.id, {
       name: values.name,
@@ -1446,9 +1468,10 @@ export function createApp(options: AppOptions) {
     const client = new SiteClient(site);
     const context = await client.context();
     const names = Object.keys(context.schema.collections);
-    const [drafts, sync, live, running, activity, counts] = await Promise.all([
+    const [drafts, sync, branch, live, running, activity, counts] = await Promise.all([
       client.listLiveDrafts(context),
       client.syncState(),
+      client.branchState().catch(() => null),
       readLive(site.deployRoot),
       liveness.running(site),
       client.activity(context),
@@ -1461,6 +1484,8 @@ export function createApp(options: AppOptions) {
       drafts,
       formsEndpoint: `${publicOrigin(c)}/f/${encodeURIComponent(site.id)}`,
       sync,
+      branch,
+      reviewUrl: branch ? reviewUrl(branch, options.github?.web) : undefined,
       live,
       scheduled: { jobs: store.listScheduled(site.id), timeZone },
       running,
@@ -2312,6 +2337,22 @@ function contentOf(c: { req: { param(name: string): string | undefined } }) {
 
 /** Compared against when an unknown email signs in, so the reply takes the same time. */
 const DUMMY_HASH = hashPassword(randomSecret());
+
+/**
+ * Where a branch's publishes can be read and merged on GitHub: its comparison with the main
+ * branch, which offers a pull request. Only for a branch of its own on a GitHub remote.
+ */
+export function reviewUrl(state: BranchState, web = "https://github.com"): string | undefined {
+  const { branch, remoteUrl, defaultBranch } = state;
+  if (!branch || !remoteUrl || branch === (defaultBranch ?? "main")) return undefined;
+  const host = new URL(web).host.replace(/[.]/g, "\\.");
+  const match =
+    new RegExp(`^https?://(?:[^@/]+@)?${host}/([^/]+/[^/]+?)(?:\\.git)?/?$`, "i").exec(remoteUrl) ??
+    new RegExp(`^(?:ssh://)?git@${host}[:/]([^/]+/[^/]+?)(?:\\.git)?/?$`, "i").exec(remoteUrl);
+  if (!match) return undefined;
+  const base = defaultBranch ? `${encodeURIComponent(defaultBranch)}...` : "";
+  return `${web.replace(/\/+$/, "")}/${match[1]}/compare/${base}${encodeURIComponent(branch)}?expand=1`;
+}
 
 /** The owner commits as git's configured identity; an editor commits as themselves. */
 function authorOf(who: Viewer): Author | undefined {

@@ -6,7 +6,7 @@ import { html } from "hono/html";
 import type { Scheduled, Site } from "../db.js";
 import { formatInZone } from "../schedule.js";
 import type { LiveSite } from "../deploys.js";
-import type { SyncState } from "../repo.js";
+import type { BranchState, SyncState } from "../repo.js";
 import type { Activity, ContentChange, UnsavedDraft } from "../sites.js";
 import { page, type PageOptions } from "./layout.js";
 import { icon } from "./icons.js";
@@ -185,6 +185,9 @@ export function sitePage(options: {
   /** This site's form address, e.g. https://studio.example.com/f/<id>. */
   formsEndpoint?: string;
   sync?: SyncState | null;
+  /** The branch publishes land on, and where to review them on GitHub. */
+  branch?: BranchState | null;
+  reviewUrl?: string;
   live?: LiveSite | null;
   scheduled?: { jobs: Scheduled[]; timeZone: string };
   running?: boolean | null;
@@ -192,7 +195,7 @@ export function sitePage(options: {
   /** Entries per collection, by collection name. */
   counts?: Record<string, number>;
 }): string {
-  const { site, schema, flash, formsEndpoint, sync, live, scheduled, running } = options;
+  const { site, schema, flash, formsEndpoint, sync, live, scheduled, running, branch } = options;
   const drafts = options.drafts ?? [];
   const drafted = new Set(drafts.map((draft) => draft.target));
   const edited = options.activity?.edited ?? new Map<string, { author: string; date: string }>();
@@ -251,7 +254,26 @@ export function sitePage(options: {
         <div>
           <dt>Publishing</dt>
           <dd>
-            ${site.pushAfterPublish ? html`One commit, pushed to <code>${sync?.upstream ?? "its upstream"}</code>` : "One commit"}
+            ${
+              site.pushAfterPublish
+                ? html`One commit, pushed to
+                    <code
+                      >${
+                        sync?.upstream ??
+                        (branch?.branch && branch.remote
+                          ? `${branch.remote}/${branch.branch}`
+                          : "its upstream")
+                      }</code
+                    >`
+                : branch?.branch
+                  ? html`One commit on <code>${branch.branch}</code>`
+                  : "One commit"
+            }
+            ${
+              options.reviewUrl
+                ? html`<br /><a href="${options.reviewUrl}">Review and merge on GitHub</a>`
+                : ""
+            }
           </dd>
         </div>
       </dl>

@@ -105,6 +105,17 @@ export interface SyncState {
 
 export type PushResult = { ok: true; upstream: string } | { ok: false; reason: string };
 
+/** The branch publishes are committed on, and the remote one the repository treats as main. */
+export interface BranchState {
+  /** Null on a detached HEAD, where a publish would belong to no branch. */
+  branch: string | null;
+  /** The remote pushes go to: the branch's own, or `origin` before its first push. */
+  remote: string | null;
+  remoteUrl: string | null;
+  /** The remote's default branch, such as `main`, when the clone recorded it. */
+  defaultBranch: string | null;
+}
+
 /** The content being published changed after the editor loaded it, so publishing would overwrite that. */
 export class ConflictError extends Error {
   constructor(
@@ -350,6 +361,106 @@ export class LocalRepository implements Repository {
     }
   }
 
+  async branchState(): Promise<BranchState> {
+    const branch =
+      (await this.tryGit(["symbolic-ref", "--quiet", "--short", "HEAD"]))?.trim() || null;
+    const configured =
+      branch && (await this.tryGit(["config", "--get", `branch.${branch}.remote`]))?.trim();
+    const remote =
+      configured ||
+      ((await this.tryGit(["remote", "get-url", "origin"])) !== null ? "origin" : null);
+    const remoteUrl = remote
+      ? (await this.tryGit(["remote", "get-url", "--push", remote]))?.trim() || null
+      : null;
+    const head = remote
+      ? (
+          await this.tryGit(["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`])
+        )?.trim()
+      : undefined;
+    return {
+      branch,
+      remote,
+      remoteUrl,
+      defaultBranch: remote && head ? head.slice(remote.length + 1) : null,
+    };
+  }
+
+  /**
+   * Moves the working copy onto a branch: an existing one, the remote's of that name, or a new
+   * one started from here. Refused while there are changes the studio did not commit, so
+   * nobody's uncommitted work is carried somewhere they did not choose.
+   */
+  async switchBranch(name: string): Promise<void> {
+    const previous = publishing.get(this.root) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(() => this.switchNow(name));
+    publishing.set(this.root, current);
+    try {
+      await current;
+    } finally {
+      answers.delete(this.root);
+      headFromFiles.delete(this.root);
+      if (publishing.get(this.root) === current) publishing.delete(this.root);
+    }
+  }
+
+  private async switchNow(name: string): Promise<void> {
+    if (
+      name.startsWith("-") ||
+      (await this.tryGit(["check-ref-format", "--branch", name])) === null
+    ) {
+      throw new LocalRepositoryError(`"${name}" is not a branch name Git accepts.`);
+    }
+    const changed = (await this.git(["status", "--porcelain", "--untracked-files=normal"]))
+      .split("\n")
+      .filter(Boolean);
+    if (changed.length > 0) {
+      throw new LocalRepositoryError(
+        `The folder has ${changed.length} ${changed.length === 1 ? "change" : "changes"} that are not committed, so the branch was not changed.`,
+        "commit or set them aside in the site's folder first, then try again.",
+      );
+    }
+    if ((await this.tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${name}`])) !== null) {
+      await this.git(["switch", "--quiet", name]);
+      return;
+    }
+    const { remote, remoteUrl } = await this.branchState();
+    if (remote && remoteUrl) {
+      // The remote may already have it, from another studio or a developer.
+      const auth = remoteAuth ? await remoteAuth(remoteUrl).catch(() => []) : [];
+      await run(
+        "git",
+        [
+          ...SAFE_GIT,
+          "fetch",
+          "--quiet",
+          "--no-tags",
+          remote,
+          `refs/heads/${name}:refs/remotes/${remote}/${name}`,
+        ],
+        {
+          cwd: this.root,
+          timeout: 60_000,
+          env: withGitConfig(
+            { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+            auth,
+          ),
+        },
+      ).catch(() => undefined);
+      if (
+        (await this.tryGit([
+          "rev-parse",
+          "--verify",
+          "--quiet",
+          `refs/remotes/${remote}/${name}`,
+        ])) !== null
+      ) {
+        await this.git(["switch", "--quiet", "--track", "-c", name, `${remote}/${name}`]);
+        return;
+      }
+    }
+    await this.git(["switch", "--quiet", "-c", name]);
+  }
+
   /** The branch's upstream and how many commits have not reached it, or null without one. */
   async syncState(): Promise<SyncState | null> {
     // A fetch moves the upstream without moving HEAD, so this one is also asked again shortly.
@@ -382,18 +493,32 @@ export class LocalRepository implements Repository {
   }
 
   private async pushNow(): Promise<PushResult> {
-    const state = await this.syncState();
-    if (!state) {
+    const tracked = await this.syncState();
+    const where = await this.branchState();
+    // A branch new to the remote, such as one the studio started, is pushed to the same name there.
+    const state =
+      tracked ??
+      (where.branch && where.remote
+        ? { upstream: `${where.remote}/${where.branch}`, ahead: 0 }
+        : null);
+    if (!state || !where.branch) {
       return {
         ok: false,
-        reason:
-          "This branch has no upstream to push to.\n  fix: run `git push -u origin <branch>` once in the site's folder.",
+        reason: where.branch
+          ? "This repository has no remote to push to.\n  fix: add one in the site's folder, such as `git remote add origin <address>`."
+          : "The folder is not on a branch, so there is nothing to push.\n  fix: choose a branch in the site's settings.",
       };
     }
     try {
-      const remote = await this.pushUrl();
-      const auth = remote && remoteAuth ? await remoteAuth(remote) : [];
-      await run("git", [...SAFE_GIT, "push", "--porcelain"], {
+      const auth = where.remoteUrl && remoteAuth ? await remoteAuth(where.remoteUrl) : [];
+      const target = tracked
+        ? []
+        : [
+            "--set-upstream",
+            where.remote as string,
+            `refs/heads/${where.branch}:refs/heads/${where.branch}`,
+          ];
+      await run("git", [...SAFE_GIT, "push", "--porcelain", ...target], {
         cwd: this.root,
         timeout: 60_000,
         env: withGitConfig(
@@ -426,15 +551,6 @@ export class LocalRepository implements Repository {
         .findLast(Boolean);
       return { ok: false, reason: `git push failed: ${detail ?? String(error)}` };
     }
-  }
-
-  /** Where the current branch pushes to, so the right credentials go with it. */
-  private async pushUrl(): Promise<string | null> {
-    const branch = (await this.tryGit(["symbolic-ref", "--short", "HEAD"]))?.trim();
-    const name =
-      branch && (await this.tryGit(["config", "--get", `branch.${branch}.remote`]))?.trim();
-    if (!name) return null;
-    return (await this.tryGit(["remote", "get-url", "--push", name]))?.trim() || null;
   }
 
   /** Writes an unsaved edit where the site's dev server will read it, with the commit it started from. */

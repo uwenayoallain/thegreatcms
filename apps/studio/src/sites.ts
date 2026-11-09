@@ -33,6 +33,7 @@ import {
   type FileChange,
   type PushResult,
   type SyncState,
+  type BranchState,
 } from "./repo.js";
 
 const SCHEMA_CANDIDATES = [".cms/schema.yaml", ".cms/schema.yml", ".cms/schema.json"];
@@ -160,6 +161,14 @@ export class SiteClient {
   /** How far the working copy is ahead of its upstream. */
   syncState(): Promise<SyncState | null> {
     return this.repo.syncState();
+  }
+
+  branchState(): Promise<BranchState> {
+    return this.repo.branchState();
+  }
+
+  switchBranch(name: string): Promise<void> {
+    return this.repo.switchBranch(name);
   }
 
   push(): Promise<PushResult> {

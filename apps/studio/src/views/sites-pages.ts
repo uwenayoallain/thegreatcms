@@ -4,6 +4,7 @@ import { html } from "hono/html";
 import type { Site } from "../db.js";
 import type { CmsSchema } from "@greatcms/spec";
 import type { CloneState, Folder } from "../connect.js";
+import type { BranchState } from "../repo.js";
 import { siteNav } from "./editor-parts.js";
 import { page, type PageOptions } from "./layout.js";
 import { icon } from "./icons.js";
@@ -101,7 +102,9 @@ export function newSitePage(
   options: {
     error?: string;
     values?: Record<string, string>;
-    fieldErrors?: { path?: string; devUrl?: string; deployRoot?: string };
+    fieldErrors?: { path?: string; devUrl?: string; deployRoot?: string; branch?: string };
+    /** The branch the edited site's folder is on, and the remote's main one. */
+    branch?: BranchState | null;
     /** Present when changing a connected site rather than connecting a new one. */
     editing?: Site;
     /** The edited site's schema, so the sidebar lists its content as on every other site page. */
@@ -129,8 +132,14 @@ export function newSitePage(
           path: editing.path,
           devUrl: editing.devUrl,
           deployRoot: editing.deployRoot,
+          branch: options.branch?.branch ?? "",
         }
       : {});
+  const onDefault = Boolean(
+    options.branch?.branch &&
+    options.branch.branch === (options.branch.defaultBranch ?? "main") &&
+    options.branch.remote,
+  );
   const title = editing ? "Site settings" : "Connect a site";
   const action = editing ? `/sites/${editing.id}/settings` : "/sites";
 
@@ -270,6 +279,47 @@ export function newSitePage(
                       : ""
                   }
                 </div>
+                ${
+                  options.branch
+                    ? html`<div class="field">
+                        <label for="branch">Branch</label>
+                        <input
+                          type="text"
+                          id="branch"
+                          name="branch"
+                          value="${values.branch ?? ""}"
+                          placeholder="greatcms-content"
+                          autocomplete="off"
+                          spellcheck="false"
+                          aria-describedby="${describedBy("branch-hint", fieldErrors.branch)}"
+                          ${fieldErrors.branch ? html`aria-invalid="true"` : ""}
+                        />
+                        <span class="hint" id="branch-hint">
+                          Publishes are committed on this branch, and pushed to the branch of the
+                          same
+                          name${options.branch.remote ? html` on <code>${options.branch.remote}</code>` : ""}.
+                          Type a new name to start a branch from this one, so the live site's branch
+                          is left alone until you merge.
+                        </span>
+                        ${
+                          fieldErrors.branch
+                            ? html`<p class="error-text" id="branch-hint-error">
+                                ${fieldErrors.branch}
+                              </p>`
+                            : ""
+                        }
+                      </div>`
+                    : ""
+                }
+                ${
+                  onDefault
+                    ? html`<p class="notice warn" role="note">
+                        This folder is on <code>${options.branch?.branch}</code>, the repository's
+                        main branch. With pushing on, every publish goes wherever that branch
+                        deploys, usually the live site.
+                      </p>`
+                    : ""
+                }
                 <div class="field">
                   <div class="checkbox">
                     <input

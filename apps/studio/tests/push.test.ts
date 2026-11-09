@@ -145,11 +145,31 @@ describe("push after publish", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  it("explains a branch with nowhere to push", async () => {
-    site.git(["branch", "--unset-upstream"]);
+  it("pushes a branch new to the remote to the same name there, and tracks it", async () => {
+    site.git(["switch", "-q", "-c", "greatcms-content"]);
+    site.commit("notes.txt", "on the branch\n");
+    const response = await post(site, `/sites/${SITE_ID}/push`, {});
+
+    expect(response.status).toBe(303);
+    const pushed = execFileSync("git", ["rev-parse", "greatcms-content"], {
+      cwd: remote,
+      encoding: "utf8",
+    }).trim();
+    expect(pushed).toBe(site.head());
+    expect(remoteHead()).not.toBe(site.head());
+    expect(
+      execFileSync("git", ["rev-parse", "--abbrev-ref", "@{u}"], {
+        cwd: site.root,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("origin/greatcms-content");
+  });
+
+  it("explains a repository with nowhere to push", async () => {
+    site.git(["remote", "remove", "origin"]);
     const response = await post(site, `/sites/${SITE_ID}/push`, {});
 
     expect(response.status).toBe(502);
-    expect(await response.text()).toMatch(/no upstream/i);
+    expect(await response.text()).toMatch(/no remote to push to/i);
   });
 });
