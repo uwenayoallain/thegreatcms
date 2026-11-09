@@ -6,6 +6,43 @@
  * weights, self-hosted. No JavaScript is served by this site.
  */
 
+/* Optional, preloaded by the layout: the face is either there for the first paint or not used, so text never swaps. */
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 400;
+  font-display: optional;
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 500;
+  font-display: optional;
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 700;
+  font-display: optional;
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2");
+}
+
+/* When it is not, a local face scaled to its width stands in; line heights are fixed, so width is what matters. */
+@font-face {
+  font-family: "Grotesk Fallback";
+  font-weight: 100 600;
+  src: local("Arial"), local("Liberation Sans"), local("Helvetica");
+  size-adjust: 105%;
+}
+
+@font-face {
+  font-family: "Grotesk Fallback";
+  font-weight: 700 900;
+  src: local("Arial Bold"), local("Liberation Sans Bold"), local("Helvetica Bold");
+  size-adjust: 99.4%;
+}
+
 :root {
   color-scheme: light dark;
 
@@ -25,14 +62,16 @@
   --del: #b23b2e;
   --focus: #0d7a5f;
 
-  --sans: "Space Grotesk", "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
+  --sans: "Space Grotesk", "Grotesk Fallback", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
 
-  --measure: 64ch;
+  /* 64ch of Space Grotesk, in rem so the column is the same width in any face. */
+  --measure: 41rem;
   --gutter: clamp(1.25rem, 4vw, 3rem);
   --wide: 76rem;
-  --radius: 10px;
-  --shadow: 0 1px 2px rgba(21, 23, 26, 0.04);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --out: cubic-bezier(0.16, 1, 0.3, 1);
+  --rise: cubic-bezier(0.2, 0.65, 0.3, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,7 +91,6 @@
     --add: #43c99a;
     --del: #f08a7e;
     --focus: #43c99a;
-    --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -64,6 +102,9 @@
 
 html {
   scroll-padding-top: 5rem;
+  /* A short page keeps a scrollbar too, so the page is the same width on every page. An empty
+     stable gutter would show the canvas beside the dark header instead. */
+  overflow-y: scroll;
 }
 
 body {
@@ -141,21 +182,13 @@ a:hover {
   top: 0;
   z-index: 5;
   display: flex;
-  gap: 0.75rem 2rem;
+  gap: 0.75rem 1rem;
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem var(--gutter);
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--canvas) 88%, transparent);
   backdrop-filter: blur(14px);
-}
-
-.masthead .wordmark .mark {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 0;
-  box-shadow: 0 0 0 1px var(--line-2);
-  border-radius: 7px;
 }
 
 .wordmark {
@@ -170,9 +203,10 @@ a:hover {
 }
 
 .wordmark .mark {
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 6px;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--line-2);
 }
 
 .masthead nav ul {
@@ -192,7 +226,7 @@ a:hover {
   padding: 0.35rem 0.6rem;
   text-decoration: none;
   color: var(--ink-2);
-  transition: color 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: color 0.3s var(--ease);
 }
 
 .masthead nav a::after {
@@ -284,9 +318,9 @@ main {
   border: 1px solid var(--accent);
   border-radius: 999px;
   transition:
-    background 0.5s cubic-bezier(0.32, 0.72, 0, 1),
-    border-color 0.5s cubic-bezier(0.32, 0.72, 0, 1),
-    transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+    background 0.5s var(--ease),
+    border-color 0.5s var(--ease),
+    transform 0.5s var(--ease);
 }
 
 /* The arrow lives in its own disc, so the button reads as a made object rather than text with a glyph. */
@@ -298,7 +332,7 @@ main {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.16);
   font-size: 1rem;
-  transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.5s var(--ease);
 }
 
 .cta:hover {
@@ -662,7 +696,6 @@ main {
   --add: #45d3a3;
   --del: #f08a7e;
   --focus: #1fbf8a;
-  --shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
   background: var(--canvas);
   color: var(--ink);
 }
@@ -915,8 +948,8 @@ main {
   border: 1px solid var(--line);
   border-radius: 12px;
   transition:
-    border-color 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+    border-color 0.4s var(--ease),
+    transform 0.4s var(--ease);
 }
 
 .proofs li:hover {
@@ -955,7 +988,7 @@ main {
 }
 
 .proofs .more span {
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.4s var(--out);
 }
 
 .proofs li:hover .more span {
@@ -1224,6 +1257,15 @@ main {
   background: var(--surface-2);
 }
 
+/* Sized by the build from the file, so nothing moves as one loads. */
+.prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .index-list {
   list-style: none;
   margin: 1.5rem 0 0;
@@ -1297,9 +1339,10 @@ main {
   display: none;
 }
 
-/* Wide enough for a third column: the contents move beside the article and stay in view. */
+/* Wide enough for a third column: the contents move beside the article and stay in view. Every docs
+   page keeps the column, outline or not, so the sidebar and the article never move between pages. */
 @media (min-width: 84rem) {
-  .docs:has(> .on-this-page.rail) {
+  .docs {
     max-width: none;
     grid-template-columns: 15rem minmax(0, var(--measure)) 13rem;
     justify-content: center;
@@ -1479,14 +1522,20 @@ main {
  * arrive as the reader reaches them; page changes crossfade the article while the
  * chrome stays put. Every bit of it is off under reduced motion.
  */
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
   /* The hero: eyebrow, headline, lede, actions and switch, one beat apart. */
   .hero .reveal > * {
-    animation: rise 760ms cubic-bezier(0.2, 0.65, 0.3, 1) backwards;
+    animation: rise 760ms var(--rise) backwards;
     animation-delay: calc(var(--i, 0) * 90ms);
   }
 
@@ -1519,7 +1568,7 @@ html {
   }
 
   .step-body .publish {
-    animation: press var(--cycle) cubic-bezier(0.32, 0.72, 0, 1) infinite;
+    animation: press var(--cycle) var(--ease) infinite;
   }
 
   .step-commit .card,
@@ -1543,7 +1592,7 @@ html {
 
   .step .diff span,
   .step-name .sha {
-    animation: land var(--cycle) cubic-bezier(0.2, 0.65, 0.3, 1) infinite;
+    animation: land var(--cycle) var(--rise) infinite;
   }
 
   .step .diff .add {
@@ -1741,7 +1790,9 @@ html {
     .claims li,
     .closing,
     .files-intro,
-    .claims-intro {
+    .claims-intro,
+    .index-list li,
+    .prose img {
       animation: rise linear both;
       animation-timeline: view();
       animation-range: entry 0% entry 30%;
@@ -1758,6 +1809,24 @@ html {
       animation-range: entry 16% entry 46%;
     }
 
+    /* On a docs page, a commit-green line under the header fills as the reader goes down it. */
+    :root:has(.docs) .masthead::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 -1px;
+      height: 2px;
+      background: var(--accent);
+      transform-origin: left;
+      animation: fill linear both;
+      animation-timeline: scroll(root);
+    }
+
+    @keyframes fill {
+      from {
+        transform: scaleX(0);
+      }
+    }
+
     /* The wordmark's green shadow slides out from behind the letters as the footer comes up. */
     .colophon .pixel-word .shadow {
       animation: shadow-out linear both;
@@ -1768,25 +1837,26 @@ html {
 
   /* The line under a nav link grows in rather than appearing. */
   .masthead nav a::after {
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.4s var(--out);
   }
 
+  /* A nudge by transform, not padding, so hovering the list never reflows it. */
   .docs-nav a {
     transition:
       background 0.3s,
       color 0.3s,
-      padding-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transform 0.3s var(--out);
   }
 
   .docs-nav a:hover {
-    padding-left: 0.95rem;
+    transform: translateX(0.25rem);
   }
 
   /* Hover physics: the things you can press lift towards you. */
   .file-list li {
     transition:
-      transform 0.6s cubic-bezier(0.32, 0.72, 0, 1),
-      border-color 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+      transform 0.6s var(--ease),
+      border-color 0.6s var(--ease);
   }
 
   .file-list li:hover {
@@ -1807,6 +1877,11 @@ html {
     view-transition-name: docs-nav;
   }
 
+  /* The current page's highlight slides from the old entry to the new one. */
+  .docs-nav [aria-current] {
+    view-transition-name: docs-current;
+  }
+
   .colophon {
     view-transition-name: colophon;
   }
@@ -1816,7 +1891,7 @@ html {
   }
 
   ::view-transition-new(root) {
-    animation: rise 360ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+    animation: rise 360ms var(--rise) both;
   }
 
   @keyframes rise {

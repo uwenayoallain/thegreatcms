@@ -13,8 +13,8 @@ const GLYPHS: Record<string, string> = {
 
 const widthOf = (glyph: string) => glyph.indexOf("|");
 
-/** Each run of ink in a row is one rect; the letters share one path per layer to keep the page small. */
-function layer(letters: string[], starts: number[], shift: number): string {
+/** Each run of ink in a row is one rect; the letters share one path, drawn twice, to keep the page small. */
+function outline(letters: string[], starts: number[]): string {
   return letters
     .flatMap((glyph, index) =>
       glyph
@@ -22,7 +22,7 @@ function layer(letters: string[], starts: number[], shift: number): string {
         .flatMap((row, r) =>
           [...row.matchAll(/#+/g)].map(
             (run) =>
-              `M${(starts[index] ?? 0) + (run.index ?? 0) + shift} ${r + shift}h${run[0].length}v1h-${run[0].length}z`,
+              `M${(starts[index] ?? 0) + (run.index ?? 0)} ${r}h${run[0].length}v1h-${run[0].length}z`,
           ),
         ),
     )
@@ -37,5 +37,5 @@ export function pixelWord(word: string): string {
   );
   const width = (starts.at(-1) ?? 0) + widthOf(letters.at(-1) ?? "");
   const shift = 0.25;
-  return `<svg class="pixel-word" viewBox="0 0 ${width + shift} ${7 + shift}" role="img" aria-label="${word}"><path class="shadow" d="${layer(letters, starts, shift)}"/><path class="face" d="${layer(letters, starts, 0)}"/></svg>`;
+  return `<svg class="pixel-word" viewBox="0 0 ${width + shift} ${7 + shift}" role="img" aria-label="${word}"><defs><path id="pixel-word" d="${outline(letters, starts)}"/></defs><use href="#pixel-word" class="shadow" x="${shift}" y="${shift}"/><use href="#pixel-word" class="face"/></svg>`;
 }

@@ -1,5 +1,7 @@
 /** Markdown → HTML with linkable headings, and the outline a page needs for "On this page". */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Marked, type Tokens } from "marked";
 import { type BundledLanguage, createHighlighter, type Highlighter } from "shiki";
 
@@ -55,6 +57,24 @@ const CLASS_FOR: Record<string, string> = {
   "#6a737d": "tk-com", // comments
 };
 
+/** A WebP's pixel size from its header, so every image is sized before it loads and nothing shifts. */
+export function webpSize(bytes: Buffer): { width: number; height: number } {
+  const chunk = bytes.toString("ascii", 12, 16);
+  if (bytes.toString("ascii", 8, 12) === "WEBP") {
+    if (chunk === "VP8 ") {
+      return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+    }
+    if (chunk === "VP8L") {
+      const bits = bytes.readUInt32LE(21);
+      return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+    }
+    if (chunk === "VP8X") {
+      return { width: bytes.readUIntLE(24, 3) + 1, height: bytes.readUIntLE(27, 3) + 1 };
+    }
+  }
+  throw new Error("Docs images are WebP, so the build can size them.");
+}
+
 let highlighter: Promise<Highlighter> | undefined;
 
 /** Highlights one block; an unknown language is returned escaped and unstyled. */
@@ -103,6 +123,11 @@ export async function renderMarkdown(source: string): Promise<Rendered> {
           ),
         });
         return placeholder;
+      },
+      image({ href, text }: Tokens.Image) {
+        if (!href.startsWith("/")) throw new Error(`Docs images are served by this site: ${href}`);
+        const { width, height } = webpSize(readFileSync(join(process.cwd(), "public", href)));
+        return `<img src="${escape(href)}" alt="${escape(text)}" width="${width}" height="${height}" loading="lazy" decoding="async">`;
       },
       heading({ tokens, depth, text }: Tokens.Heading) {
         const plain = text.replace(/[`*_]/g, "");

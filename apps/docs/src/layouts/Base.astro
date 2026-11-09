@@ -1,7 +1,7 @@
 ---
-import "@fontsource/space-grotesk/latin-400.css";
-import "@fontsource/space-grotesk/latin-500.css";
-import "@fontsource/space-grotesk/latin-700.css";
+import regular from "@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2?url";
+import medium from "@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2?url";
+import bold from "@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2?url";
 import "../styles/site.css";
 import { cms } from "../lib/cms";
 import { pixelWord } from "../lib/pixel";
@@ -29,6 +29,7 @@ const nav = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    {[regular, medium, bold].map((font) => <link rel="preload" href={font} as="font" type="font/woff2" crossorigin />)}
     {description && <meta name="description" content={description} />}
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
@@ -49,7 +50,7 @@ const nav = [
     <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="masthead ink">
-      <a class="wordmark" href="/"><svg class="mark" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2.2" fill="#0e0f11"/><g shape-rendering="crispEdges"><path fill="#0b5c47" d="M3.25 1.75h5v1h-5zM2.25 2.75h2v1h-2zM2.25 3.75h2v1h-2zM2.25 4.75h2v1h-2zM5.25 4.75h3v1h-3zM2.25 5.75h2v1h-2zM6.25 5.75h2v1h-2zM2.25 6.75h2v1h-2zM6.25 6.75h2v1h-2zM3.25 7.75h5v1h-5z"/><path fill="#f3f3f3" d="M2.75 1.25h5v1h-5zM1.75 2.25h2v1h-2zM1.75 3.25h2v1h-2zM1.75 4.25h2v1h-2zM1.75 5.25h2v1h-2zM5.75 5.25h2v1h-2zM1.75 6.25h2v1h-2zM5.75 6.25h2v1h-2zM2.75 7.25h5v1h-5z"/><path fill="#1fbf8a" d="M4.75 4.25h3v1h-3z"/></g></svg> GreatCMS</a>
+      <a class="wordmark" href="/"><img class="mark" src="/favicon.svg" alt="" width="28" height="28" /> GreatCMS</a>
       <nav aria-label="Main">
         <ul>
           {

@@ -190,6 +190,20 @@ describe("the docs", () => {
     ).toBe("/spec/");
   });
 
+  it("sizes every image and describes it, so none moves the page or goes unread", () => {
+    const images = walk(DIST)
+      .filter((file) => file.endsWith(".html"))
+      .flatMap((file) =>
+        [...readFileSync(file, "utf8").matchAll(/<img\s[^>]*>/g)].map((m) => m[0]),
+      );
+    expect(images.filter((img) => img.includes("/screens/")).length).toBeGreaterThanOrEqual(3);
+    for (const img of images) {
+      expect(img, img).toMatch(/\swidth="\d+"/);
+      expect(img, img).toMatch(/\sheight="\d+"/);
+      if (img.includes("/screens/")) expect(img, img).toMatch(/\salt="[^"]{40,}"/);
+    }
+  });
+
   it("renders the standard from SPEC.md, so the two cannot drift", () => {
     const html = read("spec/index.html");
     expect(html).toContain("Resolution rules");
