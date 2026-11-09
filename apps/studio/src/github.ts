@@ -6,7 +6,7 @@
  */
 
 import { createSign, randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 export interface GitHubAppConfig {
@@ -60,6 +60,11 @@ export class GitHubError extends Error {
   }
 }
 
+/** Creations waiting for GitHub to send the browser back; the oldest is dropped past this. */
+const MAX_STATES = 20;
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** The least an app needs to clone and push: file contents, and metadata GitHub always grants. */
 export const PERMISSIONS = { contents: "write", metadata: "read" } as const;
 
@@ -97,6 +102,9 @@ export class GitHub {
     const state = randomBytes(24).toString("base64url");
     const now = Date.now();
     for (const [key, until] of this.states) if (until < now) this.states.delete(key);
+    while (this.states.size >= MAX_STATES) {
+      this.states.delete(this.states.keys().next().value as string);
+    }
     this.states.set(state, now + 60 * 60_000);
     const manifest = {
       name: appName(origin),
@@ -138,6 +146,15 @@ export class GitHub {
       html_url: string;
       owner?: { login?: string; type?: string };
     };
+    // The answer is kept and later followed, so it has to be an app on this GitHub and nothing else.
+    if (
+      !Number.isSafeInteger(made.id) ||
+      !/^[A-Za-z0-9][A-Za-z0-9-]{0,99}$/.test(String(made.slug)) ||
+      typeof made.pem !== "string" ||
+      !String(made.html_url).startsWith(`${this.web}/`)
+    ) {
+      throw new GitHubError("GitHub's answer did not describe an app this studio can use.");
+    }
     const config: GitHubAppConfig = {
       id: made.id,
       slug: made.slug,
@@ -148,8 +165,11 @@ export class GitHub {
       ownerType: made.owner?.type === "Organization" ? "Organization" : "User",
     };
     mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 });
-    writeFileSync(this.file, JSON.stringify(config), { mode: 0o600 });
-    chmodSync(this.file, 0o600);
+    chmodSync(dirname(this.file), 0o700);
+    // Whole or not at all, and never readable by anyone else on the way.
+    const temporary = `${this.file}.${randomBytes(6).toString("hex")}.tmp`;
+    writeFileSync(temporary, JSON.stringify(config), { mode: 0o600, flag: "wx" });
+    renameSync(temporary, this.file);
     this.forget();
     return config;
   }
@@ -157,16 +177,19 @@ export class GitHub {
   /** Where the owner picks the accounts and repositories the app may reach. */
   installUrl(): string | null {
     const config = this.config();
-    return config ? `${config.htmlUrl}/installations/new` : null;
+    // The file is the studio's own, but the browser is sent here: only ever to this GitHub.
+    if (!config || !String(config.htmlUrl).startsWith(`${this.web}/`)) return null;
+    return `${config.htmlUrl}/installations/new`;
   }
 
   /** Where the app itself is deleted on GitHub, which only its owner can do. */
   settingsUrl(): string | null {
     const config = this.config();
     if (!config) return null;
+    const slug = encodeURIComponent(config.slug);
     return config.ownerType === "Organization"
-      ? `${this.web}/organizations/${config.owner}/settings/apps/${config.slug}`
-      : `${this.web}/settings/apps/${config.slug}`;
+      ? `${this.web}/organizations/${encodeURIComponent(config.owner)}/settings/apps/${slug}`
+      : `${this.web}/settings/apps/${slug}`;
   }
 
   /** The accounts the app is installed on; asked again after a minute. */
@@ -250,6 +273,8 @@ export class GitHub {
     const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
     return [
       [`http.${this.web}/.extraheader`, `AUTHORIZATION: basic ${basic}`],
+      // git keeps sending the header to wherever a redirect leads, so none is followed.
+      [`http.${this.web}/.followRedirects`, "false"],
       [`url.${this.web}/.insteadOf`, `git@${host}:`],
       [`url.${this.web}/.insteadOf`, `ssh://git@${host}/`],
     ];
@@ -257,9 +282,10 @@ export class GitHub {
 
   /** The account a repository address belongs to, when it is on this GitHub. */
   ownerOf(remoteUrl: string): string | null {
-    const host = new URL(this.web).host.replace(/[.]/g, "\\.");
+    const host = escapeRegExp(new URL(this.web).host);
+    const scheme = new URL(this.web).protocol.replace(":", "");
     const match =
-      new RegExp(`^https?://(?:[^@/]+@)?${host}/([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(
+      new RegExp(`^${scheme}://(?:[^@/]+@)?${host}/([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(
         remoteUrl,
       ) ??
       new RegExp(`^(?:ssh://)?git@${host}[:/]([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(remoteUrl);
