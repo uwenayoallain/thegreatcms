@@ -5,11 +5,12 @@ import { createVerify, generateKeyPairSync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { HtmlValidate } from "html-validate";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { Store } from "../src/db.js";
-import { GitHub, PERMISSIONS } from "../src/github.js";
+import { appName, GitHub, PERMISSIONS } from "../src/github.js";
 import { withGitConfig } from "../src/repo.js";
 import { PASSWORD, SECRET, signedIn } from "./site.js";
 
@@ -106,7 +107,23 @@ describe("making the app", () => {
     expect(parsed.hook_attributes.active).toBe(false);
     expect(parsed.redirect_url).toBe("https://studio.example.com/git-access/github/created");
     expect(parsed.setup_url).toBe("https://studio.example.com/git-access/github/installed");
-    expect(parsed.name.length).toBeLessThanOrEqual(34);
+    expect(parsed.name).toBe("GreatCMS studio.example.com");
+    expect(parsed.description).toContain("studio.example.com");
+    expect(parsed.description.length).toBeLessThanOrEqual(400);
+  });
+
+  it("names a studio with no public name so two on localhost do not collide", () => {
+    expect(appName("http://localhost:8787")).toMatch(/^GreatCMS Studio [0-9a-f]{4}$/);
+    expect(appName("https://a-very-long-studio-host-name.example.com")).toMatch(
+      /^GreatCMS Studio [0-9a-f]{4}$/,
+    );
+  });
+
+  it("serves the logo GitHub asks to have uploaded, without a sign-in", async () => {
+    const target = createApp({ store: new Store(":memory:"), password: PASSWORD, secret: SECRET });
+    const logo = await target.request("/greatcms-logo.png");
+    expect(logo.status).toBe(200);
+    expect(logo.headers.get("content-type")).toBe("image/png");
   });
 
   it("makes it for an organization, or on GitHub Enterprise Server, when asked", () => {
@@ -366,6 +383,36 @@ describe("the pages", () => {
     );
     expect(row?.textContent).toContain("in the sites folder");
     expect(row?.querySelector("form")).toBeNull();
+  });
+
+  it("shows what the connected app reaches, and how to give it the GreatCMS logo", async () => {
+    const target = app(await connected());
+    const body = await (await target.request("/git-access", { headers: signedIn })).text();
+    const { document } = new JSDOM(body).window;
+    const section = document.querySelector("#github")?.parentElement;
+
+    expect(section?.textContent?.replace(/\s+/g, " ")).toContain(
+      "It reaches 2 repositories in Acme",
+    );
+    expect(section?.querySelector(".app-logo img")?.getAttribute("src")).toBe("/greatcms-logo.png");
+    expect(section?.querySelector(".app-logo a:last-child")?.getAttribute("href")).toBe(
+      "https://github.com/organizations/acme/settings/apps/greatcms-studio-ab12",
+    );
+    const report = await new HtmlValidate({
+      extends: ["html-validate:standard"],
+      rules: {
+        "void-style": "off",
+        "doctype-style": "off",
+        "attribute-boolean-style": "off",
+        "attribute-empty-style": "off",
+        "no-trailing-whitespace": "off",
+        "no-inline-style": "off",
+        "no-redundant-role": "off",
+      },
+    }).validateString(body);
+    expect(
+      report.results.flatMap((r) => r.messages.map((m) => `${m.ruleId}: ${m.message}`)),
+    ).toEqual([]);
   });
 
   it("offers to connect GitHub where it is not connected yet", async () => {

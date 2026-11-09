@@ -17,6 +17,8 @@ export const ICONS: Record<string, string> = {
   "favicon.ico": "image/x-icon",
   "favicon.svg": "image/svg+xml",
   "apple-touch-icon.png": "image/png",
+  // For the GitHub App's settings, which take a logo only by upload.
+  "greatcms-logo.png": "image/png",
 };
 /** Display type, the website's own, self-hosted so the studio needs nothing from another origin. */
 const FONTS = new Set(["space-grotesk-500.woff2", "space-grotesk-700.woff2"]);

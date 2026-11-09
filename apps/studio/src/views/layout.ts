@@ -502,7 +502,9 @@ body.plain { display: block; }
 :is(.editors, .folders) li > div { display: flex; flex-direction: column; flex: 1 1 14rem; }
 :is(.editors, .folders) li .muted { font-size: .8rem; }
 .folders li > form { margin: 0; }
-.public-key { white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.app-logo { display: flex; gap: .9rem; align-items: center; margin: 1rem 0; padding: .75rem .9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.app-logo img { flex: none; border-radius: 12px; }
+.app-logo p { margin: 0; font-size: .85rem; color: var(--ink-2); }
 .connect-section { max-width: 44rem; margin: 0 0 2rem; }
 .connect-section > h2, .connect-heading { font-size: 1rem; margin: 0 0 .35rem; }
 .connect-section > p { color: var(--ink-2); font-size: .88rem; margin: 0 0 .85rem; }

@@ -35,6 +35,17 @@ export interface Repository {
   defaultBranch: string;
 }
 
+/**
+ * A name people recognise on GitHub's screens, which must also be unique across GitHub: the
+ * studio's own host when it has a public one, and a short random tag on localhost or an address.
+ */
+export function appName(origin: string): string {
+  const host = new URL(origin).hostname;
+  const local = host === "localhost" || host.endsWith(".localhost") || /^[\d.:[\]]+$/.test(host);
+  const named = `GreatCMS ${host}`;
+  return !local && named.length <= 34 ? named : `GreatCMS Studio ${randomBytes(2).toString("hex")}`;
+}
+
 function encode(value: object): string {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
@@ -87,12 +98,11 @@ export class GitHub {
     const now = Date.now();
     for (const [key, until] of this.states) if (until < now) this.states.delete(key);
     this.states.set(state, now + 60 * 60_000);
-    const host = new URL(origin).hostname;
     const manifest = {
-      // App names are unique across GitHub; the suffix keeps two studios from colliding.
-      name: `GreatCMS ${host}`.slice(0, 28) + ` ${randomBytes(2).toString("hex")}`,
+      name: appName(origin),
       url: origin,
-      description: "Lets a GreatCMS studio copy and publish to the repositories you choose.",
+      description: `Lets the GreatCMS studio at ${new URL(origin).host} copy the repositories you choose and publish your team's edits to them as commits. It reads and writes file contents only: no issues, no settings, no webhooks.`,
+      request_oauth_on_install: false,
       redirect_url: `${origin}/git-access/github/created`,
       setup_url: `${origin}/git-access/github/installed`,
       setup_on_update: true,

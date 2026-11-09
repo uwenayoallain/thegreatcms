@@ -661,7 +661,7 @@ export function createApp(options: AppOptions) {
     return c.html(sharePage({ site, url: url.href }));
   });
 
-  app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png}", (c) => {
+  app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|greatcms-logo\\.png}", (c) => {
     const found = icon(c.req.param("file"));
     if (!found) return c.notFound();
     return c.body(new Uint8Array(found.body), 200, {

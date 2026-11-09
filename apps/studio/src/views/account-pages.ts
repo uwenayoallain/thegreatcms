@@ -393,6 +393,20 @@ function githubSection(github: GitHubView) {
         <button class="secondary" type="submit">Check again</button>
       </form>
     </div>
+    ${
+      github.settingsUrl
+        ? html`<div class="app-logo">
+            <img src="/greatcms-logo.png" alt="" width="56" height="56" />
+            <p>
+              GitHub takes an app's logo only by upload. To show the GreatCMS mark wherever GitHub
+              lists the app,
+              <a href="/greatcms-logo.png" download="greatcms-logo.png">download the logo</a>, then
+              add it under Display information in
+              <a href="${github.settingsUrl}">the app's settings</a>.
+            </p>
+          </div>`
+        : ""
+    }
     <details class="danger-confirm">
       <summary>Disconnect GitHub</summary>
       <p>
