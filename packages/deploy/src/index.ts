@@ -8,6 +8,7 @@ export {
   createPreviewServer,
   previewMain,
   previewPage,
+  siteEnv,
   waitingPage,
 } from "./preview.js";
 export type { PreviewOptions, PreviewState } from "./preview.js";
