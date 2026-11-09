@@ -14,14 +14,18 @@ export class Liveness {
 
   /**
    * `probeUrls` maps a site id to where this server reaches its dev server, when that is not where
-   * browsers do: a studio in a container reaches `http://previews:4322`, a browser
+   * browsers do: a studio in a container reaches `http://previews:4321`, a browser
    * `https://paraline-preview.example.com`.
    */
-  constructor(private readonly probeUrls: ReadonlyMap<string, string> = new Map()) {}
+  constructor(
+    private readonly probeUrls: ReadonlyMap<string, string> = new Map(),
+    /** The preview service, for the sites it runs: it answers for them whatever a probe URL says. */
+    private readonly managed: (site: Site) => string | undefined = () => undefined,
+  ) {}
 
   /** `null` when the site has no dev server to ask about. */
   async running(site: Site): Promise<boolean | null> {
-    const url = this.probeUrls.get(site.id) || site.devUrl;
+    const url = this.managed(site) || this.probeUrls.get(site.id) || site.devUrl;
     if (!url) return null;
     const known = this.seen.get(url);
     if (known && Date.now() - known.at < (known.up ? FRESH_MS.up : FRESH_MS.down)) return known.up;

@@ -3,7 +3,7 @@
 import { ui } from "./ui.js";
 import { parseSchema, SPEC_VERSION } from "@greatcms/spec";
 import { quote } from "./add.js";
-import type { Framework } from "./detect.js";
+import { detectFramework, type DetectionInput, type Framework } from "./detect.js";
 
 export type TemplateId = "hero" | "landing" | "business" | "blog" | "blank";
 
@@ -135,6 +135,28 @@ export function planInit(answers: InitAnswers): InitPlan {
     firstRegion: answers.template === "blank" ? null : "home.hero",
     agentsNote: renderAgentsNote(answers),
   };
+}
+
+/**
+ * What `greatcms init --yes` would write for a folder, decided without asking: the framework
+ * from the folder's own files, its usual content folders, and the chosen template. The studio's
+ * "Set up" button writes these two files; it wires nothing into the site's code.
+ */
+export function planStarter(
+  input: DetectionInput & { name: string; template: TemplateId },
+): InitPlan & { framework: Framework } {
+  const { framework } = detectFramework(input);
+  const plan = planInit({
+    name: input.name,
+    framework,
+    template: input.template,
+    regionsDir: framework.regionsDir,
+    mediaDir: framework.mediaDir,
+    mediaUrlPrefix: framework.mediaUrlPrefix,
+    collectionsDir: framework.collectionsDir,
+    schemaUrl: DEFAULT_SCHEMA_URL,
+  });
+  return { ...plan, framework };
 }
 
 function renderConfig(answers: InitAnswers): string {

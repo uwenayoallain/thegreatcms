@@ -83,7 +83,26 @@ import { collectionPage, editEntryPage } from "./views/collection-pages.js";
 import { inboxPage } from "./views/inbox-page.js";
 import { editRegionPage } from "./views/region-page.js";
 import { sitePage } from "./views/site-page.js";
-import { newSitePage, sitesPage } from "./views/sites-pages.js";
+import { newSitePage, setupPage, sitesPage } from "./views/sites-pages.js";
+import {
+  Clones,
+  folderFromUrl,
+  folderPath,
+  hasSchema,
+  isBranchName,
+  isCloneUrl,
+  isFolderName,
+  isInside,
+  listFolders,
+  nameFromFolder,
+  PreviewAddresses,
+  previewEntries,
+  writePreviewList,
+} from "./connect.js";
+import { planStarter, TEMPLATES, type TemplateId } from "@greatcms/cli";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import { LocalRepository } from "./repo.js";
 import { siteTile } from "./views/pixel.js";
 import { findSiteIcon } from "./site-icon.js";
 import { Liveness } from "./liveness.js";
@@ -123,6 +142,16 @@ export interface AppOptions {
   cookieDomain?: string;
   /** Where this server reaches a site's dev server, by site id, when browsers reach it elsewhere. */
   probeUrls?: ReadonlyMap<string, string>;
+  /** The folder holding sites (`STUDIO_SITES_ROOT`): listed on the connect page, and where clones go. */
+  sitesRoot?: string;
+  /** `STUDIO_PREVIEW_URL`, e.g. `https://{site}-preview.example.com`: a new site's preview address. */
+  previewUrl?: string;
+  /** `STUDIO_PREVIEWS_FILE`: where the list of those previews is written for the preview service. */
+  previewsFile?: string;
+  /** `STUDIO_PREVIEW_PROBE`: where this server reaches the preview service, to say whether it is up. */
+  previewProbe?: string;
+  /** Replaces git for clones, in tests. */
+  cloneGit?: (args: string[]) => Promise<void>;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
@@ -152,7 +181,21 @@ export function createApp(options: AppOptions) {
   const { store, password, secret } = options;
   const app = new Hono<{ Variables: Variables }>();
   const limiter = options.rateLimiter ?? new RateLimiter();
-  const liveness = new Liveness(options.probeUrls);
+  const previews = options.previewUrl ? new PreviewAddresses(options.previewUrl) : undefined;
+  const liveness = new Liveness(options.probeUrls, (site) =>
+    previews?.nameOf(site.devUrl) ? options.previewProbe : undefined,
+  );
+  const clones = options.sitesRoot ? new Clones(options.sitesRoot, options.cloneGit) : undefined;
+  /** Keeps the preview service's list in step with the sites, after every change to them. */
+  const sitesChanged = () => {
+    if (!previews || !options.previewsFile) return;
+    try {
+      writePreviewList(options.previewsFile, previewEntries(store.listSites(), previews));
+    } catch (error) {
+      process.stderr.write(`could not write ${options.previewsFile}: ${describeError(error)}\n`);
+    }
+  };
+  sitesChanged();
   // Per-address limits stop one sender; these stop many senders filling the inbox and the mail quota.
   const siteSubmissions = options.siteSubmissionLimiter ?? new RateLimiter(1000, 24 * 60 * 60_000);
   const notifications = options.notificationLimiter ?? new RateLimiter(60, 60 * 60_000);
@@ -461,9 +504,14 @@ export function createApp(options: AppOptions) {
     if (c.get("viewer")?.owner) return next();
     return c.html(errorPage("Only the owner can do that", "Ask whoever runs this studio."), 403);
   };
+  // The sidebar calls the list "Sites"; its address is the home page.
+  app.get("/sites", (c) => c.redirect("/", 301));
   for (const route of [
     "/sites",
     "/sites/new",
+    "/sites/setup",
+    "/sites/clone",
+    "/sites/clone/*",
     "/sites/:id/settings",
     "/sites/:id/delete",
     "/editors",
@@ -792,7 +840,57 @@ export function createApp(options: AppOptions) {
     return c.redirect("/inbox", 303);
   });
 
-  app.get("/sites/new", (c) => c.html(newSitePage()));
+  /** The connect page, with the sites folder's contents when there is one. */
+  const connectPage = (extra: Parameters<typeof newSitePage>[0] = {}) =>
+    newSitePage({
+      sitesRoot: options.sitesRoot,
+      folders: options.sitesRoot ? listFolders(options.sitesRoot, store.listSites()) : [],
+      clones: clones?.list() ?? [],
+      previewTemplate: options.previewUrl,
+      ...extra,
+    });
+
+  app.get("/sites/new", (c) => c.html(connectPage()));
+
+  /**
+   * Connects a folder that has a schema: checked by reading it, stored only if that works.
+   * A folder without one gets the setup page instead of a dead end.
+   */
+  const connect = async (
+    c: Context<{ Variables: Variables }>,
+    values: { name: string; path: string; devUrl: string },
+  ) => {
+    const site: Site = {
+      id: crypto.randomUUID(),
+      name: values.name || nameFromFolder(basename(values.path)),
+      path: values.path,
+      devUrl:
+        values.devUrl ||
+        (previews ? previews.suggest(basename(values.path), store.listSites()) : ""),
+      pushAfterPublish: false,
+      deployRoot: "",
+      createdAt: new Date().toISOString(),
+    };
+    if (!hasSchema(site.path)) {
+      return c.html(
+        setupPage({
+          path: site.path,
+          values: { ...values, name: site.name },
+          templates: TEMPLATES,
+          error: `${site.path} has no .cms/schema.yaml.\n  fix: choose a starter below, or run \`greatcms init\` in that folder.`,
+        }),
+        422,
+      );
+    }
+    try {
+      await new SiteClient(site).context();
+    } catch (error) {
+      return c.html(connectPage({ error: describeError(error), values }), 422);
+    }
+    store.addSite(site);
+    sitesChanged();
+    return c.redirect(`/sites/${site.id}`, 303);
+  };
 
   app.post("/sites", async (c) => {
     const form = await c.req.formData();
@@ -806,7 +904,7 @@ export function createApp(options: AppOptions) {
     // iframe src on the editor page, where `javascript:` would run as us.
     if (values.devUrl && !isHttpUrl(values.devUrl)) {
       return c.html(
-        newSitePage({
+        connectPage({
           error: "Nothing was connected: check the dev server URL.",
           fieldErrors: { devUrl: DEV_URL_ERROR },
           values,
@@ -815,41 +913,120 @@ export function createApp(options: AppOptions) {
       );
     }
 
-    if (values.path && !(await isDirectory(values.path))) {
+    if (!values.path) {
+      return c.html(connectPage({ error: "Give the folder's path.", values }), 422);
+    }
+    const resolved = folderPath(values.path);
+    const problem =
+      "error" in resolved
+        ? resolved.error
+        : (await isDirectory(resolved.path))
+          ? null
+          : "There is no folder at this path on this machine.";
+    if (problem || "error" in resolved) {
       return c.html(
-        newSitePage({
+        connectPage({
           error: "Nothing was connected: check the folder path.",
-          fieldErrors: { path: "There is no folder at this path on this machine." },
+          fieldErrors: { path: problem ?? "" },
           values,
         }),
         422,
       );
     }
+    return connect(c, { ...values, path: resolved.path });
+  });
 
-    if (!values.name || !values.path) {
-      return c.html(
-        newSitePage({ error: "A name and the folder's path are required.", values }),
-        422,
-      );
-    }
+  app.get("/sites/setup", async (c) => {
+    const path = c.req.query("path") ?? "";
+    if (!path.startsWith("/") || !(await isDirectory(path))) return c.redirect("/sites/new", 303);
+    if (hasSchema(path)) return c.redirect("/sites/new", 303);
+    return c.html(
+      setupPage({ path, values: { name: nameFromFolder(basename(path)) }, templates: TEMPLATES }),
+    );
+  });
 
-    const candidate: Site = {
-      id: crypto.randomUUID(),
-      ...values,
-      pushAfterPublish: false,
-      deployRoot: "",
-      createdAt: new Date().toISOString(),
+  /** Writes a starter schema and config from the same templates as `greatcms init`, as one commit. */
+  app.post("/sites/setup", async (c) => {
+    const form = await c.req.formData();
+    const values = {
+      path: String(form.get("path") ?? "").trim(),
+      name: String(form.get("name") ?? "").trim(),
+      devUrl: String(form.get("devUrl") ?? "").trim(),
+      template: String(form.get("template") ?? ""),
     };
-
-    // Verify before storing: a site that cannot be read is not connected, and finding.
-    try {
-      await new SiteClient(candidate).context();
-    } catch (error) {
-      return c.html(newSitePage({ error: describeError(error), values }), 422);
+    if (!values.path.startsWith("/") || !(await isDirectory(values.path))) {
+      return c.redirect("/sites/new", 303);
+    }
+    const again = (error: string) =>
+      c.html(setupPage({ path: values.path, values, templates: TEMPLATES, error }), 422);
+    if (values.devUrl && !isHttpUrl(values.devUrl)) return again(DEV_URL_ERROR);
+    if (!TEMPLATES.some((template) => template.id === values.template)) {
+      return again("Choose what to start with.");
+    }
+    if (!values.name) return again("The site needs a name.");
+    if (hasSchema(values.path)) {
+      return again(`${values.path} already has a .cms/schema.yaml: connect it instead.`);
     }
 
-    store.addSite(candidate);
-    return c.redirect(`/sites/${candidate.id}`, 303);
+    let files: string[] = [];
+    let packageJson: Record<string, never> | undefined;
+    try {
+      files = readdirSync(values.path);
+      packageJson = JSON.parse(readFileSync(join(values.path, "package.json"), "utf8"));
+    } catch {
+      // No package.json: the starter falls back to a generic layout.
+    }
+    const plan = planStarter({
+      name: values.name,
+      template: values.template as TemplateId,
+      files,
+      packageJson,
+    });
+    try {
+      await new LocalRepository(values.path).commitFiles({
+        message: "Set up GreatCMS",
+        files: plan.files.map((file) => ({ path: file.path, content: file.content })),
+        author: authorOf(c.get("viewer")),
+      });
+    } catch (error) {
+      return again(describeError(error));
+    }
+    return connect(c, values);
+  });
+
+  /** Copies a repository into the sites folder; the page shows it until it finishes. */
+  app.post("/sites/clone", async (c) => {
+    if (!clones || !options.sitesRoot) return c.notFound();
+    const form = await c.req.formData();
+    const cloneValues = {
+      url: String(form.get("url") ?? "").trim(),
+      branch: String(form.get("branch") ?? "").trim(),
+      folder: String(form.get("folder") ?? "").trim(),
+    };
+    const again = (cloneError: string) =>
+      c.html(connectPage({ error: "Nothing was copied.", cloneError, cloneValues }), 422);
+    if (!isCloneUrl(cloneValues.url)) {
+      return again("Use an https:// or SSH address, such as git@github.com:you/site.git.");
+    }
+    if (cloneValues.branch && !isBranchName(cloneValues.branch)) {
+      return again("That branch name is not one Git accepts.");
+    }
+    const folder = cloneValues.folder || folderFromUrl(cloneValues.url);
+    if (!isFolderName(folder)) {
+      return again("Give a folder name of letters, digits, dots, dashes and underscores.");
+    }
+    const target = join(options.sitesRoot, folder);
+    if (!isInside(options.sitesRoot, target) || existsSync(target)) {
+      return again(`${target} already exists: choose another folder name.`);
+    }
+    void clones.start(cloneValues.url, folder, cloneValues.branch);
+    return c.redirect("/sites/new", 303);
+  });
+
+  app.post("/sites/clone/dismiss", async (c) => {
+    const form = await c.req.formData();
+    clones?.dismiss(String(form.get("folder") ?? ""));
+    return c.redirect("/sites/new", 303);
   });
 
   app.get("/sites/:id/settings", async (c) => {
@@ -904,6 +1081,7 @@ export function createApp(options: AppOptions) {
       pushAfterPublish: form.get("pushAfterPublish") === "on",
       deployRoot: values.deployRoot,
     });
+    sitesChanged();
     return c.redirect(`/sites/${site.id}`, 303);
   });
 
@@ -1102,6 +1280,7 @@ export function createApp(options: AppOptions) {
 
   app.post("/sites/:id/delete", (c) => {
     store.removeSite(c.req.param("id"));
+    sitesChanged();
     return c.redirect("/", 303);
   });
 

@@ -619,6 +619,14 @@ describe("editors", () => {
     expect((await editor.get("/editors")).status).toBe(403);
     expect((await editor.get("/sites/new")).status).toBe(403);
     expect((await editor.post("/sites/local-1/delete", {})).status).toBe(403);
+    expect((await editor.get("/sites/setup?path=/tmp")).status).toBe(403);
+    expect((await editor.post("/sites/setup", { path: "/tmp", template: "blank" })).status).toBe(
+      403,
+    );
+    expect((await editor.post("/sites/clone", { url: "https://example.com/a.git" })).status).toBe(
+      403,
+    );
+    expect((await editor.post("/sites/clone/dismiss", { folder: "a" })).status).toBe(403);
     expect((await editor.get("/sites/local-1/regions/home.hero")).status).toBe(200);
   });
 

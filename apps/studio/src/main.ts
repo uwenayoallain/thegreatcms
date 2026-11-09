@@ -4,6 +4,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
 import { applySites, parseSites } from "./config.js";
+import { PreviewAddresses } from "./connect.js";
 import { Store } from "./db.js";
 import { isHttpUrl } from "./http.js";
 import { type Notifier, Notifiers, ResendNotifier, WebhookNotifier } from "./submissions.js";
@@ -51,6 +52,14 @@ const trustProxy =
 // What language the studio's own screens use for dates; content keeps the language its schema says.
 setLocale(process.env.STUDIO_LOCALE ?? "en");
 
+// A mistyped preview template stops the start, rather than giving every new site a broken address.
+try {
+  if (process.env.STUDIO_PREVIEW_URL) void new PreviewAddresses(process.env.STUDIO_PREVIEW_URL);
+} catch (error) {
+  process.stderr.write(`${(error as Error).message}\n`);
+  process.exit(1);
+}
+
 const store = new Store(databaseFile);
 
 // An inbox is not an archive: with STUDIO_SUBMISSION_DAYS set, older submissions are deleted.
@@ -72,6 +81,10 @@ const app = createApp({
   publicUrl: process.env.STUDIO_URL?.replace(/\/$/, "") || undefined,
   cookieDomain: process.env.STUDIO_COOKIE_DOMAIN || undefined,
   probeUrls: new Map(sites.filter((site) => site.probeUrl).map((site) => [site.id, site.probeUrl])),
+  sitesRoot: process.env.STUDIO_SITES_ROOT || undefined,
+  previewUrl: process.env.STUDIO_PREVIEW_URL || undefined,
+  previewsFile: process.env.STUDIO_PREVIEWS_FILE || undefined,
+  previewProbe: process.env.STUDIO_PREVIEW_PROBE || undefined,
 });
 
 // Publishes scheduled for later go out within half a minute of their time.
@@ -81,6 +94,12 @@ serve({ fetch: app.fetch, port }, (info) => {
   process.stdout.write(`GreatCMS studio on http://localhost:${info.port}\n`);
   process.stdout.write(`  database: ${databaseFile}\n`);
   for (const line of declared) process.stdout.write(`  site ${line}\n`);
+  if (process.env.STUDIO_SITES_ROOT) {
+    process.stdout.write(`  sites folder: ${process.env.STUDIO_SITES_ROOT}\n`);
+  }
+  if (process.env.STUDIO_PREVIEW_URL) {
+    process.stdout.write(`  previews: ${process.env.STUDIO_PREVIEW_URL}\n`);
+  }
   process.stdout.write(
     process.env.RESEND_API_KEY
       ? "  submissions: stored and emailed\n"

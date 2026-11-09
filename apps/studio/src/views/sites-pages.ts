@@ -3,6 +3,7 @@
 import { html } from "hono/html";
 import type { Site } from "../db.js";
 import type { CmsSchema } from "@greatcms/spec";
+import type { CloneState, Folder } from "../connect.js";
 import { siteNav } from "./editor-parts.js";
 import { page, type PageOptions } from "./layout.js";
 import { icon } from "./icons.js";
@@ -105,6 +106,14 @@ export function newSitePage(
     editing?: Site;
     /** The edited site's schema, so the sidebar lists its content as on every other site page. */
     schema?: CmsSchema;
+    /** The sites folder (`STUDIO_SITES_ROOT`) and what is in it, when one is set. */
+    sitesRoot?: string;
+    folders?: Folder[];
+    clones?: CloneState[];
+    /** `STUDIO_PREVIEW_URL`, so the dev URL field can say what an empty one becomes. */
+    previewTemplate?: string;
+    cloneValues?: Record<string, string>;
+    cloneError?: string;
   } = {},
 ): string {
   const { editing, fieldErrors = {} } = options;
@@ -132,6 +141,7 @@ export function newSitePage(
         { href: editing ? action : "/sites/new", label: title },
       ],
       flash: options.error ? { kind: "error", message: options.error } : undefined,
+      refresh: options.clones?.some((clone) => clone.state === "cloning") ? 3 : undefined,
     },
     html`
       <div class="page-head">
@@ -147,6 +157,14 @@ export function newSitePage(
         </p>
       </div>
 
+      ${editing ? "" : connectSources(options)}
+      ${
+        !editing && options.sitesRoot
+          ? html`<h2 class="connect-heading" id="other">Another folder</h2>
+              <p class="lede">Anywhere else on this machine, by its full path.</p>`
+          : ""
+      }
+
       <form method="POST" action="${action}" class="page-form">
         <div class="field">
           <label for="name">Name</label>
@@ -156,9 +174,13 @@ export function newSitePage(
             name="name"
             value="${values.name ?? ""}"
             autocomplete="off"
-            required
+            aria-describedby="name-hint"
+            ${editing ? html`required` : ""}
           />
-          <span class="hint">What you will call it in this studio.</span>
+          <span class="hint" id="name-hint"
+            >What you will call it in this
+            studio.${editing ? "" : " Leave it empty to use the folder's name."}</span
+          >
         </div>
 
         <div class="field">
@@ -168,7 +190,7 @@ export function newSitePage(
             id="path"
             name="path"
             value="${values.path ?? ""}"
-            placeholder="/home/you/projects/my-site"
+            placeholder="${options.sitesRoot ? `${options.sitesRoot}/my-site` : "/home/you/projects/my-site"}"
             autocomplete="off"
             spellcheck="false"
             aria-describedby="${describedBy("path-hint", fieldErrors.path)}"
@@ -201,7 +223,13 @@ export function newSitePage(
           />
           <span class="hint" id="dev-hint">
             If set, the editor shows your real site beside the form: your own components, rendering
-            what you are typing.
+            what you are
+            typing.${
+              !editing && options.previewTemplate
+                ? html` Leave it empty to use this studio's preview service, at
+                    <code>${options.previewTemplate.replace("{site}", "<name>")}</code>.`
+                : ""
+            }
           </span>
           ${
             fieldErrors.devUrl
@@ -284,6 +312,225 @@ export function newSitePage(
             </section>`
           : ""
       }
+    `,
+  );
+}
+
+/** The sites folder's contents and the Git form, above the path form, when a sites folder is set. */
+function connectSources(options: Parameters<typeof newSitePage>[0]) {
+  const { sitesRoot, folders = [], clones = [], cloneValues = {}, cloneError } = options ?? {};
+  if (!sitesRoot) return "";
+  const working = clones.filter((clone) => clone.state === "cloning");
+  const failed = clones.filter((clone) => clone.state === "failed");
+  return html`
+    <section class="connect-section" aria-labelledby="found">
+      <h2 id="found">In the sites folder</h2>
+      <p>
+        Folders in <code>${sitesRoot}</code>. Connect one, or set it up if it has no schema yet.
+      </p>
+      ${
+        working.length || failed.length
+          ? html`<ul class="folders" role="list" aria-live="polite">
+              ${working.map(
+                (clone) => html`<li>
+                  <div>
+                    <strong>${clone.folder}</strong>
+                    <span class="muted">Copying from ${clone.url}…</span>
+                  </div>
+                </li>`,
+              )}
+              ${failed.map(
+                (clone) => html`<li>
+                  <div>
+                    <strong>${clone.folder}</strong>
+                    <span class="error-text"
+                      >Not copied: ${clone.state === "failed" ? clone.reason : ""}</span
+                    >
+                  </div>
+                  <form method="POST" action="/sites/clone/dismiss">
+                    <input type="hidden" name="folder" value="${clone.folder}" />
+                    <button class="secondary" type="submit">Dismiss</button>
+                  </form>
+                </li>`,
+              )}
+            </ul>`
+          : ""
+      }
+      ${
+        folders.length
+          ? html`<ul class="folders" role="list">
+              ${folders.map((folder) => folderRow(folder))}
+            </ul>`
+          : html`<p class="muted">Nothing here yet. Copy a site from Git below.</p>`
+      }
+    </section>
+
+    <section class="connect-section" aria-labelledby="clone">
+      <h2 id="clone">Copy from Git</h2>
+      <p>
+        Clones a repository into the sites folder with this machine's Git access. Only the files are
+        fetched: nothing from the repository runs.
+      </p>
+      <form method="POST" action="/sites/clone" class="card-form">
+        <div class="field">
+          <label for="clone-url">Repository address</label>
+          <input
+            type="text"
+            id="clone-url"
+            name="url"
+            value="${cloneValues.url ?? ""}"
+            placeholder="https://github.com/you/my-site.git"
+            autocomplete="off"
+            spellcheck="false"
+            required
+            aria-describedby="${describedBy("clone-url-hint", cloneError)}"
+            ${cloneError ? html`aria-invalid="true"` : ""}
+          />
+          <span class="hint" id="clone-url-hint"
+            >An https or SSH address. A private repository needs a deploy key or token on this
+            machine.</span
+          >
+          ${cloneError ? html`<p class="error-text" id="clone-url-hint-error">${cloneError}</p>` : ""}
+        </div>
+        <div class="field">
+          <label for="clone-branch">Branch <span class="tag">optional</span></label>
+          <input
+            type="text"
+            id="clone-branch"
+            name="branch"
+            value="${cloneValues.branch ?? ""}"
+            placeholder="main"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="clone-branch-hint"
+          />
+          <span class="hint" id="clone-branch-hint"
+            >Empty for the repository's default branch.</span
+          >
+        </div>
+        <div class="field">
+          <label for="clone-folder">Folder name <span class="tag">optional</span></label>
+          <input
+            type="text"
+            id="clone-folder"
+            name="folder"
+            value="${cloneValues.folder ?? ""}"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="clone-folder-hint"
+          />
+          <span class="hint" id="clone-folder-hint">Empty for the repository's own name.</span>
+        </div>
+        <div class="form-actions">
+          <button type="submit">Copy</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function folderRow(folder: Folder) {
+  const status = {
+    connected: "Connected",
+    ready: "Ready to connect",
+    "needs-setup": "No .cms/schema.yaml yet",
+  }[folder.state];
+  return html`<li>
+    <div>
+      <strong>${folder.name}</strong>
+      <span class="muted">${status}</span>
+    </div>
+    ${
+      folder.state === "connected"
+        ? html`<a class="button secondary" href="/sites/${folder.siteId}"
+            >Open<span class="visually-hidden"> ${folder.name}</span></a
+          >`
+        : folder.state === "ready"
+          ? html`<form method="POST" action="/sites">
+              <input type="hidden" name="path" value="${folder.path}" />
+              <button type="submit">
+                Connect<span class="visually-hidden"> ${folder.name}</span>
+              </button>
+            </form>`
+          : html`<a
+              class="button secondary"
+              href="/sites/setup?path=${encodeURIComponent(folder.path)}"
+              >Set up<span class="visually-hidden"> ${folder.name}</span></a
+            >`
+    }
+  </li>`;
+}
+
+/** For a folder with no schema: a starter from the same templates as `greatcms init`. */
+export function setupPage(options: {
+  path: string;
+  values: Record<string, string>;
+  templates: Array<{ id: string; label: string; hint: string }>;
+  error?: string;
+}): string {
+  const { path, values, templates } = options;
+  const chosen = values.template || "hero";
+  return page(
+    {
+      title: "Set up a site",
+      section: "sites",
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: "/sites/new", label: "Connect a site" },
+        { href: `/sites/setup?path=${encodeURIComponent(path)}`, label: "Set up" },
+      ],
+      flash: options.error ? { kind: "error", message: options.error } : undefined,
+    },
+    html`
+      <div class="page-head">
+        <h1>Set up a site</h1>
+        <p class="lede">
+          <code>${path}</code> has no <code>.cms/schema.yaml</code> yet. Choose what the studio
+          should manage to begin with. It writes <code>.cms/schema.yaml</code> and
+          <code>.cms/config.yaml</code>, commits them, and connects the site. Nothing else in the
+          folder changes; the pages read the content once they use <code>@greatcms/reader</code>.
+        </p>
+      </div>
+
+      <form method="POST" action="/sites/setup" class="page-form">
+        <input type="hidden" name="path" value="${path}" />
+        <input type="hidden" name="devUrl" value="${values.devUrl ?? ""}" />
+        <div class="field">
+          <label for="name">Name</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value="${values.name ?? ""}"
+            autocomplete="off"
+            required
+          />
+          <span class="hint">The site's name, written into the schema.</span>
+        </div>
+        <fieldset>
+          <legend>Start with</legend>
+          ${templates.map(
+            (template) => html`<div class="choice">
+              <input
+                type="radio"
+                id="template-${template.id}"
+                name="template"
+                value="${template.id}"
+                aria-describedby="template-${template.id}-hint"
+                ${template.id === chosen ? html`checked` : ""}
+              />
+              <div>
+                <label for="template-${template.id}">${template.label}</label>
+                <span class="hint" id="template-${template.id}-hint">${template.hint}</span>
+              </div>
+            </div>`,
+          )}
+        </fieldset>
+        <div class="form-actions">
+          <button type="submit">Set up and connect</button>
+          <a class="button secondary" href="/sites/new">Cancel</a>
+        </div>
+      </form>
     `,
   );
 }

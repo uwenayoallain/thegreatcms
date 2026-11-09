@@ -41,6 +41,8 @@ export interface PageOptions {
   /** Signed-out screens get the shell without the navigation. */
   chrome?: boolean;
   site?: SiteNav;
+  /** Seconds before the page loads itself again, while it reports work still running. */
+  refresh?: number;
 }
 
 export function page(
@@ -57,6 +59,7 @@ export function page(
     unread = 0,
     chrome = true,
     site,
+    refresh,
   } = options;
 
   return compact(
@@ -67,6 +70,7 @@ export function page(
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <meta name="theme-color" content="#f4f4f2" />
           <meta name="robots" content="noindex" />
+          ${refresh ? html`<meta http-equiv="refresh" content="${refresh}" />` : ""}
           <title>${title} · GreatCMS Studio</title>
           <link rel="icon" href="/favicon.ico" sizes="32x32" />
           <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -492,11 +496,20 @@ body.plain { display: block; }
 .signed-in { display: flex; align-items: center; gap: .55rem; margin: 0 0 .2rem; padding: .2rem .55rem; font-size: .84rem; font-weight: 600; color: var(--ink); }
 .signed-in .avatar { width: 1.5rem; height: 1.5rem; border-radius: 6px; }
 .editors li > .avatar { width: 2.1rem; height: 2.1rem; border-radius: 8px; }
-.editors { list-style: none; margin: 0 0 1.5rem; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-.editors li { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.25rem; padding: .65rem .9rem; border-top: 1px solid var(--line); }
-.editors li:first-child { border-top: 0; }
-.editors li > div { display: flex; flex-direction: column; flex: 1 1 14rem; }
-.editors li .muted { font-size: .8rem; }
+:is(.editors, .folders) { list-style: none; margin: 0 0 1.5rem; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+:is(.editors, .folders) li { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.25rem; padding: .65rem .9rem; border-top: 1px solid var(--line); }
+:is(.editors, .folders) li:first-child { border-top: 0; }
+:is(.editors, .folders) li > div { display: flex; flex-direction: column; flex: 1 1 14rem; }
+:is(.editors, .folders) li .muted { font-size: .8rem; }
+.folders li > form { margin: 0; }
+.connect-section { max-width: 44rem; margin: 0 0 2rem; }
+.connect-section > h2, .connect-heading { font-size: 1rem; margin: 0 0 .35rem; }
+.connect-section > p { color: var(--ink-2); font-size: .88rem; margin: 0 0 .85rem; }
+.choice { display: flex; gap: .55rem; align-items: start; margin: 0 0 .55rem; }
+.choice:last-child { margin-bottom: 0; }
+.choice input { margin-top: .25rem; }
+.choice label { font-weight: 600; font-size: .88rem; }
+.choice .hint { margin-top: 0; }
 .row-form { display: flex; gap: .4rem; align-items: center; }
 .row-form input { min-width: 12rem; }
 .card-form, .page-form, .page-form + .danger-zone { max-width: 44rem; }

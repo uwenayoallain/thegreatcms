@@ -1,7 +1,7 @@
 import { parseConfig, parseSchema } from "@greatcms/spec";
 import { describe, expect, it } from "vitest";
 import { detectFramework, FRAMEWORKS } from "./detect.js";
-import { nextSteps, planInit, type InitAnswers } from "./init.js";
+import { nextSteps, planInit, planStarter, type InitAnswers } from "./init.js";
 
 function answers(overrides: Partial<InitAnswers> = {}): InitAnswers {
   const framework = overrides.framework ?? FRAMEWORKS.astro;
@@ -204,5 +204,23 @@ describe("next steps", () => {
     expect(output).toContain('cms.collection("products")');
     expect(output).toContain('cms.collection("pages")');
     expect(output).toContain("one dynamic route");
+  });
+});
+
+describe("a starter for the studio", () => {
+  it("decides the framework and folders from the site's own files, without asking", () => {
+    const plan = planStarter({
+      name: "Bakery",
+      template: "landing",
+      files: ["next.config.ts", "package.json"],
+      packageJson: { dependencies: { next: "15" } },
+    });
+
+    expect(plan.framework.id).toBe("next");
+    expect(plan.files.map((entry) => entry.path)).toEqual([".cms/schema.yaml", ".cms/config.yaml"]);
+    expect(parseSchema(file(plan, ".cms/schema.yaml"), { file: "schema.yaml" }).site.name).toBe(
+      "Bakery",
+    );
+    expect(parseConfig(file(plan, ".cms/config.yaml")).content.regions).toBe("content/cms");
   });
 });
