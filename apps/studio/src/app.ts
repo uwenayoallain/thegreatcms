@@ -78,7 +78,7 @@ import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { errorsByPath } from "./views/fields.js";
 import { page, type PageOptions } from "./views/layout.js";
 import { asset, compressed, icon, ICONS } from "./assets.js";
-import { editorsPage, sharePage, signInPage } from "./views/account-pages.js";
+import { editorsPage, gitAccessPage, sharePage, signInPage } from "./views/account-pages.js";
 import { collectionPage, editEntryPage } from "./views/collection-pages.js";
 import { inboxPage } from "./views/inbox-page.js";
 import { editRegionPage } from "./views/region-page.js";
@@ -103,6 +103,7 @@ import { planStarter, TEMPLATES, type TemplateId } from "@greatcms/cli";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { LocalRepository } from "./repo.js";
+import type { GitAccess } from "./git-access.js";
 import { siteTile } from "./views/pixel.js";
 import { findSiteIcon } from "./site-icon.js";
 import { Liveness } from "./liveness.js";
@@ -150,6 +151,8 @@ export interface AppOptions {
   previewsFile?: string;
   /** `STUDIO_PREVIEW_PROBE`: where this server reaches the preview service, to say whether it is up. */
   previewProbe?: string;
+  /** The studio's own SSH key and host tokens, for private repositories. */
+  gitAccess?: GitAccess;
   /** Replaces git for clones, in tests. */
   cloneGit?: (args: string[]) => Promise<void>;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
@@ -512,6 +515,8 @@ export function createApp(options: AppOptions) {
     "/sites/setup",
     "/sites/clone",
     "/sites/clone/*",
+    "/git-access",
+    "/git-access/*",
     "/sites/:id/settings",
     "/sites/:id/delete",
     "/editors",
@@ -847,6 +852,7 @@ export function createApp(options: AppOptions) {
       folders: options.sitesRoot ? listFolders(options.sitesRoot, store.listSites()) : [],
       clones: clones?.list() ?? [],
       previewTemplate: options.previewUrl,
+      gitAccess: Boolean(options.gitAccess),
       ...extra,
     });
 
@@ -1021,6 +1027,64 @@ export function createApp(options: AppOptions) {
     }
     void clones.start(cloneValues.url, folder, cloneValues.branch);
     return c.redirect("/sites/new", 303);
+  });
+
+  const gitAccess = options.gitAccess;
+  const gitAccessView = (extra: Partial<Parameters<typeof gitAccessPage>[0]> = {}) =>
+    gitAccessPage({
+      publicKey: gitAccess?.publicKey() ?? null,
+      tokens: gitAccess?.tokens() ?? [],
+      ...extra,
+    });
+
+  app.get("/git-access", (c) => (gitAccess ? c.html(gitAccessView()) : c.notFound()));
+
+  app.post("/git-access/key", async (c) => {
+    if (!gitAccess) return c.notFound();
+    try {
+      await gitAccess.createKey(`greatcms-studio@${new URL(publicOrigin(c)).hostname}`);
+    } catch (error) {
+      return c.html(
+        gitAccessView({
+          flash: { kind: "error", message: `No key was made: ${describeError(error)}` },
+        }),
+        500,
+      );
+    }
+    return c.redirect("/git-access", 303);
+  });
+
+  app.post("/git-access/key/delete", (c) => {
+    gitAccess?.removeKey();
+    return c.redirect("/git-access", 303);
+  });
+
+  app.post("/git-access/token", async (c) => {
+    if (!gitAccess) return c.notFound();
+    const form = await c.req.formData();
+    const host = String(form.get("host") ?? "");
+    const problem = gitAccess.saveToken(
+      host,
+      String(form.get("username") ?? ""),
+      String(form.get("token") ?? ""),
+    );
+    if (problem) {
+      return c.html(
+        gitAccessView({
+          host,
+          tokenError: problem,
+          flash: { kind: "error", message: "Nothing was saved." },
+        }),
+        422,
+      );
+    }
+    return c.redirect("/git-access", 303);
+  });
+
+  app.post("/git-access/token/delete", async (c) => {
+    const form = await c.req.formData();
+    gitAccess?.removeToken(String(form.get("host") ?? ""));
+    return c.redirect("/git-access", 303);
   });
 
   app.post("/sites/clone/dismiss", async (c) => {

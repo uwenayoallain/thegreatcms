@@ -1133,8 +1133,10 @@ one three ways:
   folders in it. One with a schema connects with a click, named after its
   folder; one without offers **Set up**.
 - **Copy from Git.** Paste an https or SSH address, and the studio clones it
-  into the sites folder with this machine's Git access. It fetches files and
-  nothing else: no hooks, no submodules, no `file` or `ext` transport.
+  into the sites folder. It fetches files and nothing else: no hooks, no
+  submodules, no `file` or `ext` transport. For a private repository, first
+  give the studio an SSH key or a token for the host on its **Git access**
+  page; pushing after a publish uses them too.
 - **By path.** Any other folder; `~` is the studio user's home.
 
 The studio reads `.cms/schema.yaml` from that working copy and builds the

@@ -502,6 +502,7 @@ body.plain { display: block; }
 :is(.editors, .folders) li > div { display: flex; flex-direction: column; flex: 1 1 14rem; }
 :is(.editors, .folders) li .muted { font-size: .8rem; }
 .folders li > form { margin: 0; }
+.public-key { white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .connect-section { max-width: 44rem; margin: 0 0 2rem; }
 .connect-section > h2, .connect-heading { font-size: 1rem; margin: 0 0 .35rem; }
 .connect-section > p { color: var(--ink-2); font-size: .88rem; margin: 0 0 .85rem; }

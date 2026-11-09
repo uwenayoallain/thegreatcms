@@ -114,6 +114,8 @@ export function newSitePage(
     previewTemplate?: string;
     cloneValues?: Record<string, string>;
     cloneError?: string;
+    /** Whether the Git access page exists, to point a private repository there. */
+    gitAccess?: boolean;
   } = {},
 ): string {
   const { editing, fieldErrors = {} } = options;
@@ -279,7 +281,9 @@ export function newSitePage(
                   </div>
                   <span class="hint" id="push-hint">
                     Sends each publish to the branch's upstream, so your host deploys it without
-                    anyone running Git. Uses this machine's Git credentials; hooks never run.
+                    anyone running Git. Signs in with this machine's Git credentials, or the
+                    studio's own
+                    <a href="/git-access">Git access</a>; hooks never run.
                   </span>
                 </div>
               `
@@ -318,7 +322,14 @@ export function newSitePage(
 
 /** The sites folder's contents and the Git form, above the path form, when a sites folder is set. */
 function connectSources(options: Parameters<typeof newSitePage>[0]) {
-  const { sitesRoot, folders = [], clones = [], cloneValues = {}, cloneError } = options ?? {};
+  const {
+    sitesRoot,
+    folders = [],
+    clones = [],
+    cloneValues = {},
+    cloneError,
+    gitAccess,
+  } = options ?? {};
   if (!sitesRoot) return "";
   const working = clones.filter((clone) => clone.state === "cloning");
   const failed = clones.filter((clone) => clone.state === "failed");
@@ -344,7 +355,12 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
                   <div>
                     <strong>${clone.folder}</strong>
                     <span class="error-text"
-                      >Not copied: ${clone.state === "failed" ? clone.reason : ""}</span
+                      >Not copied:
+                      ${clone.state === "failed" ? clone.reason : ""}${
+                        gitAccess && clone.state === "failed" && clone.reason.includes("sign-in")
+                          ? html` <a href="/git-access">Set up Git access</a>.`
+                          : ""
+                      }</span
                     >
                   </div>
                   <form method="POST" action="/sites/clone/dismiss">
@@ -387,8 +403,13 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
             ${cloneError ? html`aria-invalid="true"` : ""}
           />
           <span class="hint" id="clone-url-hint"
-            >An https or SSH address. A private repository needs a deploy key or token on this
-            machine.</span
+            >An https or SSH address.
+            ${
+              gitAccess
+                ? html`For a private repository, first give the studio a key or token in
+                    <a href="/git-access">Git access</a>.`
+                : "A private repository needs a deploy key or token on this machine."
+            }</span
           >
           ${cloneError ? html`<p class="error-text" id="clone-url-hint-error">${cloneError}</p>` : ""}
         </div>

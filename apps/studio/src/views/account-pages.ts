@@ -211,3 +211,135 @@ export function editorsPage(options: {
     `,
   );
 }
+
+/** The studio's own key and tokens, so it can copy and push private repositories. */
+export function gitAccessPage(options: {
+  publicKey: string | null;
+  tokens: Array<{ host: string; username: string }>;
+  flash?: PageOptions["flash"];
+  tokenError?: string;
+  host?: string;
+}): string {
+  const { publicKey, tokens, tokenError } = options;
+  return page(
+    {
+      title: "Git access",
+      section: "sites",
+      crumbs: [
+        { href: "/", label: "Sites" },
+        { href: "/git-access", label: "Git access" },
+      ],
+      flash: options.flash,
+    },
+    html`
+      <div class="page-head">
+        <h1>Git access</h1>
+        <p class="lede">
+          How this studio signs in to Git hosts, to copy private repositories and to push after
+          publishing. Every site shares it. Use either one: an SSH key, or a token per host.
+        </p>
+      </div>
+
+      <section class="connect-section" aria-labelledby="ssh-key">
+        <h2 id="ssh-key">SSH key</h2>
+        ${
+          publicKey
+            ? html`<p>
+                  Add this public key where the repositories are: to your GitHub or GitLab account,
+                  or a machine account, to reach every repository it can; or as a deploy key on one
+                  repository, with write access if publishes are pushed. Then copy with the SSH
+                  address, such as <code>git@github.com:you/site.git</code>.
+                </p>
+                <pre class="public-key">${publicKey}</pre>
+                <details class="danger-confirm">
+                  <summary>Remove this key</summary>
+                  <p>Repositories reached with it stop working until another key is added.</p>
+                  <form method="POST" action="/git-access/key/delete">
+                    <button class="danger" type="submit">Confirm remove the key</button>
+                  </form>
+                </details>`
+            : html`<p>
+                  The studio makes its own key pair and keeps the private half in its data folder.
+                  You add the public half to the host.
+                </p>
+                <form method="POST" action="/git-access/key">
+                  <button type="submit">Create a key</button>
+                </form>`
+        }
+      </section>
+
+      <section class="connect-section" aria-labelledby="tokens">
+        <h2 id="tokens">Access tokens</h2>
+        <p>
+          For https addresses. On GitHub, a fine-grained token with read and write access to
+          Contents on the repositories this studio manages. Tokens are never shown again.
+        </p>
+        ${
+          tokens.length
+            ? html`<ul class="folders" role="list">
+                ${tokens.map(
+                  (token) => html`<li>
+                    <div>
+                      <strong>${token.host}</strong>
+                      <span class="muted">as ${token.username}</span>
+                    </div>
+                    <form method="POST" action="/git-access/token/delete">
+                      <input type="hidden" name="host" value="${token.host}" />
+                      <button class="secondary" type="submit">
+                        Remove<span class="visually-hidden"> the token for ${token.host}</span>
+                      </button>
+                    </form>
+                  </li>`,
+                )}
+              </ul>`
+            : ""
+        }
+        <form method="POST" action="/git-access/token" class="card-form">
+          <div class="field">
+            <label for="token-host">Host</label>
+            <input
+              type="text"
+              id="token-host"
+              name="host"
+              value="${options.host ?? ""}"
+              placeholder="github.com"
+              autocomplete="off"
+              spellcheck="false"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="token-value">Token</label>
+            <input
+              type="password"
+              id="token-value"
+              name="token"
+              autocomplete="off"
+              required
+              ${tokenError ? html`aria-describedby="token-error" aria-invalid="true"` : ""}
+            />
+            ${tokenError ? html`<p class="error-text" id="token-error">${tokenError}</p>` : ""}
+          </div>
+          <div class="field">
+            <label for="token-user">User name <span class="tag">optional</span></label>
+            <input
+              type="text"
+              id="token-user"
+              name="username"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="token-user-hint"
+            />
+            <span class="hint" id="token-user-hint"
+              >Known for GitHub, GitLab and Bitbucket. Other hosts: the account the token belongs
+              to.</span
+            >
+          </div>
+          <div class="form-actions">
+            <button type="submit">Save token</button>
+          </div>
+        </form>
+      </section>
+    `,
+  );
+}

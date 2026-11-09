@@ -195,7 +195,7 @@ export function cloneFailure(error: Error & { stderr?: string }): string {
       /could not read Username|Authentication failed|terminal prompts disabled/i.test(line),
     )
   ) {
-    return "The repository asked for a sign-in. Give this machine access to it (a deploy key or a token in git's credential store) and try again.";
+    return "The repository asked for a sign-in this studio does not have: add a key or token for it, then try again.";
   }
   if (text.some((line) => /Remote branch .* not found/i.test(line))) {
     return "That branch does not exist in the repository.";

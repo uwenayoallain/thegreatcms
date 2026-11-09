@@ -5,6 +5,8 @@ import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
 import { applySites, parseSites } from "./config.js";
 import { PreviewAddresses } from "./connect.js";
+import { GitAccess } from "./git-access.js";
+import { dirname, join } from "node:path";
 import { Store } from "./db.js";
 import { isHttpUrl } from "./http.js";
 import { type Notifier, Notifiers, ResendNotifier, WebhookNotifier } from "./submissions.js";
@@ -85,6 +87,8 @@ const app = createApp({
   previewUrl: process.env.STUDIO_PREVIEW_URL || undefined,
   previewsFile: process.env.STUDIO_PREVIEWS_FILE || undefined,
   previewProbe: process.env.STUDIO_PREVIEW_PROBE || undefined,
+  // Beside the database, so a container keeps its key and tokens in the same volume.
+  gitAccess: new GitAccess(join(dirname(databaseFile), "git")),
 });
 
 // Publishes scheduled for later go out within half a minute of their time.
