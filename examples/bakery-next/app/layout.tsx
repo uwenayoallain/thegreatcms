@@ -9,20 +9,16 @@ import { Nav } from "./nav";
 import { Lines } from "./parts";
 import "./site.css";
 
-const serif = localFont({
-  src: [
-    {
-      path: "../node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2",
-      style: "normal",
-    },
-    {
-      path: "../node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2",
-      style: "italic",
-    },
-  ],
+// Only the upright face: nothing set in the serif is italic, and every preload competes with the page.
+const instrumentSerif = localFont({
+  src: "../node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2",
   weight: "400",
+  style: "normal",
   variable: "--font-serif",
-  display: "swap",
+  // Preloaded, so it is normally there for the first paint; if it is late the page keeps the
+  // metric-matched fallback in site.css rather than reflowing when it lands.
+  display: "optional",
+  adjustFontFallback: false,
 });
 
 export function generateMetadata(): Metadata {
@@ -36,7 +32,7 @@ export function generateMetadata(): Metadata {
 export default function Layout({ children }: { children: ReactNode }) {
   const { identity, visit } = content();
   return (
-    <html lang="en" className={serif.variable}>
+    <html lang="en" className={instrumentSerif.variable}>
       <head>
         {/* The studio's preview script under `next dev`; a built page carries none of it. */}
         <GreatcmsPreview />
