@@ -53,7 +53,7 @@ const next = all[(at + 1) % all.length]!;
                     <span class="count" style={`--to: ${parts.number}`} data-count={parts.number} data-pad={parts.digits}>
                       {parts.before}
                       <span class="count__value">{String(parts.number).padStart(parts.digits, '0')}</span>
-                      <span class="count__digits" aria-hidden="true" />
+                      <span class="count__digits" aria-hidden="true" data-final={String(parts.number).padStart(parts.digits, '0')} />
                       {parts.after}
                     </span>
                   ) : (

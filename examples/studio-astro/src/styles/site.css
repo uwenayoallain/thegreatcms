@@ -42,6 +42,83 @@
   initial-value: 0deg;
 }
 
+/* The two faces, from their packages but with `optional` display: preloaded, they are there for the
+   first paint, and one that is late leaves the matched fallback in place instead of reflowing. */
+@font-face {
+  font-family: "Bricolage Grotesque Variable";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 200 800;
+  src: url("@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2")
+    format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Bricolage Grotesque Variable";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 200 800;
+  src: url("@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-ext-wght-normal.woff2")
+    format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-display: optional;
+  font-weight: 400;
+  src: url("@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2")
+    format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-display: optional;
+  font-weight: 400;
+  src: url("@fontsource/instrument-serif/files/instrument-serif-latin-ext-400-italic.woff2")
+    format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+/* Arial- and Times-metric faces scaled to the two above, so a page that keeps them is set alike. */
+@font-face {
+  font-family: "Bricolage fallback";
+  font-weight: 100 549;
+  src: local("Arial"), local("Liberation Sans"), local("Arimo");
+  size-adjust: 106.7%;
+  ascent-override: 87.2%;
+  descent-override: 25.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Bricolage fallback";
+  font-weight: 550 900;
+  src: local("Arial Bold"), local("Liberation Sans Bold"), local("Arimo Bold");
+  size-adjust: 101.3%;
+  ascent-override: 91.8%;
+  descent-override: 26.7%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Instrument fallback";
+  font-style: italic;
+  src: local("Times New Roman Italic"), local("Liberation Serif Italic"), local("Tinos Italic");
+  size-adjust: 88%;
+  ascent-override: 112.5%;
+  descent-override: 35.2%;
+  line-gap-override: 0%;
+}
+
 :root {
   --ink: #0b0b0e;
   --ink-2: #16161b;
@@ -50,8 +127,9 @@
   --mute: rgb(243 239 231 / 0.62);
   --accent: #ff5a36;
   --accent-2: #7c5cff;
-  --sans: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
-  --serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --sans:
+    "Bricolage Grotesque Variable", "Bricolage fallback", ui-sans-serif, system-ui, sans-serif;
+  --serif: "Instrument Serif", "Instrument fallback", ui-serif, Georgia, serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --gutter: clamp(1.25rem, 4vw, 3.5rem);
   --section: clamp(5rem, 11vw, 9rem);
@@ -69,6 +147,8 @@
 html {
   background: var(--ink);
   -webkit-text-size-adjust: 100%;
+  /* Room for the scrollbar on every page, so the fixed header spans the same width on a short one. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -1003,8 +1083,31 @@ em {
   font-variant-numeric: tabular-nums;
 }
 
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
 .count__digits {
   display: none;
+}
+
+/* While a figure counts, an invisible copy of its final value holds the width, so nothing beside it moves. */
+.count__digits::before,
+.count__digits::after {
+  grid-area: 1 / 1;
+}
+
+.count__digits::before {
+  content: attr(data-final);
+  visibility: hidden;
+}
+
+.count__digits::after {
+  content: counter(count);
+}
+
+.count[data-pad="2"] .count__digits::after {
+  content: counter(count, decimal-leading-zero);
 }
 
 /* Quote */
@@ -1685,10 +1788,10 @@ em {
     gap: 1rem;
   }
 
+  /* One column: a city beside the year only fit with a pixel to spare, so a fallback face wrapped it. */
   .site-footer__meta {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .site-footer__meta ul {
@@ -1736,10 +1839,18 @@ em {
     view-transition-name: header;
   }
 
+  /* The header holds still; only the line under the current page travels to its new link. */
+  ::view-transition-group(header) {
+    animation: none;
+  }
+
+  .site-header nav a[aria-current="page"]::after {
+    view-transition-name: nav-current;
+  }
+
   @keyframes page-out {
     to {
       opacity: 0;
-      transform: translateY(-2rem) scale(0.98);
     }
   }
 
@@ -1869,10 +1980,10 @@ em {
     animation-delay: calc(0.12s + var(--w) * 0.07s);
   }
 
+  /* Position only: animating the weight widened each word and pushed the rest of the line along. */
   @keyframes word-in {
     from {
       transform: translateY(105%) rotate(6deg);
-      font-variation-settings: "wght" 200;
     }
   }
 
@@ -1925,10 +2036,6 @@ em {
   .hero__foot,
   .hero__scroll {
     animation: rise 1s var(--ease-out) both 0.75s;
-  }
-
-  .site-header {
-    animation: rise 1s var(--ease-out) both 0.2s;
   }
 
   @keyframes rise {
@@ -2142,15 +2249,7 @@ em {
     }
 
     .count__digits {
-      display: inline;
-    }
-
-    .count__digits::after {
-      content: counter(count);
-    }
-
-    .count[data-pad="2"] .count__digits::after {
-      content: counter(count, decimal-leading-zero);
+      display: inline-grid;
     }
 
     @keyframes count-up {
@@ -2254,6 +2353,7 @@ em {
       cursor: none;
     }
 
+    /* Always label-sized; the disc inside scales, so growing into a label moves no box. */
     .has-cursor .cursor {
       position: fixed;
       top: 0;
@@ -2261,29 +2361,35 @@ em {
       z-index: 90;
       display: grid;
       place-items: center;
-      width: 0.75rem;
-      height: 0.75rem;
-      margin: -0.375rem 0 0 -0.375rem;
-      border-radius: 50%;
-      background: var(--bone);
-      opacity: 0;
-      pointer-events: none;
-      mix-blend-mode: difference;
-      transition:
-        width 0.5s var(--ease-out),
-        height 0.5s var(--ease-out),
-        margin 0.5s var(--ease-out);
-    }
-
-    .has-cursor .cursor.is-label {
       width: 5.5rem;
       height: 5.5rem;
       margin: -2.75rem 0 0 -2.75rem;
+      opacity: 0;
+      pointer-events: none;
+      mix-blend-mode: difference;
+    }
+
+    .has-cursor .cursor::before {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--bone);
+      content: "";
+      scale: calc(0.75 / 5.5);
+      transition: scale 0.5s var(--ease-out);
+    }
+
+    .has-cursor .cursor.is-label {
       mix-blend-mode: normal;
+    }
+
+    .has-cursor .cursor.is-label::before {
       background: var(--accent);
+      scale: 1;
     }
 
     .cursor__label {
+      position: relative;
       color: var(--ink);
       font-size: 0.85rem;
       font-weight: 600;
@@ -2297,8 +2403,25 @@ em {
   }
 }
 
-/* The same pinned layouts, for the script to drive where the browser has no scroll timelines. */
+/* The same pinned layouts and counting figures, for the script to drive where the browser has no
+   scroll timelines. */
 @media (prefers-reduced-motion: no-preference) {
+  .scroll-fallback .count {
+    counter-reset: count var(--count);
+  }
+
+  .scroll-fallback .count__value {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .scroll-fallback .count__digits {
+    display: inline-grid;
+  }
+
   .statement.is-pinned {
     height: 260svh;
   }

@@ -38,6 +38,13 @@ pnpm --filter @greatcms/example-studio-astro test      # after a build
 3. **Reduced motion turns it all off.** Every animation sits inside
    `@media (prefers-reduced-motion: no-preference)`, and the script returns
    early. A test fails if an animation is ever started outside that block.
+4. **Motion never moves the layout.** Animations change transform, opacity,
+   clip-path or paint, never a box's size or place. The header holds still
+   between pages, figures count up inside a box already the width of their
+   final value, and the faces use `font-display: optional` with fallbacks
+   sized so the header and footer measure the same either way.
+   `tests/layout.test.ts` loads every page at five widths, with the fonts on
+   time and late, and fails on any layout shift or a landmark out of place.
 
 ## Adding a home section
 
