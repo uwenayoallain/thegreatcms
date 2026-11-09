@@ -11,32 +11,29 @@
   font-family: "Space Grotesk";
   font-weight: 400;
   font-display: optional;
-  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2") format("woff2");
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2");
 }
 
 @font-face {
   font-family: "Space Grotesk";
   font-weight: 500;
   font-display: optional;
-  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2") format("woff2");
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2");
 }
 
 @font-face {
   font-family: "Space Grotesk";
   font-weight: 700;
   font-display: optional;
-  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2") format("woff2");
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2");
 }
 
-/* When it is not, a local face sized to its metrics stands in. */
+/* When it is not, a local face scaled to its width stands in; line heights are fixed, so width is what matters. */
 @font-face {
   font-family: "Grotesk Fallback";
   font-weight: 100 600;
   src: local("Arial"), local("Liberation Sans"), local("Helvetica");
   size-adjust: 105%;
-  ascent-override: 93%;
-  descent-override: 28%;
-  line-gap-override: 0%;
 }
 
 @font-face {
@@ -44,9 +41,6 @@
   font-weight: 700 900;
   src: local("Arial Bold"), local("Liberation Sans Bold"), local("Helvetica Bold");
   size-adjust: 99.4%;
-  ascent-override: 98.6%;
-  descent-override: 29.2%;
-  line-gap-override: 0%;
 }
 
 :root {
@@ -1528,11 +1522,17 @@ main {
  * arrive as the reader reaches them; page changes crossfade the article while the
  * chrome stays put. Every bit of it is off under reduced motion.
  */
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
   /* The hero: eyebrow, headline, lede, actions and switch, one beat apart. */
   .hero .reveal > * {
     animation: rise 760ms var(--rise) backwards;
@@ -1790,7 +1790,9 @@ html {
     .claims li,
     .closing,
     .files-intro,
-    .claims-intro {
+    .claims-intro,
+    .index-list li,
+    .prose img {
       animation: rise linear both;
       animation-timeline: view();
       animation-range: entry 0% entry 30%;
@@ -1805,6 +1807,24 @@ html {
     .file-list li:nth-child(3),
     .proofs li:nth-child(3) {
       animation-range: entry 16% entry 46%;
+    }
+
+    /* On a docs page, a commit-green line under the header fills as the reader goes down it. */
+    :root:has(.docs) .masthead::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 -1px;
+      height: 2px;
+      background: var(--accent);
+      transform-origin: left;
+      animation: fill linear both;
+      animation-timeline: scroll(root);
+    }
+
+    @keyframes fill {
+      from {
+        transform: scaleX(0);
+      }
     }
 
     /* The wordmark's green shadow slides out from behind the letters as the footer comes up. */
@@ -1855,6 +1875,11 @@ html {
 
   .docs-nav {
     view-transition-name: docs-nav;
+  }
+
+  /* The current page's highlight slides from the old entry to the new one. */
+  .docs-nav [aria-current] {
+    view-transition-name: docs-current;
   }
 
   .colophon {

@@ -174,7 +174,8 @@ describe.skipIf(!browser)("between pages", () => {
         expect(result.shift, `${path} shifts by ${result.shift}`).toBe(0);
       }
     },
-    60_000,
+    // Every page in one tab takes seconds alone, and far longer beside the other browser suites.
+    120_000,
   );
 
   // A slow font is where a swap would move text: the face is optional, so it never swaps in late.
