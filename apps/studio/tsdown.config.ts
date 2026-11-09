@@ -14,6 +14,17 @@ export default defineConfig([
     outExtensions: () => ({ js: ".js" }),
   },
   {
+    // The same server as a function, for `greatcms studio` and the published package.
+    entry: ["src/start.ts"],
+    format: ["esm"],
+    dts: false,
+    clean: false,
+    target: "node22",
+    platform: "node",
+    deps: { alwaysBundle: [/.*/] },
+    outExtensions: () => ({ js: ".js" }),
+  },
+  {
     // The studio's only client-side JavaScript, and an enhancement over a real textarea.
     entry: ["client/editor.ts", "client/live.ts", "client/form.ts", "client/shell.ts"],
     format: ["esm"],
