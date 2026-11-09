@@ -75,6 +75,7 @@ import { SiteClient, type SiteContext, entryTitle } from "./sites.js";
 import { type Author, ConflictError } from "./repo.js";
 import { type Viewer, withViewer } from "./views/viewer.js";
 import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
+import { panesOf, withChrome } from "./views/chrome.js";
 import { errorsByPath } from "./views/fields.js";
 import { page, type PageOptions } from "./views/layout.js";
 import { asset, compressed, icon, ICONS } from "./assets.js";
@@ -432,7 +433,8 @@ export function createApp(options: AppOptions) {
     c.set("actor", who.name);
     c.set("viewer", who);
     c.set("session", session.actor);
-    return withViewer(who, next);
+    const shell = { ...panesOf(c.req.header("cookie")), unread: () => store.countUnread() };
+    return withViewer(who, () => withChrome(shell, next));
   });
 
   /** A plain form post, so the switch works before any script has loaded, or without one. */

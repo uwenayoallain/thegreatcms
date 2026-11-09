@@ -14,11 +14,13 @@ interface Resizer {
   max: () => number;
   /** Where the width is measured from: the left edge of the target, or its right edge. */
   from: "left" | "right";
+  /** Also kept in a cookie, so the server draws each screen at this width before any script runs. */
+  cookie?: string;
 }
 
 const STEP = 16;
 
-function setUp({ handle, target, property, key, min, max, from }: Resizer): void {
+function setUp({ handle, target, property, key, min, max, from, cookie }: Resizer): void {
   // What the stylesheet gave it, until a drag or a key says otherwise.
   const measure = () => {
     const value = getComputedStyle(target).getPropertyValue(property).trim();
@@ -30,10 +32,16 @@ function setUp({ handle, target, property, key, min, max, from }: Resizer): void
     handle.setAttribute("aria-valuenow", String(clamped));
     return clamped;
   };
-  const remember = (width: number) => localStorage.setItem(`greatcms:${key}`, String(width));
+  const share = (width: number) => {
+    if (cookie) document.cookie = `${cookie}=${width}; path=/; max-age=31536000; samesite=lax`;
+  };
+  const remember = (width: number) => {
+    localStorage.setItem(`greatcms:${key}`, String(width));
+    share(width);
+  };
 
   const stored = Number(localStorage.getItem(`greatcms:${key}`));
-  if (stored > 0) apply(stored);
+  if (stored > 0) share(apply(stored));
   else handle.setAttribute("aria-valuenow", String(Math.round(measure())));
   handle.hidden = false;
 
@@ -119,6 +127,7 @@ function start(): void {
       min: 176,
       max: () => Math.min(480, window.innerWidth * 0.4),
       from: "left",
+      cookie: "greatcms_sidebar",
     });
   }
   const split = document.querySelector<HTMLElement>(".split");
@@ -132,6 +141,7 @@ function start(): void {
       min: 320,
       max: () => split.getBoundingClientRect().width - 360,
       from: "right",
+      cookie: "greatcms_live",
     });
   }
 }

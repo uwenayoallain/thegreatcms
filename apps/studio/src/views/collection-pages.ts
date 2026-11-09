@@ -11,7 +11,7 @@ import type { Elsewhere } from "../elsewhere.js";
 import { html } from "hono/html";
 import type { Site } from "../db.js";
 import { type ErrorsByPath, hasRichText, renderFields } from "./fields.js";
-import { page, type PageOptions } from "./layout.js";
+import { page, type PageOptions, splitWidth } from "./layout.js";
 import { icon } from "./icons.js";
 import { ago } from "./locale.js";
 import {
@@ -186,7 +186,7 @@ export function editEntryPage(options: {
         </p>
       </div>
 
-      <div class="split">
+      <div class="split" ${splitWidth()}>
         <form
           method="POST"
           action="${action}"

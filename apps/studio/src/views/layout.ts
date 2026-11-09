@@ -8,6 +8,10 @@ import { personAvatar, siteAvatar } from "./pixel.js";
 import { locale } from "./locale.js";
 import { viewer } from "./viewer.js";
 import { theme, type Theme } from "./theme.js";
+import { chrome as shell } from "./chrome.js";
+
+/** Display type the headings use: fetched with the stylesheet, so it is in hand before the first paint. */
+const FONTS = ["space-grotesk-500.woff2", "space-grotesk-700.woff2"];
 
 export interface Crumb {
   href: string;
@@ -43,6 +47,10 @@ export interface PageOptions {
   site?: SiteNav;
 }
 
+/** Render-blocking in the head: an enhancement that lands after the first paint moves what it enhances. */
+const script = (file: string) =>
+  html`<script type="module" blocking="render" src="${assetUrl(file)}"></script>`;
+
 export function page(
   options: PageOptions,
   body: HtmlEscapedString | Promise<HtmlEscapedString> | string,
@@ -54,10 +62,13 @@ export function page(
     editor = false,
     liveSite = false,
     section,
-    unread = 0,
     chrome = true,
     site,
   } = options;
+  const unread = options.unread ?? shell().unread?.() ?? 0;
+  const sidebar = chrome ? shell().sidebar : undefined;
+  // Top-level screens name themselves, so the bar is there on every screen and nothing below it moves.
+  const trail = crumbs.length > 0 ? crumbs : [{ href: "", label: title }];
 
   return compact(
     `<!doctype html>${html`
@@ -72,23 +83,38 @@ export function page(
           <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           <link rel="stylesheet" href="${assetUrl("studio.css")}" />
+          ${FONTS.map(
+            (file) =>
+              html`<link
+                rel="preload"
+                href="/assets/${file}"
+                as="font"
+                type="font/woff2"
+                crossorigin
+              />`,
+          )}
+          ${editor ? script("editor.js") : ""}
+          ${liveSite ? html`${script("live.js")} ${script("form.js")} ${script("shell.js")}` : ""}
         </head>
-        <body class="${chrome ? "" : "plain"}">
+        <body
+          class="${chrome ? "" : "plain"}"
+          ${sidebar ? raw(` style="--sidebar-width: ${sidebar}px"`) : ""}
+        >
           <a class="skip-link" href="#main">Skip to content</a>
 
           ${chrome ? navigation(section, unread, site, liveSite) : ""}
 
           <div class="content">
             ${
-              chrome && crumbs.length > 0
+              chrome
                 ? html`
                     <nav aria-label="Breadcrumb" class="crumbs">
                       <ol>
-                        ${crumbs.map(
+                        ${trail.map(
                           (crumb, index) => html`
                             <li>
                               ${
-                                index === crumbs.length - 1
+                                index === trail.length - 1
                                   ? html`<span aria-current="page">${crumb.label}</span>`
                                   : html`<a href="${crumb.href}">${crumb.label}</a>`
                               }
@@ -103,19 +129,16 @@ export function page(
 
             <main id="main">${flash ? flashNotice(flash) : ""} ${body}</main>
           </div>
-
-          ${editor ? html`<script type="module" src="${assetUrl("editor.js")}"></script>` : ""}
-          ${
-            liveSite
-              ? html`<script type="module" src="${assetUrl("live.js")}"></script>
-                  <script type="module" src="${assetUrl("form.js")}"></script>
-                  <script type="module" src="${assetUrl("shell.js")}"></script>`
-              : ""
-          }
         </body>
       </html>
     `}`,
   );
+}
+
+/** An editor's split at the width its preview was last dragged to, so it opens there. */
+export function splitWidth() {
+  const live = shell().live;
+  return live ? raw(` style="--live-width: ${live}px"`) : "";
 }
 
 /** System, light or dark: three buttons in one form, so it works with no script at all. */
@@ -202,7 +225,7 @@ function navigation(
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize the sidebar"
-              aria-valuenow="248"
+              aria-valuenow="${shell().sidebar ?? 248}"
               tabindex="0"
               data-resize-sidebar
               hidden
@@ -369,6 +392,9 @@ const STYLES = `
 /* The same identity as the website: stone surfaces, tight near-black type, mono only for what is a file, one green for publishing. */
 @font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 500; font-display: swap; src: url(/assets/space-grotesk-500.woff2) format("woff2"); }
 @font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 700; font-display: swap; src: url(/assets/space-grotesk-700.woff2) format("woff2"); }
+/* Arial sized to Space Grotesk's width and set on its baseline, so a late font swaps in without moving a line. */
+@font-face { font-family: "Space Grotesk Fallback"; font-weight: 500; src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans"); size-adjust: 105.15%; ascent-override: 93.2%; descent-override: 27.6%; line-gap-override: 0%; }
+@font-face { font-family: "Space Grotesk Fallback"; font-weight: 700; src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold"); size-adjust: 99.43%; ascent-override: 98.6%; descent-override: 29.2%; line-gap-override: 0%; }
 :root {
   color-scheme: light dark;
   --canvas: #f4f4f2;
@@ -395,7 +421,7 @@ const STYLES = `
   --radius-sm: 7px;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
   --sans: "Inter", "SF Pro Text", "Segoe UI Variable Text", "Helvetica Neue", system-ui, sans-serif;
-  --display: "Space Grotesk", var(--sans);
+  --display: "Space Grotesk", "Space Grotesk Fallback", var(--sans);
   --shadow: 0 1px 2px rgba(21, 23, 26, .04);
   --shadow-lift: 0 2px 6px -2px rgba(21, 23, 26, .08);
   --pop: 0 8px 24px -12px rgba(0, 0, 0, .25);
@@ -407,9 +433,11 @@ const STYLES = `
   :root[data-theme="system"] { ${DARK} }
 }
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-padding-top: 5rem; }
+/* The scrollbar's room is kept on every screen, so a short page sits where a long one does. */
+html { scroll-padding-top: 5rem; scrollbar-gutter: stable; }
 body {
   margin: 0;
+  align-content: start;
   background: var(--canvas);
   color: var(--ink);
   font: 14.5px/1.55 var(--sans);
@@ -529,6 +557,8 @@ body.plain { display: block; }
   .sidebar .site-nav .nav-search { flex: 0 0 9.5rem; margin: 0; }
   .sign-out { margin: 0; padding: 0; border: 0; flex-direction: row; }
   .sidebar > .theme-switch { order: 2; margin: 0; }
+  /* In a row a bolder current link would push its neighbours along. */
+  .sidebar nav a[aria-current="page"], .sign-out > a[aria-current="page"] { font-weight: 500; }
 }
 /* A phone keeps the brand, the account links and the theme on one row: the links keep their names for screen readers. */
 @media (max-width: 30rem) {
@@ -543,13 +573,17 @@ body.plain { display: block; }
   padding: .7rem 2.25rem; border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--canvas) 86%, transparent); backdrop-filter: blur(12px);
 }
-.crumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; list-style: none; margin: 0; padding: 0; font-size: .82rem; color: var(--ink-2); }
+/* One line whatever the trail: earlier steps give way first, so the bar is the same height on every screen. */
+.crumbs ol { display: flex; align-items: center; gap: .5rem; list-style: none; margin: 0; padding: 0; font-size: .82rem; color: var(--ink-2); white-space: nowrap; }
 .crumbs a { color: var(--ink-2); text-decoration: none; }
 .crumbs a:hover { color: var(--ink); text-decoration: underline; }
-.crumbs li { display: flex; align-items: center; gap: .5rem; }
+.crumbs li { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.crumbs li:last-child { flex: none; max-width: 100%; }
+.crumbs li > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .crumbs li + li::before { content: ""; width: .85rem; height: .85rem; background: currentColor; opacity: .4; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat; }
 .crumbs [aria-current="page"] { color: var(--ink); font-weight: 600; }
-main { width: 100%; max-width: 66rem; margin: 0 auto; padding: 2.5rem 2.25rem 6rem; }
+/* Set from the left on every screen, the editors' wider one included, so the heading never moves. */
+main { width: 100%; max-width: 66rem; margin: 0; padding: 2rem 2.25rem 6rem; }
 body.plain main { max-width: 25rem; margin: 0 auto; padding: 5rem 1.25rem; }
 @media (max-width: 42rem) {
   .crumbs { position: static; padding: .6rem 1rem; }
@@ -795,11 +829,11 @@ button.secondary:disabled:hover { background: var(--surface); border-color: var(
 /* The editor and the site beside it: the site gets the room, because it is the point. */
 .split { display: grid; gap: 2rem; align-items: start; grid-template-columns: minmax(0, 1fr); }
 .split-handle { display: none; }
-main:has(> .split) { max-width: none; padding-top: 1.5rem; }
+main:has(> .split) { max-width: none; }
 main:has(> .split) .page-head { margin-bottom: .75rem; }
-main:has(> .split) h1 { font-size: 1.4rem; }
 @media (min-width: 72rem) {
-  .split { grid-template-columns: minmax(0, 1fr) auto minmax(20rem, var(--live-width, 46%)); gap: 1.25rem; }
+  /* The handle's column is there before the script shows the handle, so the preview does not step aside for it. */
+  .split { grid-template-columns: minmax(0, 1fr) .6rem minmax(20rem, var(--live-width, 46%)); gap: 1.25rem; }
   /* Placed by hand: a hidden handle takes no cell, and the preview must not slide into its column. */
   .split > form { grid-column: 1; grid-row: 1; }
   .split > .split-handle { grid-column: 2; grid-row: 1 / span 2; }
@@ -814,7 +848,8 @@ main:has(> .split) h1 { font-size: 1.4rem; }
 .live-bar h2 { display: inline-flex; align-items: center; gap: .45rem; margin: 0; font-size: .84rem; font-weight: 650; letter-spacing: 0; }
 .live-bar h2::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
 .live-url { flex: 1 1 10rem; min-width: 0; padding: .2rem .6rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-family: var(--mono); font-size: .74rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.live-bar p { flex: 1 0 100%; order: 10; margin: .35rem 0 0; font-size: .76rem; color: var(--ink-3); max-width: none; }
+/* The status changes as the page answers: two lines are kept for it, so the frame below never moves. */
+.live-bar p { flex: 1 0 100%; order: 10; margin: .35rem 0 0; font-size: .76rem; color: var(--ink-3); max-width: none; min-height: 3.1em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .live-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .35rem; margin-left: auto; min-width: 0; }
 .live-toggle { display: inline-flex; align-items: center; gap: .3rem; min-height: 1.9rem; margin: 0; padding: 0 .55rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: .74rem; font-weight: 600; cursor: pointer; user-select: none; }
 .live-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
@@ -822,6 +857,11 @@ main:has(> .split) h1 { font-size: 1.4rem; }
 .live-toggle:hover { color: var(--ink); }
 .live-toggle:has(input:checked) { background: var(--accent); color: #fff; border-color: var(--accent); }
 .live-toggle:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* The controls the script turns on keep their places until it does, for browsers that paint before it runs. */
+@media (scripting: enabled) {
+  .live-tools > .live-toggle[hidden] { display: inline-flex !important; visibility: hidden; }
+  .live-tools > .icon-button[hidden] { display: inline-grid !important; visibility: hidden; }
+}
 .icon-button { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink-3); }
 .icon-button:hover { color: var(--ink); background: var(--surface); }
 .icon-button .icon { width: .95rem; height: .95rem; }
@@ -1084,7 +1124,11 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
 body.plain .flash { margin-bottom: 1rem; }
 
 /* Visual editor. */
-.editor { border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; }
+/* The editor opens at the height of the textarea it replaces. */
+textarea[data-richtext] { height: 15rem; }
+.editor { display: flex; flex-direction: column; min-height: 15rem; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; }
+.editor-surface { flex: 1 1 auto; display: flex; flex-direction: column; }
+.editor-surface .ProseMirror { flex: 1 1 auto; }
 .editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
 .editor-toolbar { display: flex; flex-wrap: wrap; gap: .1rem; padding: .3rem .4rem; border-bottom: 1px solid var(--line); background: var(--surface-2); }
 .editor-toolbar button { min-height: 1.7rem; min-width: 1.7rem; padding: 0; background: transparent; color: var(--ink-2); border: 1px solid transparent; border-radius: 5px; }
