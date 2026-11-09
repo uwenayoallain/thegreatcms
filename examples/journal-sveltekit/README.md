@@ -48,3 +48,9 @@ axe-clean pages, one `h1` each, no script but the speculation rules and no
 module preload in any built page, every internal link pointing at a page that
 was built at exactly that address, every essay listed newest first and rendered
 from its Markdown, and a labelled form that posts to the studio.
+
+In Chromium, when one is installed, `tests/layout.test.ts` loads every page at
+375, 768, 1024, 1280 and 1600 pixels wide and fails on any layout shift, or on
+a masthead, main column or footer that sits differently from one page to the
+next or across a click. It runs again with the font held back, where
+`font-display: optional` must keep the fallback rather than reflow the page.

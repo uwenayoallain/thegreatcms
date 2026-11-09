@@ -45,3 +45,9 @@ pnpm --filter @greatcms/example-changelog-nuxt build  # then `test`
 axe-clean pages, one `h1` each, no executable script or module preload in any
 generated page, every release listed newest first and rendered from its
 Markdown, and a labelled form that posts to the studio.
+
+In Chromium, when one is installed, `tests/layout.test.ts` loads every page at
+375, 768, 1024, 1280 and 1600 pixels wide and fails on any layout shift, or on
+a masthead, main column or footer that sits differently from one page to the
+next or across a click. It runs again with the font held back, where
+`font-display: optional` must keep the fallback rather than reflow the page.

@@ -48,3 +48,9 @@ axe-clean pages, one `h1` each, nothing of the studio in an exported page, one
 minified stylesheet, the JavaScript Next.js brings kept under 700 KB before
 compression, every menu item priced and grouped in the schema's order, and
 every form control labelled.
+
+In Chromium, when one is installed, `tests/layout.test.ts` loads every page at
+375, 768, 1024, 1280 and 1600 pixels wide and fails on any layout shift, or on
+a masthead, main column or footer that sits differently from one page to the
+next or across a click. It runs again with the font held back, where
+`font-display: optional` must keep the fallback rather than reflow the page.
