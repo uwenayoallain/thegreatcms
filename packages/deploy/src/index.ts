@@ -3,9 +3,21 @@
 import { Deployer, readStatus, type DeployOptions } from "./deploy.js";
 
 export { Deployer, readStatus } from "./deploy.js";
-export { PreviewRunner, createPreviewServer, previewMain, waitingPage } from "./preview.js";
+export {
+  PreviewRunner,
+  createPreviewServer,
+  previewMain,
+  previewPage,
+  waitingPage,
+} from "./preview.js";
 export type { PreviewOptions, PreviewState } from "./preview.js";
-export { createPreviewSitesServer, devCommand, PreviewSites, SiteList } from "./previews.js";
+export {
+  createPreviewSitesServer,
+  devCommand,
+  PreviewSites,
+  SiteList,
+  WARM_PATH,
+} from "./previews.js";
 export type { PreviewSite, PreviewSitesOptions } from "./previews.js";
 export type { DeployOptions, Outcome, Release, Status } from "./deploy.js";
 

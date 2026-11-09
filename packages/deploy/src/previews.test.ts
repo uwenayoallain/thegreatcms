@@ -120,7 +120,7 @@ describe("one proxy for every site", () => {
 
     const first = await get(port, "one-preview.example.com", "/page");
     expect(first.status).toBe(503);
-    expect(first.body).toContain("Starting your preview");
+    expect(first.body).toContain("Starting the preview");
 
     await until(async () => (await get(port, "one-preview.example.com")).status === 200);
     expect((await get(port, "one-preview.example.com", "/page")).body).toBe(
@@ -131,6 +131,15 @@ describe("one proxy for every site", () => {
       "two two-preview.example.com /x",
     );
     expect(sites.status().map((entry) => entry.state)).toEqual(["running", "running"]);
+  }, 30000);
+
+  it("starts a site's dev server when warmed, without waiting for it", async () => {
+    list([{ host: "warm-preview.example.com", path: answering("warm") }]);
+    const { port, sites } = await up();
+
+    expect((await get(port, "warm-preview.example.com", "/__greatcms/warm")).status).toBe(204);
+    expect(sites.status()[0]?.state).toBe("starting");
+    await until(async () => (await get(port, "warm-preview.example.com")).status === 200);
   }, 30000);
 
   it("serves nothing for a host the studio did not list", async () => {

@@ -37,6 +37,10 @@ export class PreviewRunner {
   state: PreviewState = "stopped";
   lastRequest = 0;
   startedAt = 0;
+  /** Whether this start installs the site's packages first, which is the slow part. */
+  get installing(): boolean {
+    return /\binstall\b/.test(this.options.command);
+  }
   private child: ChildProcess | undefined;
   private timer: NodeJS.Timeout | undefined;
   private failure: string | undefined;
@@ -127,28 +131,77 @@ export class PreviewRunner {
   }
 }
 
-/** The page the browser sees while the dev server comes up; it asks again every two seconds. */
-export function waitingPage(runner: PreviewRunner): string {
-  const { failure } = runner.status();
+const ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+export function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (character) => ESCAPES[character] as string);
+}
+
+/**
+ * The one page the preview service shows instead of a site: plain and neutral, so it sits as well
+ * inside the studio's frame as in a tab of its own, light or dark, with nothing that moves.
+ */
+export function previewPage(options: {
+  title: string;
+  lines: string[];
+  note?: string;
+  /** Seconds before the browser asks again, while there is something to wait for. */
+  refresh?: number;
+}): string {
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Starting the preview</title>
-${failure ? "" : '<meta http-equiv="refresh" content="2">'}
+<html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(options.title)}</title>
+${options.refresh ? `<meta http-equiv="refresh" content="${options.refresh}">` : ""}
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#15171a;background:#f6f6f4}
-main{text-align:center;padding:2rem;max-width:28rem}
-.dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:#0d7a5f;animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{50%{opacity:.25}}
-@media (prefers-reduced-motion:reduce){.dot{animation:none}}
-code{font-size:.9em}
+:root{--bg:#f6f6f4;--ink:#16181b;--muted:#5d6168;--line:#dcddd8}
+@media (prefers-color-scheme:dark){:root{--bg:#141517;--ink:#e8e9eb;--muted:#a3a7ad;--line:#2c2f34}}
+html{background:var(--bg);color:var(--ink);scrollbar-gutter:stable}
+body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{width:min(30rem,100% - 3rem);padding:2rem 0}
+p{margin:0 0 .5rem;color:var(--muted)}
+h1{margin:0 0 .75rem;font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
+.label{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+.note{margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--line);font-size:.85rem}
 </style></head>
 <body><main>
-${
-  failure
-    ? `<p><strong>The preview could not start.</strong></p><p>The dev server ${failure}. Check the preview container's log.</p>`
-    : `<p><span class="dot"></span></p><p><strong>Starting your preview.</strong></p><p>The dev server runs only while someone is editing; the first look after a quiet spell takes a moment.</p>`
-}
+<p class="label">Preview</p>
+<h1>${escapeHtml(options.title)}</h1>
+${options.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n")}
+${options.note ? `<p class="note">${escapeHtml(options.note)}</p>` : ""}
 </main></body></html>`;
+}
+
+/** The page the browser sees while the dev server comes up; it asks again every two seconds. */
+export function waitingPage(runner: PreviewRunner, now = Date.now()): string {
+  const { failure } = runner.status();
+  if (failure) {
+    return previewPage({
+      title: "The preview did not start",
+      lines: [`The site's dev server ${failure}.`],
+      note: "Its output is in the preview service's log. Reload this page to try again.",
+    });
+  }
+  const seconds = runner.startedAt ? Math.max(0, Math.round((now - runner.startedAt) / 1000)) : 0;
+  return previewPage({
+    title: "Starting the preview",
+    lines: [
+      runner.installing
+        ? "Installing the site's packages, then starting its dev server."
+        : "Starting the site's dev server.",
+      seconds > 1
+        ? `${seconds} seconds so far. This page shows the site once it answers.`
+        : "This page shows the site once it answers.",
+    ],
+    note: "The preview runs only while someone is editing, so the first look after a quiet spell takes a moment.",
+    refresh: 2,
+  });
 }
 
 export function proxy(options: PreviewOptions, runner: PreviewRunner) {

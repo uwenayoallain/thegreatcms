@@ -2,7 +2,7 @@
 
 import { type AddressInfo, connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { createPreviewServer, waitingPage, type PreviewOptions } from "./preview.js";
+import { createPreviewServer, previewPage, waitingPage, type PreviewOptions } from "./preview.js";
 
 // The "dev server": Node answering hello on $PORT, after a short delay, with a WebSocket echo.
 const DEV = `node -e '
@@ -58,7 +58,7 @@ describe("the preview proxy", () => {
 
     const first = await fetch(`${url}/page`);
     expect(first.status).toBe(503);
-    expect(await first.text()).toContain("Starting your preview");
+    expect(await first.text()).toContain("Starting the preview");
     expect(runner.state).toBe("starting");
 
     await until(async () => (await fetch(`${url}/page`)).status === 200);
@@ -83,7 +83,7 @@ describe("the preview proxy", () => {
     const { url, runner } = await up({ command: "exit 3", startTimeout: 5 });
     await fetch(url);
     await until(() => runner.state === "stopped");
-    expect(waitingPage(runner)).toContain("could not start");
+    expect(waitingPage(runner)).toContain("The preview did not start");
     expect(waitingPage(runner)).not.toContain("http-equiv");
   });
 });
@@ -114,5 +114,25 @@ describe("live reload through the proxy", () => {
 
     expect(await upgradeAnswer(url, "/socket")).toBe("HTTP/1.1 101 Switching Protocols");
     expect(await upgradeAnswer(url, "/refuse")).toBe("HTTP/1.1 400 Bad Request");
+  });
+});
+
+describe("the page shown while waiting", () => {
+  it("says what is happening and for how long, with nothing that animates", async () => {
+    const { runner } = await up({ command: `npm install && ${DEV}` });
+    runner.touch();
+    const page = waitingPage(runner, runner.startedAt + 12_000);
+
+    expect(page).toContain("Installing the site&#39;s packages");
+    expect(page).toContain("12 seconds so far");
+    expect(page).toContain('http-equiv="refresh"');
+    expect(page).toContain("prefers-color-scheme:dark");
+    expect(page).not.toMatch(/animation|@keyframes|transition/);
+  });
+
+  it("escapes whatever it is told", () => {
+    const page = previewPage({ title: "<b>x</b>", lines: ['"><script>alert(1)</script>'] });
+    expect(page).not.toContain("<script>");
+    expect(page).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });

@@ -7,7 +7,17 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { join } from "node:path";
-import { type PreviewOptions, PreviewRunner, proxy, STATUS_PATH, upgrade } from "./preview.js";
+import {
+  previewPage,
+  type PreviewOptions,
+  PreviewRunner,
+  proxy,
+  STATUS_PATH,
+  upgrade,
+} from "./preview.js";
+
+/** Starts a site's dev server without waiting for it, so it is up by the time someone looks. */
+export const WARM_PATH = "/__greatcms/warm";
 
 export interface PreviewSite {
   id: string;
@@ -205,17 +215,15 @@ function notice(res: ServerResponse, status: number, message: string): void {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",
   });
-  res.end(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Preview</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#15171a;background:#f6f6f4}main{text-align:center;padding:2rem;max-width:28rem}</style>
-</head><body><main><p><strong>No preview here.</strong></p><p>${escapeHtml(message)}</p></main></body></html>`);
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+  res.end(
+    previewPage({
+      title: status === 404 ? "No preview at this address" : "This site cannot be previewed",
+      lines: [message],
+      note:
+        status === 404
+          ? "Previews appear here once the site is connected in the studio."
+          : "Fix that in the site's repository, and the next visit starts it.",
+    }),
   );
 }
 
@@ -224,6 +232,12 @@ export function createPreviewSitesServer(options: PreviewSitesOptions) {
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const found = sites.lookup(req.headers.host ?? "");
     if ("status" in found) return notice(res, found.status, found.message);
+    if (req.url === WARM_PATH) {
+      found.runner.touch();
+      res.writeHead(204, { "cache-control": "no-store" });
+      res.end();
+      return;
+    }
     if (req.url === STATUS_PATH) {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(JSON.stringify(found.runner.status()));
