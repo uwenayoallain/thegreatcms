@@ -11,6 +11,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
+import { GitAccess } from "../src/git-access.js";
+import { GitHub } from "../src/github.js";
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
@@ -77,6 +79,8 @@ const LONG = Array.from({ length: 12 }, (_, i) => `<p>Paragraph ${i + 1} of copy
 const SCREENS: Array<{ name: string; path: string; site?: string; signedOut?: boolean }> = [
   { name: "sites", path: "/" },
   { name: "connect", path: "/sites/new" },
+  { name: "set up", path: "/sites/setup?path=SITES_ROOT/bare" },
+  { name: "git access", path: "/git-access" },
   { name: "inbox", path: "/inbox" },
   { name: "editors", path: "/editors" },
   { name: "site", path: "/sites/site-1", site: "site-1" },
@@ -166,6 +170,7 @@ interface Measure {
 let server: ReturnType<typeof serve>;
 let devServer: ReturnType<typeof createServer>;
 let origin: string;
+let sitesRoot: string;
 const roots: string[] = [];
 
 function makeSiteFolder(): string {
@@ -229,7 +234,20 @@ beforeAll(async () => {
     spamScore: 0,
     spamReasons: [],
   });
-  const app = createApp({ store, password: PASSWORD, secret: SECRET });
+  // A sites folder with one site ready to connect and one to set up, as the connect page lists them.
+  sitesRoot = mkdtempSync(join(tmpdir(), "greatcms-layout-sites-"));
+  roots.push(sitesRoot);
+  mkdirSync(join(sitesRoot, "ready", ".cms"), { recursive: true });
+  writeFileSync(join(sitesRoot, "ready", ".cms", "schema.yaml"), SCHEMA);
+  mkdirSync(join(sitesRoot, "bare"));
+  const app = createApp({
+    store,
+    password: PASSWORD,
+    secret: SECRET,
+    sitesRoot,
+    gitAccess: new GitAccess(join(sitesRoot, ".git-access"), {}),
+    github: new GitHub(join(sitesRoot, ".github-app.json")),
+  });
   server = serve({ fetch: app.fetch, port: 0, createServer });
   const address = server.address();
   origin = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -297,7 +315,9 @@ async function measure(screen: (typeof SCREENS)[number], width: number): Promise
   });
   const page: Page = await context.newPage();
   try {
-    await page.goto(origin + path, { waitUntil: "load" });
+    await page.goto(origin + path.replace("SITES_ROOT", encodeURIComponent(sitesRoot)), {
+      waitUntil: "load",
+    });
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(400);
     const shots = process.env.GREATCMS_TEST_SCREENSHOTS;
