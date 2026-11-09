@@ -48,8 +48,10 @@ function foldWithOffsets(text: string): { folded: string; from: number[] } {
 
 /** Where `needle` is found in `haystack`, as a range of `haystack` itself. */
 export function findFolded(haystack: string, needle: string): [number, number] | undefined {
-  const { folded, from } = foldWithOffsets(haystack);
   const target = fold(needle);
+  // Folding the whole text at once says whether it is there; where it is costs a pass per letter.
+  if (!fold(haystack).includes(target)) return undefined;
+  const { folded, from } = foldWithOffsets(haystack);
   const at = folded.indexOf(target);
   if (at === -1) return undefined;
   // The end is where the next source character starts, so a trailing combining accent stays in.
