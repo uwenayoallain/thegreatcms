@@ -1,8 +1,8 @@
 /** `greatcms-deploy`: watch a repository, build every new commit, keep the live folder whole. */
 
-import { Deployer, readStatus, type DeployOptions } from "./deploy.js";
+import { Deployer, healthy, readStatus, type DeployOptions } from "./deploy.js";
 
-export { Deployer, readStatus } from "./deploy.js";
+export { Deployer, healthy, readStatus } from "./deploy.js";
 export {
   PreviewRunner,
   createPreviewServer,
@@ -29,6 +29,7 @@ const HELP = `greatcms-deploy: build a site on every new commit and swap it live
   greatcms-deploy status     print status.json
   greatcms-deploy releases   list the releases kept on disk, newest first
   greatcms-deploy rollback <sha>   put an earlier release back live until the next commit
+  greatcms-deploy health     exit 0 while a watcher is checking or building here (a healthcheck)
 
 Environment:
   DEPLOY_SOURCE    repository: a path on this machine, or a URL git can clone   (required)
@@ -83,7 +84,15 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     process.stdout.write(`${JSON.stringify(readStatus(options.root), null, 2)}\n`);
     return 0;
   }
+  const interval = Number(env.DEPLOY_INTERVAL || 10) * 1000;
+  if (!Number.isFinite(interval) || interval <= 0) {
+    process.stderr.write("DEPLOY_INTERVAL must be a positive number.\n");
+    return 1;
+  }
+  if (command === "health") return healthy(options.root, interval, options.timeout) ? 0 : 1;
   const deployer = new Deployer(options);
+  // A build runs in its own process group, so it is ended by hand however this process ends.
+  process.on("exit", () => deployer.abort());
   if (command === "rollback") {
     const ok = await deployer.rollback(argv[1] ?? "");
     if (!ok) process.stderr.write("No such release. `greatcms-deploy releases` lists them.\n");
@@ -94,6 +103,8 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     return 0;
   }
   if (command === "once") {
+    for (const signal of ["SIGINT", "SIGTERM"] as const)
+      process.once(signal, () => process.exit(1));
     const result = await deployer.once();
     return result.outcome === "failed" ? 1 : 0;
   }
@@ -102,15 +113,18 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     return 1;
   }
 
-  const interval = Number(env.DEPLOY_INTERVAL || 10) * 1000;
   options.log(
     `watching ${options.source} (${options.branch}) every ${interval / 1000}s; serving ${options.root}/current`,
   );
   // One check at a time, the next scheduled only after this one has finished.
   return new Promise<number>((resolve) => {
     let timer: NodeJS.Timeout | undefined;
+    let stopped = false;
     const stop = () => {
+      stopped = true;
       clearTimeout(timer);
+      options.log("stopping");
+      deployer.abort();
       resolve(0);
     };
     for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, stop);
@@ -120,7 +134,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
         .then(() => deployer.once())
         .catch((error: Error) => options.log(`check failed: ${error.message.split("\n")[0]}`))
         .then(() => {
-          timer = setTimeout(check, interval);
+          if (!stopped) timer = setTimeout(check, interval);
         });
     void check();
   });
