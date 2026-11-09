@@ -1,6 +1,6 @@
 /** @greatcms/reader: read managed content at build time. */
 
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import {
   type CmsConfig,
@@ -82,6 +82,24 @@ export interface CollectionEntry {
   body: string;
 }
 
+/** The largest `.cms` file and the largest content file a reader takes on. */
+const MAX_DEFINITION_BYTES = 4 * 1024 * 1024;
+const MAX_CONTENT_BYTES = 32 * 1024 * 1024;
+
+/** In development a file must have sat unchanged this long before its parse is kept. */
+const SETTLED_MS = 2000;
+
+/** Parsed files, shared by every reader in the process and trusted only while the file is unchanged. */
+const parsedFiles = new Map<string, { stamp: string; value: unknown }>();
+
+const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+function tooLarge(file: string, size: number, limit: number): Error {
+  return new Error(
+    `${file} is ${mb(size)}, and the reader takes files up to ${mb(limit)}.\n  fix: split it into smaller files; media belongs in the media folder, not inside content.`,
+  );
+}
+
 export class CmsReader {
   readonly root: string;
   readonly schema: CmsSchema;
@@ -90,6 +108,7 @@ export class CmsReader {
   private readonly drafts: boolean;
   private readonly cache = new Map<string, RegionDocument | null>();
   private readonly entryCache = new Map<string, CollectionEntry[]>();
+  private realRoot: string | undefined;
 
   constructor(options: ReaderOptions = {}) {
     this.root = resolve(options.root ?? process.cwd());
@@ -106,9 +125,9 @@ export class CmsReader {
         `No .cms/schema.yaml found under ${this.root}.\n  fix: run \`greatcms init\`, or pass { root } pointing at the directory that contains .cms/`,
       );
     }
-    this.schema = parseSchema(readFileSync(join(this.root, schemaFile), "utf8"), {
-      file: schemaFile,
-    });
+    this.schema = this.definition(schemaFile, (source) =>
+      parseSchema(source, { file: schemaFile }),
+    );
 
     const configFile = firstExisting(this.root, [
       ".cms/config.json",
@@ -116,8 +135,34 @@ export class CmsReader {
       ".cms/config.yml",
     ]);
     this.config = configFile
-      ? parseConfig(readFileSync(join(this.root, configFile), "utf8"), configFile)
+      ? this.definition(configFile, (source) => parseConfig(source, configFile))
       : DEFAULT_CONFIG;
+  }
+
+  /** The schema or config, parsed once per process however many readers a build creates. */
+  private definition<T>(file: string, parse: (source: string) => T): T {
+    const absolute = join(this.root, file);
+    const stat = statSync(absolute);
+    if (stat.size > MAX_DEFINITION_BYTES) throw tooLarge(file, stat.size, MAX_DEFINITION_BYTES);
+    return this.remembered(absolute, stat, () => parse(readFileSync(absolute, "utf8")));
+  }
+
+  /** `produce()`, or what it gave last time if the file has not changed since. */
+  private remembered<T>(
+    absolute: string,
+    stat: { mtimeMs: number; size: number; ino: number },
+    produce: () => T,
+  ): T {
+    // Keyed by root too: a link that stays inside one site's root may leave another's.
+    const key = `${this.root}\0${absolute}`;
+    const stamp = `${stat.mtimeMs}:${stat.size}:${stat.ino}`;
+    // Two edits inside one tick of the clock share a stamp, so in dev a fresh file is read again.
+    const trusted = !this.drafts || Date.now() - stat.mtimeMs > SETTLED_MS;
+    const hit = parsedFiles.get(key);
+    if (trusted && hit?.stamp === stamp) return hit.value as T;
+    const value = produce();
+    parsedFiles.set(key, { stamp, value });
+    return value;
   }
 
   /** Resolves a region: schema defaults, then the stored file layered on top. */
@@ -138,8 +183,7 @@ export class CmsReader {
     }
 
     const relative = regionFilePath(this.config, regionId);
-    const source = this.read(relative);
-    const stored = source === null ? null : parseRegionFile(source, relative);
+    const stored = this.read(relative, (source) => parseRegionFile(source, relative));
 
     const resolved = resolveRegion(this.schema, regionId, stored);
     this.cache.set(regionId, resolved);
@@ -153,21 +197,35 @@ export class CmsReader {
     return Array.isArray(blocks) ? (blocks as Array<T & { _type: string }>) : [];
   }
 
-  /** A file's contents, taking an unsaved draft over the committed copy, and refusing symlinks outside the site root. */
-  private read(relative: string): string | null {
+  /** A file, parsed, taking an unsaved draft over the committed copy. */
+  private read<T>(relative: string, parse: (source: string) => T): T | null {
     if (this.drafts) {
-      const draft = this.readInside(join(this.root, draftFilePath(relative)));
+      const draft = this.readInside(join(this.root, draftFilePath(relative)), relative, parse);
       if (draft !== null) return draft;
     }
-    return this.readInside(join(this.root, relative));
+    return this.readInside(join(this.root, relative), relative, parse);
   }
 
-  private readInside(absolute: string): string | null {
-    if (!existsSync(absolute)) return null;
+  /** Null for a file that is missing, unreadable, or a link to somewhere outside the site root. */
+  private readInside<T>(
+    absolute: string,
+    relative: string,
+    parse: (source: string) => T,
+  ): T | null {
+    const stat = statSync(absolute, { throwIfNoEntry: false });
+    if (!stat?.isFile()) return null;
+    if (stat.size > MAX_CONTENT_BYTES) throw tooLarge(relative, stat.size, MAX_CONTENT_BYTES);
+    return this.remembered(absolute, stat, () => {
+      const source = this.sourceInside(absolute);
+      return source === null ? null : parse(source);
+    });
+  }
+
+  private sourceInside(absolute: string): string | null {
     try {
-      const realRoot = realpathSync(this.root);
+      this.realRoot ??= realpathSync(this.root);
       const realFile = realpathSync(absolute);
-      if (realFile !== realRoot && !realFile.startsWith(realRoot + sep)) return null;
+      if (!realFile.startsWith(this.realRoot + sep)) return null;
       return readFileSync(realFile, "utf8");
     } catch {
       return null;
@@ -207,26 +265,30 @@ export class CmsReader {
     const extension = `.${entryExtension(def.format)}`;
     const entries: CollectionEntry[] = [];
 
+    const base = def.path.replace(/\/+$/, "");
     for (const file of readdirSync(dir).toSorted()) {
       if (!file.endsWith(extension)) continue;
-      const relative = `${def.path.replace(/\/+$/, "")}/${file}`;
-      const source = this.read(relative);
-      if (source === null) continue;
+      const relative = `${base}/${file}`;
       const slug = file.slice(0, -extension.length);
-
-      if (def.format === "json") {
-        entries.push({ slug, file: relative, data: parseRegionFile(source, relative), body: "" });
-        continue;
-      }
-
-      const { data, body } = parseFrontmatter(source, relative);
-      // The body is a normal field to consumers; Markdown is only where it is stored.
-      if (def.body) data[def.body] = body;
-      entries.push({ slug, file: relative, data, body });
+      const entry = this.read(relative, (source) => readEntry(def, slug, relative, source));
+      if (entry !== null) entries.push(entry);
     }
 
     return entries;
   }
+}
+
+function readEntry(
+  def: CollectionDef,
+  slug: string,
+  file: string,
+  source: string,
+): CollectionEntry {
+  if (def.format === "json") return { slug, file, data: parseRegionFile(source, file), body: "" };
+  const { data, body } = parseFrontmatter(source, file);
+  // The body is a normal field to consumers; Markdown is only where it is stored.
+  if (def.body) data[def.body] = body;
+  return { slug, file, data, body };
 }
 
 /** Convenience for the common case: one site, rooted at the current directory. */
