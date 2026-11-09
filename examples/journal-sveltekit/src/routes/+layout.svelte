@@ -1,6 +1,6 @@
 <script>
-  import "@fontsource-variable/newsreader/opsz.css";
-  import "@fontsource-variable/newsreader/opsz-italic.css";
+  import roman from "@fontsource-variable/newsreader/files/newsreader-latin-opsz-normal.woff2?url";
+  import italic from "@fontsource-variable/newsreader/files/newsreader-latin-opsz-italic.woff2?url";
   import "../app.css";
   import { page } from "$app/state";
 
@@ -13,6 +13,12 @@
     return undefined;
   };
 </script>
+
+<svelte:head>
+  <!-- Both faces are on every page (the title is italic); `optional` uses only what arrives in time. -->
+  <link rel="preload" href={roman} as="font" type="font/woff2" crossorigin="anonymous" />
+  <link rel="preload" href={italic} as="font" type="font/woff2" crossorigin="anonymous" />
+</svelte:head>
 
 <a class="skip-link" href="#main">Skip to content</a>
 

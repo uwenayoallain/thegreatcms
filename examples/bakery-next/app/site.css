@@ -1,5 +1,16 @@
 /* Hearth: an enamel-sign blue on white, a serif for what is said aloud, a printed menu. */
 
+/* Times New Roman or a metric twin, scaled to Instrument Serif, for a page the font misses. */
+@font-face {
+  font-family: "Instrument Serif Fallback";
+  src:
+    local("Times New Roman"), local("TimesNewRomanPSMT"), local("Liberation Serif"), local("Tinos");
+  size-adjust: 83.99%;
+  ascent-override: 117.87%;
+  descent-override: 36.91%;
+  line-gap-override: 0%;
+}
+
 :root {
   color-scheme: light;
   --edge: max(var(--gap), calc((100% - 76rem) / 2 + var(--gap)));
@@ -13,7 +24,7 @@
   --blue-deep: #172f8f;
   --blue-wash: #eef1fb;
   --butter: #f3c94a;
-  --serif: var(--font-serif), "Iowan Old Style", Georgia, serif;
+  --serif: var(--font-serif), "Instrument Serif Fallback", Georgia, serif;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --gap: clamp(1.25rem, 4vw, 3rem);
   --section: clamp(3.5rem, 8vw, 6.5rem);
@@ -24,6 +35,11 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+html {
+  /* Room for a scrollbar on every page, so a short page is never wider than a long one. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -97,7 +113,8 @@ a:hover {
       color 0.15s ease,
       background-color 0.15s ease,
       border-color 0.15s ease,
-      text-decoration-color 0.15s ease;
+      text-decoration-color 0.15s ease,
+      transform 0.12s ease;
   }
 }
 
@@ -375,6 +392,12 @@ main > section {
 
 .section-head a:hover {
   text-decoration-color: currentColor;
+}
+
+.section-head a::after {
+  content: "→" / "";
+  display: inline-block;
+  margin-left: 0.4rem;
 }
 
 .featured {
@@ -779,6 +802,15 @@ textarea:focus-visible {
   border-bottom: 2px dotted #c4c1b9;
 }
 
+/* The leader inks in under the line being read, as a finger would trace it. */
+.item:hover .leader {
+  border-bottom-color: var(--blue);
+}
+
+.item:hover .price {
+  color: var(--blue);
+}
+
 .price {
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -920,5 +952,107 @@ textarea:focus-visible {
 
   .form > .button {
     justify-self: stretch;
+  }
+}
+
+/* Motion moves only transform and opacity, so nothing it does can shift the layout. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+
+  /* The notice and masthead hold still while the page under them changes. */
+  body > header {
+    view-transition-name: masthead;
+  }
+
+  ::view-transition-old(root) {
+    animation: 0.14s ease-in both page-out;
+  }
+
+  ::view-transition-new(root) {
+    animation: 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) both page-in;
+  }
+
+  @keyframes page-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+  }
+
+  /* The baker's stamp is pressed onto the page once. */
+  .stamp {
+    animation: stamp-press 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both;
+  }
+
+  @keyframes stamp-press {
+    from {
+      opacity: 0;
+      transform: scale(1.15) rotate(-12deg);
+    }
+  }
+
+  .button:active,
+  .pill:active {
+    transform: translateY(1px);
+  }
+
+  .section-head a::after {
+    transition: transform 0.2s ease;
+  }
+
+  .section-head a:hover::after {
+    transform: translateX(0.2rem);
+  }
+
+  .choice input:checked {
+    animation: tick 0.2s cubic-bezier(0.3, 1.5, 0.5, 1);
+  }
+
+  @keyframes tick {
+    from {
+      transform: scale(0.55);
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    /* The ring of the stamp turns with the page; the wheat stays upright. */
+    .stamp text {
+      transform-box: view-box;
+      transform-origin: 50% 50%;
+      animation: ring-turn linear both;
+      animation-timeline: scroll(root);
+    }
+
+    @keyframes ring-turn {
+      to {
+        transform: rotate(-180deg);
+      }
+    }
+
+    /* What comes into view is set down on the counter, not already there. */
+    .card,
+    .item,
+    .hours,
+    .visit-grid address,
+    .order-notes li {
+      animation: set-down linear both;
+      animation-timeline: view();
+      animation-range: entry 10% entry 80%;
+    }
+
+    @keyframes set-down {
+      from {
+        opacity: 0;
+        transform: translateY(1.25rem);
+      }
+    }
   }
 }

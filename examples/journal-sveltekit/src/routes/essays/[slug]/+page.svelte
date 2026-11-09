@@ -15,7 +15,7 @@
     <p class="meta">
       <time datetime={essay.date}>{formatDate(essay.date)}</time> · {essay.minutes} min read
     </p>
-    <h1>{essay.title}</h1>
+    <h1 style:view-transition-name="essay-{essay.slug}">{essay.title}</h1>
     {#if essay.dek}<p class="dek">{essay.dek}</p>{/if}
     {#if essay.tags.length}
       <ul class="tags" aria-label="Topics">
@@ -29,12 +29,16 @@
 <nav class="pager" aria-label="More essays">
   {#if data.newer}
     <a href="/essays/{data.newer.slug}/"
-      ><span class="label">Newer</span> <span class="name">{data.newer.title}</span></a
+      ><span class="label">Newer</span> <span class="name" style:view-transition-name="essay-{data.newer.slug}"
+        >{data.newer.title}</span
+      ></a
     >
   {/if}
   {#if data.older}
     <a class="older" href="/essays/{data.older.slug}/"
-      ><span class="label">Older</span> <span class="name">{data.older.title}</span></a
+      ><span class="label">Older</span> <span class="name" style:view-transition-name="essay-{data.older.slug}"
+        >{data.older.title}</span
+      ></a
     >
   {/if}
 </nav>

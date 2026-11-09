@@ -22,7 +22,9 @@
         <span>Latest</span> · <time datetime={data.lead.date}>{formatDate(data.lead.date)}</time> ·
         {data.lead.minutes} min read
       </p>
-      <h2><a href="/essays/{data.lead.slug}/">{data.lead.title}</a></h2>
+      <h2 style:view-transition-name="essay-{data.lead.slug}">
+        <a href="/essays/{data.lead.slug}/">{data.lead.title}</a>
+      </h2>
       {#if data.lead.dek}<p class="dek">{data.lead.dek}</p>{/if}
     </div>
     {#if data.lead.opening}
@@ -41,7 +43,9 @@
       <li>
         <time datetime={essay.date}>{formatDate(essay.date)}</time>
         <div>
-          <h3><a href="/essays/{essay.slug}/">{essay.title}</a></h3>
+          <h3 style:view-transition-name="essay-{essay.slug}">
+            <a href="/essays/{essay.slug}/">{essay.title}</a>
+          </h3>
           {#if essay.dek}<p>{essay.dek}</p>{/if}
           <p class="facts">
             <span>{essay.minutes} min read</span>

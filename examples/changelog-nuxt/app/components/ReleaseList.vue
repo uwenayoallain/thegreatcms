@@ -19,7 +19,7 @@ withDefaults(
       </p>
       <div class="what">
         <span v-if="release.kind" :class="['kind', release.kind]">{{ KINDS[release.kind] }}</span>
-        <component :is="headingTag">
+        <component :is="headingTag" :style="{ 'view-transition-name': `release-${release.slug}` }">
           <a :href="`/changelog/${release.slug}/`">{{ release.title }}</a>
         </component>
       </div>

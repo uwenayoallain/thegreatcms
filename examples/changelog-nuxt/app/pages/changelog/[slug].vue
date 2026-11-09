@@ -17,7 +17,7 @@ useHead({ title: `${release.version}: ${release.title}` });
         <time :datetime="release.date">{{ formatDate(release.date) }}</time>
       </span>
     </p>
-    <h1>{{ release.title }}</h1>
+    <h1 :style="{ 'view-transition-name': `release-${release.slug}` }">{{ release.title }}</h1>
     <!-- A studio edit is stored as sanitized HTML; a file written by hand is trusted like any other source. -->
     <div class="prose" v-html="release.html" />
     <a class="back" href="/changelog/">All releases</a>
