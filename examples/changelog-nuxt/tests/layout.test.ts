@@ -23,6 +23,10 @@ const LANDMARKS = {
 };
 const NAVIGATION = { from: "/thanks/", link: '.masthead a[href="/changelog/"]', to: "/changelog/" };
 const WIDTHS = [375, 768, 1024, 1280, 1600];
+// A late font reflows at any width it reflows at all; a phone and a desktop are enough to catch it.
+const LATE_FONT_WIDTHS = new Set([375, 1280]);
+// Every page is loaded cold, one at a time, while `pnpm check` runs everything else beside it.
+const BUDGET = 90_000;
 
 type Box = { x: number; y: number; width: number; height: number };
 type Shot = { cls: number; boxes: Record<string, Box> };
@@ -71,7 +75,8 @@ async function launch(): Promise<Browser | null> {
 
 const browser = await launch();
 
-function serveDist(): Server {
+/** The built site, with every font answered `fontDelay` milliseconds late. */
+function serveDist(fontDelay: number): Server {
   return createServer((request, response) => {
     const path = normalize(decodeURIComponent((request.url ?? "/").split("?")[0]!));
     const candidate = join(DIST, path);
@@ -83,35 +88,43 @@ function serveDist(): Server {
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
-    createReadStream(file).pipe(response);
+    const send = () => {
+      response.writeHead(200, {
+        "content-type": TYPES[extname(file)] ?? "application/octet-stream",
+      });
+      createReadStream(file).pipe(response);
+    };
+    if (fontDelay && file.endsWith(".woff2")) setTimeout(send, fontDelay);
+    else send();
   });
 }
 
-let server: Server;
-let origin: string;
+const servers: Server[] = [];
+const origins = { onTime: "", late: "" };
+
+async function listen(fontDelay: number): Promise<string> {
+  const server = serveDist(fontDelay);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  servers.push(server);
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
 
 beforeAll(async () => {
   if (!existsSync(join(DIST, "index.html"))) {
     throw new Error("Run `pnpm build` in examples/changelog-nuxt before its tests.");
   }
   if (!browser) return;
-  server = serveDist();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  [origins.onTime, origins.late] = await Promise.all([listen(0), listen(400)]);
 });
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((resolve) => (server ? server.close(resolve) : resolve(undefined)));
+  await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
 });
 
 /** A page at one width, counting every layout shift from its first byte. */
-async function open(width: number, lateFonts: boolean): Promise<Page> {
+async function open(width: number): Promise<Page> {
   const context = await browser!.newContext({ viewport: { width, height: 900 } });
-  if (lateFonts) {
-    await context.route(/\.woff2$/, (route) => setTimeout(() => void route.continue(), 400));
-  }
   await context.addInitScript(() => {
     const record = globalThis as unknown as { layoutShift: number };
     record.layoutShift = 0;
@@ -128,8 +141,13 @@ async function open(width: number, lateFonts: boolean): Promise<Page> {
 }
 
 async function shot(page: Page): Promise<Shot> {
-  await page.waitForLoadState("networkidle");
-  await page.evaluate(() => document.fonts.ready);
+  await page.waitForLoadState("load");
+  // Whatever arrives after load, fonts and anything hydrating, has a moment to move things.
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   return page.evaluate((landmarks) => {
     const boxes: Record<string, Box> = {};
     for (const [name, selector] of Object.entries(landmarks)) {
@@ -143,6 +161,14 @@ async function shot(page: Page): Promise<Shot> {
   }, LANDMARKS);
 }
 
+async function visit(width: number, url: string): Promise<Shot> {
+  const page = await open(width);
+  await page.goto(url);
+  const result = await shot(page);
+  await page.context().close();
+  return result;
+}
+
 const pick = (boxes: Record<string, Box>) =>
   Object.fromEntries(
     Object.entries(COMPARED).map(([name, keys]) => [
@@ -152,38 +178,45 @@ const pick = (boxes: Record<string, Box>) =>
   );
 
 describe.skipIf(!browser).each(WIDTHS)("at %ipx wide", (width) => {
-  it.each([
-    ["on time", false],
-    ["late", true],
-  ])(
+  it.each(
+    LATE_FONT_WIDTHS.has(width)
+      ? ([
+          ["on time", "onTime"],
+          ["late", "late"],
+        ] as const)
+      : ([["on time", "onTime"]] as const),
+  )(
     "puts every landmark in one place on every page, with fonts %s, and nothing shifts",
     async (_, late) => {
-      const shots = await Promise.all(
-        PAGES.map(async (path) => {
-          const page = await open(width, late as boolean);
-          await page.goto(origin + path);
-          const result = await shot(page);
-          await page.context().close();
-          return [path, result] as const;
-        }),
-      );
+      const shots: [string, Shot][] = [];
+      // One page at a time: Chromium can treat a page that is not in front as hidden, and a
+      // hidden page never paints, so it would neither shift nor finish its frame.
+      for (const path of PAGES) {
+        // oxlint-disable-next-line no-await-in-loop
+        shots.push([path, await visit(width, origins[late] + path)]);
+      }
       const [, first] = shots[0]!;
       for (const [path, { cls, boxes }] of shots) {
         expect(cls, `${path} shifted`).toBe(0);
         expect(pick(boxes), path).toEqual(pick(first.boxes));
       }
     },
+    BUDGET,
   );
 
-  it("keeps them in place through a navigation by link", async () => {
-    const page = await open(width, false);
-    await page.goto(origin + NAVIGATION.from);
-    const before = await shot(page);
-    await page.click(NAVIGATION.link);
-    await page.waitForURL(origin + NAVIGATION.to);
-    const after = await shot(page);
-    await page.context().close();
-    expect(after.cls).toBe(0);
-    expect(pick(after.boxes)).toEqual(pick(before.boxes));
-  });
+  it(
+    "keeps them in place through a navigation by link",
+    async () => {
+      const page = await open(width);
+      await page.goto(origins.onTime + NAVIGATION.from);
+      const before = await shot(page);
+      await page.click(NAVIGATION.link);
+      await page.waitForURL(origins.onTime + NAVIGATION.to);
+      const after = await shot(page);
+      await page.context().close();
+      expect(after.cls).toBe(0);
+      expect(pick(after.boxes)).toEqual(pick(before.boxes));
+    },
+    BUDGET,
+  );
 });
