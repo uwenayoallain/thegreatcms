@@ -1150,7 +1150,10 @@ textarea[data-richtext] { height: 15rem; }
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-/* Motion: page changes keep the chrome and the preview in place while the content settles; sections open smoothly; a flash slides in. */
+/*
+ * Motion, only on opacity and transform so it never moves the layout. Between screens the chrome and
+ * the preview hold their place, what changed in them crossfades, and the page settles in beneath.
+ */
 @media (prefers-reduced-motion: no-preference) {
   @view-transition { navigation: auto; }
   .sidebar { view-transition-name: sidebar; }
@@ -1159,10 +1162,16 @@ textarea[data-richtext] { height: 15rem; }
   ::view-transition-old(root) { animation: fade-out 140ms ease-out both; }
   ::view-transition-new(root) { animation: settle 320ms cubic-bezier(.2,.65,.3,1) both; }
   ::view-transition-group(live), ::view-transition-group(sidebar), ::view-transition-group(crumbs) { animation-duration: 0s; }
+  ::view-transition-old(sidebar), ::view-transition-new(sidebar), ::view-transition-old(crumbs), ::view-transition-new(crumbs) { animation-duration: 180ms; animation-timing-function: ease-out; }
   .flash { animation: settle 420ms cubic-bezier(.2,.65,.3,1) both; }
   .block-collapsible > details[open] > .block-fields { animation: appear 300ms ease-out both; }
+  /* A confirmation fades in beside the summary that asked for it. */
+  :is(.inline-confirm, .danger-confirm)[open] > :not(summary) { animation: appear 200ms ease-out backwards; }
   .live-frame { transition: width .45s cubic-bezier(.32,.72,0,1), border-radius .45s cubic-bezier(.32,.72,0,1); }
   .sidebar nav a, .count, .live-devices label { transition: background .35s cubic-bezier(.32,.72,0,1), color .35s cubic-bezier(.32,.72,0,1); }
+  :is(.crumbs a, .theme-switch button, .icon-button, .live-toggle, .sign-out > a, .sidebar button.link, .card-action, a.status.open-site, .entry-list a, .search-hits a, .outline a, .touched a, .block-collapsible > details > summary, :is(.schedule, .inline-confirm, .block-remove-confirm) > summary) { transition: background-color .2s ease-out, color .2s ease-out, border-color .2s ease-out, box-shadow .2s ease-out, transform .2s ease-out; }
+  :is(.entry-list a, .search-hits a) strong { transition: color .2s ease-out; }
+  tbody td { transition: background-color .2s ease-out; }
   @keyframes settle { from { opacity: 0; transform: translateY(.5rem); } }
   @keyframes appear { from { opacity: 0; } }
   @keyframes fade-out { to { opacity: 0; } }
