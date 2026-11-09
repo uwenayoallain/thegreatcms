@@ -179,7 +179,7 @@ ${options.note ? `<p class="note">${escapeHtml(options.note)}</p>` : ""}
 }
 
 /** The page the browser sees while the dev server comes up; it asks again every two seconds. */
-export function waitingPage(runner: PreviewRunner, now = Date.now()): string {
+export function waitingPage(runner: PreviewRunner): string {
   const { failure } = runner.status();
   if (failure) {
     return previewPage({
@@ -188,16 +188,13 @@ export function waitingPage(runner: PreviewRunner, now = Date.now()): string {
       note: "Its output is in the preview service's log. Reload this page to try again.",
     });
   }
-  const seconds = runner.startedAt ? Math.max(0, Math.round((now - runner.startedAt) / 1000)) : 0;
   return previewPage({
     title: "Starting the preview",
     lines: [
       runner.installing
         ? "Installing the site's packages, then starting its dev server."
         : "Starting the site's dev server.",
-      seconds > 1
-        ? `${seconds} seconds so far. This page shows the site once it answers.`
-        : "This page shows the site once it answers.",
+      "This page shows the site once it answers.",
     ],
     note: "The preview runs only while someone is editing, so the first look after a quiet spell takes a moment.",
     refresh: 2,

@@ -118,13 +118,13 @@ describe("live reload through the proxy", () => {
 });
 
 describe("the page shown while waiting", () => {
-  it("says what is happening and for how long, with nothing that animates", async () => {
+  it("says what is happening, with nothing that animates or counts", async () => {
     const { runner } = await up({ command: `npm install && ${DEV}` });
     runner.touch();
-    const page = waitingPage(runner, runner.startedAt + 12_000);
+    const page = waitingPage(runner);
 
     expect(page).toContain("Installing the site&#39;s packages");
-    expect(page).toContain("12 seconds so far");
+    expect(page).not.toMatch(/seconds so far/);
     expect(page).toContain('http-equiv="refresh"');
     expect(page).toContain("prefers-color-scheme:dark");
     expect(page).not.toMatch(/animation|@keyframes|transition/);
