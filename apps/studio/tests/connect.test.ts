@@ -2,6 +2,8 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { type AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import axe from "axe-core";
@@ -259,6 +261,37 @@ describe("the sites folder", () => {
     expect(
       report.results.flatMap((result) => result.messages.map((m) => `${m.ruleId}: ${m.message}`)),
     ).toEqual([]);
+  });
+});
+
+describe("warming a preview", () => {
+  it("starts a site's dev server when its page opens, and none from the sites list", async () => {
+    const asked: string[] = [];
+    const service = createServer((req, res) => {
+      if (req.url === "/__greatcms/warm") asked.push(req.headers.host ?? "");
+      res.writeHead(204).end();
+    });
+    await new Promise<void>((resolve) => service.listen(0, "127.0.0.1", resolve));
+    const probe = `http://127.0.0.1:${(service.address() as AddressInfo).port}`;
+    folder("shop", { ".cms/schema.yaml": SCHEMA });
+    const target = createApp({
+      store,
+      password: PASSWORD,
+      secret: SECRET,
+      sitesRoot: root,
+      previewUrl: "https://{site}-preview.example.com",
+      previewProbe: probe,
+    });
+    await post(target, "/sites", { path: join(root, "shop") });
+    const [site] = store.listSites();
+
+    await target.request("/", { headers: signedIn });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(asked).toEqual([]);
+
+    await target.request(`/sites/${site?.id}`, { headers: signedIn });
+    await expect.poll(() => asked).toEqual(["shop-preview.example.com"]);
+    service.close();
   });
 });
 

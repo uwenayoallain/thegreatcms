@@ -21,10 +21,17 @@ export class Liveness {
     private readonly probeUrls: ReadonlyMap<string, string> = new Map(),
     /** The preview service, for the sites it runs: it answers for them whatever a probe URL says. */
     private readonly managed: (site: Site) => string | undefined = () => undefined,
+    /** Called when one site's screen asks, so its dev server can start before anyone looks. */
+    private readonly opened: (site: Site) => void = () => {},
   ) {}
 
-  /** `null` when the site has no dev server to ask about. */
-  async running(site: Site): Promise<boolean | null> {
+  /** `null` when the site has no dev server to ask about. Asked by a screen about this one site. */
+  running(site: Site): Promise<boolean | null> {
+    this.opened(site);
+    return this.check(site);
+  }
+
+  private async check(site: Site): Promise<boolean | null> {
     const url = this.managed(site) || this.probeUrls.get(site.id) || site.devUrl;
     if (!url) return null;
     const known = this.seen.get(url);
@@ -41,7 +48,8 @@ export class Liveness {
 
   /** Every site at once, for the screens that list them. */
   async all(sites: Site[]): Promise<Map<string, boolean | null>> {
-    const answers = await Promise.all(sites.map((site) => this.running(site)));
+    // The list starts no dev servers: only opening a site does.
+    const answers = await Promise.all(sites.map((site) => this.check(site)));
     return new Map(sites.map((site, index) => [site.id, answers[index] ?? null]));
   }
 }

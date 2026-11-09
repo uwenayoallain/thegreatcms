@@ -5,6 +5,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
@@ -54,6 +55,30 @@ export function sameRepository(url: string): string {
     .replace(/^http:/, "https:")
     .replace(/\/+$/, "")
     .replace(/\.git$/, "");
+}
+
+/**
+ * Asks the preview service to start a site's dev server, and does not wait: by the time someone
+ * opens the editor, the preview is usually up instead of showing its starting page.
+ */
+export function warmPreview(probe: string, devUrl: string): void {
+  try {
+    const target = new URL(probe);
+    const request = httpRequest({
+      host: target.hostname,
+      port: target.port || 80,
+      path: "/__greatcms/warm",
+      method: "GET",
+      headers: { host: new URL(devUrl).host },
+      timeout: 2000,
+    });
+    request.on("response", (response) => response.resume());
+    request.on("timeout", () => request.destroy());
+    request.on("error", () => undefined);
+    request.end();
+  } catch {
+    // A preview that cannot be warmed starts when it is first looked at, as before.
+  }
 }
 
 /** Never sites, and slow to look into. */

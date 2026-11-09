@@ -104,6 +104,7 @@ import {
   originOf,
   PreviewAddresses,
   sameRepository,
+  warmPreview,
   type Folder,
   previewEntries,
   writePreviewList,
@@ -204,9 +205,12 @@ export function createApp(options: AppOptions) {
   const app = new Hono<{ Variables: Variables }>();
   const limiter = options.rateLimiter ?? new RateLimiter();
   const previews = options.previewUrl ? new PreviewAddresses(options.previewUrl) : undefined;
-  const liveness = new Liveness(options.probeUrls, (site) =>
-    previews?.nameOf(site.devUrl) ? options.previewProbe : undefined,
-  );
+  const managed = (site: Site) =>
+    previews?.nameOf(site.devUrl) ? options.previewProbe : undefined;
+  const liveness = new Liveness(options.probeUrls, managed, (site) => {
+    const probe = managed(site);
+    if (probe) warmPreview(probe, site.devUrl);
+  });
   const clones = options.sitesRoot ? new Clones(options.sitesRoot, options.cloneGit) : undefined;
   // Pushes to a repository the GitHub App reaches sign in with a token minted for that push.
   useRemoteAuth(
