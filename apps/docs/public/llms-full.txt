@@ -270,9 +270,8 @@ was posted to it. The editor's structured document is preserved in `_ast`
 for lossless round-tripping. **Consumers should ignore `_ast`.** Any key
 beginning with `_` is machinery and may be ignored by consumers.
 
-A reader returns `html` exactly as stored and does not sanitize it again. What
-is in the repository is as trusted as the code beside it: a site that accepts
-content from people who may not commit code should sanitize where it renders.
+A reader returns `html` as stored and does not sanitize it again: a site that
+takes content from people who may not commit code sanitizes where it renders.
 
 ### Addresses
 
@@ -334,11 +333,9 @@ Body text becomes the field named by the collection's `body` key.
 ```
 
 A slug is one file name: up to 120 characters, not starting with `.`, and with
-no `/`, `\`, `%` or control characters. Reading goes the other way: an entry's
-slug is its file name with the extension removed, and only that, so
-`release-1.2.md` is `release-1.2`. The entries of a collection are the files
-directly in its folder that carry its format's extension, in file-name order;
-a subfolder, or a file with any other extension, is not one.
+no `/`, `\`, `%` or control characters. Read back, a slug is the file name less
+its extension: `release-1.2.md` is `release-1.2`. A collection's entries are the
+files directly in its folder with its format's extension; nothing else is one.
 
 An `mdx` entry is the same file with an `.mdx` extension, and a body that may
 import and use components:
@@ -539,10 +536,8 @@ Point your reader at the fixture site, dump each resolved region as
 includes a region with no content file, a region edited before a field was
 added, a blocks region with a block missing a defaulted field, and a decorative
 image with empty alt text: the four cases naive implementations get wrong. It
-also holds the valid files that trip a reader in practice: a stored `null`, an
-object merged into its default, a block of a type the schema no longer has, a
-JSON collection, and Markdown entries with CRLF line endings, a byte-order
-mark, no frontmatter, an unclosed fence and every YAML 1.2 scalar.
+also holds a stored `null`, an unknown block type, a JSON collection, and
+entries with CRLF endings, a byte-order mark and no frontmatter.
 
 A reference reader in Python (stdlib + PyYAML, ~120 lines) lives at
 `examples/reader-python/read.py` and passes the suite. It is the shortest honest
@@ -1985,11 +1980,6 @@ implementations get them wrong:
 The rules are in [section 6 of the standard](/spec/#6-resolution-rules-the-important-part):
 objects merge deeply, arrays are replaced wholesale, and a missing schema is a
 loud error where a missing content file is not.
-
-The fixtures also hold the valid files that trip a reader in practice: a stored
-`null` (a value, not a gap), a body with CRLF line endings (verbatim means your
-file API must not translate them), a byte-order mark, and an entry with no
-frontmatter at all.
 
 ## Proving it
 
