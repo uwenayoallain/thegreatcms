@@ -976,6 +976,25 @@ page loads (Google Fonts and the like), which is what makes text move when
 they arrive, and says how to serve them from the site instead. It is a
 warning, not a failure.
 
+## `greatcms fonts`
+
+For an Astro site that loads Google Fonts. It reads the font link the site
+already has and makes the change itself: each family goes into `astro.config`
+under `fonts`, a `<Font>` tag for it into the layout's head, the CSS points at
+the new variables, and the old link, `@import` and preconnects are removed.
+The fonts are then served by the site, with fallbacks sized to match and no
+swap after first paint, so text does not move.
+
+```sh
+greatcms fonts --dry-run   # say what would change, write nothing
+greatcms fonts             # make the change; review it with git diff
+```
+
+It plans every edit before making any. If the config already sets fonts, a
+font is loaded in a way it does not recognise, or the site is not on Astro 6
+or newer, it changes nothing and says why. Run it once per site, and again
+only when the site adds a typeface.
+
 ## `greatcms studio`
 
 ```sh

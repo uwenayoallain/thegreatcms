@@ -1,7 +1,7 @@
 /** Every command the binary runs, loaded only once one of them is asked for. */
 
 import { describeSite, formatDescription } from "./describe.js";
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { execFile } from "node:child_process";
@@ -49,7 +49,8 @@ import {
   type TemplateId,
   mergeAgentsNote,
 } from "./init.js";
-import { fontRemedy, remoteFonts } from "./fonts.js";
+import { fontRemedy, remoteFonts, sourceFiles } from "./fonts.js";
+import { planFonts } from "./fonts-fix.js";
 import { packageManager, wirePreview, withReader } from "./wire.js";
 import { defaultsOnlyPrompt, terminalPrompt, type PromptPort } from "./prompt.js";
 import { CliError, UsageError, type FilePort, type GitPort } from "./ports.js";
@@ -714,6 +715,89 @@ export async function describeCommand(options: RunOptions & { flags: Flags }): P
     flags.boolean("json")
       ? `${JSON.stringify(description, null, 2)}\n`
       : formatDescription(description),
+  );
+  return 0;
+}
+
+/** Moves an Astro site's Google Fonts onto the site itself, or says why it left everything alone. */
+export async function fontsCommand(options: RunOptions & { flags: Flags }): Promise<number> {
+  const { cwd, stdout, stderr, flags } = options;
+  const root = resolve(cwd);
+  const u = ui();
+  const files = await sourceFiles(root);
+  let dependencies: Record<string, unknown> = {};
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      dependencies?: Record<string, unknown>;
+      devDependencies?: Record<string, unknown>;
+    };
+    dependencies = { ...pkg.dependencies, ...pkg.devDependencies };
+  } catch {
+    // No package.json: treated as not an Astro site below.
+  }
+  const config = [
+    "astro.config.mjs",
+    "astro.config.ts",
+    "astro.config.js",
+    "astro.config.mts",
+  ].find((name) => files.has(name));
+  const layouts = [...files]
+    .filter(([path, text]) => path.endsWith(".astro") && /<head[\s>]/.test(text))
+    .map(([path]) => path);
+  const plan = planFonts(files, config, layouts);
+  if (plan.families.length === 0 && plan.problems.length === 0) {
+    stdout(`${u.ok("No fonts are fetched from Google Fonts: there is nothing to move.")}\n`);
+    return 0;
+  }
+  let astroMajor = 0;
+  try {
+    const installed = JSON.parse(
+      readFileSync(join(root, "node_modules/astro/package.json"), "utf8"),
+    ) as { version?: string };
+    astroMajor = Number.parseInt(installed.version ?? "", 10) || 0;
+  } catch {
+    astroMajor = Number.parseInt(String(dependencies.astro ?? "").replace(/^\D+/, ""), 10) || 0;
+  }
+  const problems = [
+    ...(!("astro" in dependencies) ? ["this is not an Astro site"] : []),
+    ...("astro" in dependencies && astroMajor < 6
+      ? [
+          `Astro ${astroMajor || "of an unknown version"} is installed, and this needs Astro 6 or newer`,
+        ]
+      : []),
+    ...plan.problems,
+  ];
+  if (problems.length > 0) {
+    stderr(
+      `${u.warn(`Nothing was changed:\n${problems.map((problem) => `  ${problem}`).join("\n")}\n${fontRemedy(dependencies)}`)}\n`,
+    );
+    return 1;
+  }
+  const changed = [...plan.changes.keys()].toSorted();
+  if (!flags.boolean("dry-run")) {
+    for (const [path, content] of plan.changes) writeFileSync(join(root, path), content);
+  }
+  stdout(
+    `${[
+      u.step(
+        flags.boolean("dry-run")
+          ? "Would move these fonts onto the site"
+          : "Moved these fonts onto the site",
+      ),
+      ...plan.families.map(
+        (family) =>
+          `  ${family.name}  ${u.muted(`${family.weights.join(", ")} · ${family.cssVariable}`)}`,
+      ),
+      "",
+      u.step(flags.boolean("dry-run") ? "Files it would change" : "Files changed"),
+      ...changed.map((path) => `  ${path}`),
+      "",
+      flags.boolean("dry-run")
+        ? u.note("Nothing was written. Run it again without --dry-run to make the change.")
+        : u.note(
+            "Look it over with `git diff`, then build the site once: the fonts are fetched then, and served from the site from there on.",
+          ),
+    ].join("\n")}\n`,
   );
   return 0;
 }

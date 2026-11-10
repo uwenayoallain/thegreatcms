@@ -178,7 +178,7 @@ describe("greatcms doctor and fonts from another site", () => {
       expect(text).not.toContain("local.css");
       expect(text).not.toContain("some-theme");
       expect(text).not.toContain("dist/index.html");
-      expect(text).toContain("under `fonts` in astro.config");
+      expect(text).toContain("run `greatcms fonts`");
       out.length = 0;
       expect(await cli(["doctor", "--json"])).toBe(0);
       expect(JSON.parse(out.join("")).remoteFonts).toEqual([
@@ -193,7 +193,7 @@ describe("greatcms doctor and fonts from another site", () => {
       out.length = 0;
       expect(await cli(["doctor"])).toBe(0);
       expect(out.join("")).toContain("serve the font files from the site");
-      expect(out.join("")).not.toContain("astro.config");
+      expect(out.join("")).not.toContain("greatcms fonts");
     } finally {
       for (const path of ["src", "node_modules", "dist", "package.json"]) {
         rmSync(join(repo, path), { recursive: true, force: true });

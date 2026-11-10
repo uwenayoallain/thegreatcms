@@ -11,9 +11,9 @@ const SKIP = new Set(["node_modules", "dist", "build", "out", "coverage", "publi
 const MAX_FILES = 3000;
 const MAX_BYTES = 512 * 1024;
 
-/** The site's own source files that name a font host, relative to `root`, in order. */
-export async function remoteFonts(root: string): Promise<string[]> {
-  const found: string[] = [];
+/** The site's own source files, by path relative to `root`: not dependencies, not what was built. */
+export async function sourceFiles(root: string): Promise<Map<string, string>> {
+  const files = new Map<string, string>();
   let seen = 0;
   const walk = async (dir: string, depth: number): Promise<void> => {
     if (depth > 8 || seen >= MAX_FILES) return;
@@ -34,18 +34,24 @@ export async function remoteFonts(root: string): Promise<string[]> {
         );
         if (size > MAX_BYTES) continue;
         // oxlint-disable-next-line no-await-in-loop -- see above
-        const text = await readFile(path, "utf8").catch(() => "");
-        if (FONT_HOSTS.test(text)) found.push(relative(root, path));
+        const text = await readFile(path, "utf8").catch(() => null);
+        if (text !== null) files.set(relative(root, path), text);
       }
     }
   };
   await walk(root, 0);
-  return found;
+  return files;
+}
+
+/** The site's own source files that name a font host, relative to `root`, in order. */
+export async function remoteFonts(root: string): Promise<string[]> {
+  const files = await sourceFiles(root);
+  return [...files].filter(([, text]) => FONT_HOSTS.test(text)).map(([path]) => path);
 }
 
 /** What to do about it, for the framework the project uses. */
 export function fontRemedy(dependencies: Record<string, unknown>): string {
   return "astro" in dependencies
-    ? "fix: list each family under `fonts` in astro.config and put a `<Font>` for it in the layout's head (https://docs.astro.build/en/guides/fonts/), then remove the link or @import. New pages need nothing; a new family is one more entry."
+    ? "fix: run `greatcms fonts`, which moves them onto the site for you (`--dry-run` shows what it would change). New pages need nothing after that; a new family means running it again."
     : "fix: serve the font files from the site (an @fontsource package, or your framework's font support), with a fallback sized to match, then remove the link or @import.";
 }

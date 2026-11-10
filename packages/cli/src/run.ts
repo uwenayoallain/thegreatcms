@@ -118,6 +118,8 @@ export async function run(options: RunOptions): Promise<number> {
         return await (await load()).typesCommand({ ...options, flags });
       case "doctor":
         return await (await load()).doctorCommand({ ...options, flags });
+      case "fonts":
+        return await (await load()).fontsCommand({ ...options, flags });
       case "describe":
         return await (await load()).describeCommand({ ...options, flags });
       case "studio": {

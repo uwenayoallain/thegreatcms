@@ -158,6 +158,15 @@ export const COMMANDS: CommandSpec[] = [
     examples: ["greatcms doctor"],
   },
   {
+    name: "fonts",
+    maxArgs: 0,
+    summary: "serve an Astro site's Google Fonts from the site itself",
+    description:
+      "Reads the Google Fonts link the site has and makes the change: the families go into astro.config, a tag for each into the layout's head, and the CSS points at them, with fallbacks sized to match so text does not move. It changes nothing when a file is not shaped the way it expects.",
+    options: [{ name: "dry-run", help: "say what would change, and write nothing" }],
+    examples: ["greatcms fonts --dry-run", "greatcms fonts"],
+  },
+  {
     name: "describe",
     maxArgs: 0,
     summary: "print the content model: every region, block, collection and field",
