@@ -14,6 +14,7 @@ import { isIP } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { Site } from "./db.js";
+import { originFromConfig } from "./git-guard.js";
 import { withGitConfig } from "./repo.js";
 
 /** A folder path as typed: `~` is this machine's home, and anything else must be absolute. */
@@ -37,17 +38,8 @@ export interface Folder {
   siteId?: string;
 }
 
-/** Where a folder's `origin` remote points, or null; reading config runs nothing of the repository's. */
-export function originOf(path: string): Promise<string | null> {
-  return new Promise((resolvePromise) =>
-    execFile(
-      "git",
-      ["-c", "core.hooksPath=/dev/null", "-C", path, "remote", "get-url", "origin"],
-      { timeout: 5000 },
-      (error, stdout) => resolvePromise(error ? null : stdout.trim() || null),
-    ),
-  );
-}
+/** Where a folder's `origin` remote points, or null: read from its config file, so nothing runs. */
+export const originOf = originFromConfig;
 
 /** One spelling for a repository's address, https or SSH, with or without `.git`. */
 export function sameRepository(url: string): string {

@@ -332,7 +332,7 @@ describe("git in a site's folder runs nothing of the folder's", () => {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: site.root, encoding: "utf8" }).trim();
 
-  it("ignores an external diff command set in the folder's config", async () => {
+  it("refuses an external diff command set in the folder's config, and never runs it", async () => {
     const marker = join(site.root, "ran-diff");
     git("config", "diff.external", `sh -c 'touch ${marker}' --`);
     const head = site.head();
@@ -341,7 +341,9 @@ describe("git in a site's folder runs nothing of the folder's", () => {
       "f[heading]": "Changed",
       headSha: head,
     });
-    expect(response.status).toBe(200);
+    // The publish is refused by name; the pages before it read history and ran nothing.
+    expect(response.status).toBe(502);
+    expect(await response.text()).toContain("diff.external");
     expect(existsSync(marker)).toBe(false);
   });
 

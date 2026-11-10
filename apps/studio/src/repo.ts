@@ -18,19 +18,10 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
+import { configRefusal, gitIn, localEnd, trackBranch } from "./git-guard.js";
 
 const run = promisify(execFile);
 
-// The studio never executes anything from a managed repository, git hooks included.
-const SAFE_GIT = [
-  "-c",
-  "core.hooksPath=/dev/null",
-  "-c",
-  "core.fsmonitor=false",
-  // A remote spelled `ext::command` is a command, whatever the folder's own config allows.
-  "-c",
-  "protocol.ext.allow=never",
-];
 /** Long enough for a commit of full-size images on a slow disk; a git that hangs is stopped. */
 const GIT_TIMEOUT_MS = 60_000;
 
@@ -346,6 +337,7 @@ export class LocalRepository implements Repository {
       throw new LocalRepositoryError("A publish needs at least one file change.");
     }
 
+    await this.refuseUncheckedConfig();
     if (request.expectedHeadSha) await this.assertUnchanged(request);
 
     // Every byte lands in a temporary file first, so a full disk or a bad path fails
@@ -530,6 +522,7 @@ export class LocalRepository implements Repository {
   }
 
   private async switchNow(name: string): Promise<void> {
+    await this.refuseUncheckedConfig();
     if (
       name.startsWith("-") ||
       (await this.tryGit(["check-ref-format", "--branch", name])) === null
@@ -553,25 +546,29 @@ export class LocalRepository implements Repository {
     if (remote && remoteUrl) {
       // The remote may already have it, from another studio or a developer.
       const auth = remoteAuth ? await remoteAuth(remoteUrl).catch(() => []) : [];
-      await run(
-        "git",
-        [
-          ...SAFE_GIT,
-          "fetch",
-          "--quiet",
-          "--no-tags",
-          remote,
-          `refs/heads/${name}:refs/remotes/${remote}/${name}`,
-        ],
-        {
-          cwd: this.root,
-          timeout: 60_000,
-          env: withGitConfig(
-            { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
-            auth,
-          ),
-        },
-      ).catch(() => undefined);
+      const guard = await gitIn(this.root);
+      if (guard) {
+        await run(
+          "git",
+          [
+            ...guard.args,
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            ...localEnd(guard, remoteUrl, "upload"),
+            remote,
+            `refs/heads/${name}:refs/remotes/${remote}/${name}`,
+          ],
+          {
+            cwd: this.root,
+            timeout: 60_000,
+            env: withGitConfig(
+              { ...guard.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+              auth,
+            ),
+          },
+        ).catch(() => undefined);
+      }
       if (
         (await this.tryGit([
           "rev-parse",
@@ -580,7 +577,7 @@ export class LocalRepository implements Repository {
           `refs/remotes/${remote}/${name}`,
         ])) !== null
       ) {
-        await this.git(["switch", "--quiet", "--track", "-c", name, `${remote}/${name}`]);
+        await this.startTracking(name, remote);
         return;
       }
     }
@@ -620,6 +617,12 @@ export class LocalRepository implements Repository {
   }
 
   private async pushNow(): Promise<PushResult> {
+    const guard = await gitIn(this.root);
+    if (!guard) return { ok: false, reason: "The folder is not a git repository." };
+    if (guard.problems.length > 0) {
+      const { message, fix } = configRefusal(guard.problems);
+      return { ok: false, reason: `${message}\n  fix: ${fix}` };
+    }
     const tracked = await this.syncState();
     const where = await this.branchState();
     // A branch new to the remote, such as one the studio started, is pushed to the same name there.
@@ -641,18 +644,32 @@ export class LocalRepository implements Repository {
       const target = tracked
         ? []
         : [
-            "--set-upstream",
+            ...(guard.configFile ? [] : ["--set-upstream"]),
             where.remote as string,
             `refs/heads/${where.branch}:refs/heads/${where.branch}`,
           ];
-      await run("git", [...SAFE_GIT, "push", "--porcelain", ...target], {
-        cwd: this.root,
-        timeout: 60_000,
-        env: withGitConfig(
-          { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
-          auth,
-        ),
-      });
+      await run(
+        "git",
+        [
+          ...guard.args,
+          "push",
+          "--porcelain",
+          ...localEnd(guard, where.remoteUrl, "receive"),
+          ...target,
+        ],
+        {
+          cwd: this.root,
+          timeout: 60_000,
+          env: withGitConfig(
+            { ...guard.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
+            auth,
+          ),
+        },
+      );
+      // The copy git was given is not the repository's config, so the upstream is written here.
+      if (!tracked && guard.configFile) {
+        await trackBranch(guard, where.branch, where.remote as string);
+      }
       return { ok: true, upstream: state.upstream };
     } catch (error) {
       const output = `${String((error as { stdout?: unknown }).stdout ?? "")}\n${String((error as { stderr?: unknown }).stderr ?? "")}`;
@@ -820,6 +837,25 @@ export class LocalRepository implements Repository {
     return walk(DRAFT_DIR);
   }
 
+  /** Stops a publish or branch change in a folder whose git config holds more than the studio reads. */
+  private async refuseUncheckedConfig(): Promise<void> {
+    const problems = (await gitIn(this.root))?.problems ?? [];
+    if (problems.length === 0) return;
+    const { message, fix } = configRefusal(problems);
+    throw new LocalRepositoryError(message, fix);
+  }
+
+  /** A new branch from the remote's, with that as its upstream. */
+  private async startTracking(name: string, remote: string): Promise<void> {
+    const guard = await gitIn(this.root);
+    if (!guard?.configFile) {
+      await this.git(["switch", "--quiet", "--track", "-c", name, `${remote}/${name}`]);
+      return;
+    }
+    await this.git(["switch", "--quiet", "--no-track", "-c", name, `${remote}/${name}`]);
+    await trackBranch(guard, name, remote);
+  }
+
   /** Runs git, returning null when this is not a repository or the command fails. */
   private async tryGit(args: string[]): Promise<string | null> {
     try {
@@ -831,12 +867,14 @@ export class LocalRepository implements Repository {
 
   /** Runs git where a failure is something the editor must see. */
   private async git(args: string[], env?: Record<string, string>): Promise<string> {
+    const guard = await gitIn(this.root);
+    if (!guard) throw new LocalRepositoryError(`git ${args[0]} failed: not a git repository`);
     try {
-      const { stdout } = await run("git", [...SAFE_GIT, ...args], {
+      const { stdout } = await run("git", [...guard.args, ...args], {
         cwd: this.root,
         maxBuffer: 8 * 1024 * 1024,
         timeout: GIT_TIMEOUT_MS,
-        ...(env ? { env: { ...process.env, ...env } } : {}),
+        env: { ...guard.env, ...env },
       });
       return stdout;
     } catch (error) {
