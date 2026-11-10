@@ -1,6 +1,6 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { francs, when, workshops, type Workshop } from "../../lib/cms";
+import { cms, francs, when, workshops, type Workshop } from "../../lib/cms";
 
 export function getStaticPaths() {
   return workshops().map((workshop) => ({ params: { slug: workshop.slug }, props: { workshop } }));
@@ -8,8 +8,19 @@ export function getStaticPaths() {
 
 const { workshop } = Astro.props as { workshop: Workshop };
 const date = when(workshop.date);
+const identity = cms.region("site.identity");
+const visit = cms.region("visit");
 ---
-<Base title={workshop.title} description={workshop.summary}>
+<Base title={workshop.title} description={workshop.summary} schema={{
+  "@type": "Event",
+  name: workshop.title,
+  description: workshop.summary,
+  startDate: workshop.date,
+  eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+  location: { "@type": "Place", name: identity.name, address: visit.address?.replaceAll("\n", ", ") },
+  organizer: { "@type": "Organization", name: identity.name },
+  offers: { "@type": "Offer", price: workshop.price, priceCurrency: "RWF", availability: `https://schema.org/${workshop.full ? "SoldOut" : "InStock"}` },
+}}>
   <article class="workshop">
     <header class="page-head">
       <p class="eyebrow"><a href="/workshops/">Workshops</a></p>

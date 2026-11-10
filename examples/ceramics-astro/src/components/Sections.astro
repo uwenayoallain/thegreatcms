@@ -8,7 +8,7 @@ interface Props { blocks: HomeSectionsRegion["blocks"] }
 const { blocks } = Astro.props;
 const next = upcoming();
 ---
-{blocks.map((block) => {
+{blocks.map((block, index) => {
   switch (block._type) {
     case "statement":
       return (
@@ -19,8 +19,8 @@ const next = upcoming();
       );
     case "process":
       return (
-        <section class="process" aria-labelledby="process-heading">
-          <h2 id="process-heading">{block.heading}</h2>
+        <section class="process" aria-labelledby={`section-${index}`}>
+          <h2 id={`section-${index}`}>{block.heading}</h2>
           <ol class="steps">
             {(block.steps ?? []).map((step, index) => (
               <li class="step">
@@ -34,14 +34,16 @@ const next = upcoming();
       );
     case "upcoming":
       return (
-        <section class="upcoming" aria-labelledby="upcoming-heading">
+        <section class="upcoming" aria-labelledby={`section-${index}`}>
           <div class="section-head">
-            <h2 id="upcoming-heading">{block.heading}</h2>
+            <h2 id={`section-${index}`}>{block.heading}</h2>
             {block.link?.href && <a class="more" href={block.link.href}>{block.link.label ?? "More"}</a>}
           </div>
-          <div class="cards">
-            {next.slice(0, block.count ?? 3).map((workshop) => <WorkshopCard workshop={workshop} />)}
-          </div>
+          {next.length > 0
+            ? <div class="cards">
+                {next.slice(0, block.count ?? 3).map((workshop) => <WorkshopCard workshop={workshop} />)}
+              </div>
+            : <p class="empty">New dates are on their way.</p>}
         </section>
       );
     case "quote":

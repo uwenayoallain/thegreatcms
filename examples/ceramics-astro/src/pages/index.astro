@@ -6,12 +6,21 @@ import { cms } from "../lib/cms";
 
 const hero = cms.region("home.hero");
 const sections = cms.region("home.sections");
+const identity = cms.region("site.identity");
+const visit = cms.region("visit");
 ---
-<Base>
+<Base schema={{
+  "@type": "LocalBusiness",
+  name: identity.name,
+  description: identity.tagline,
+  url: Astro.site?.href,
+  email: identity.email,
+  address: visit.address?.replaceAll("\n", ", "),
+}}>
   <section class="hero">
     <div class="hero__text">
       {hero.eyebrow && <p class="eyebrow">{hero.eyebrow}</p>}
-      <h1>{hero.heading}</h1>
+      <h1>{hero.heading ?? identity.tagline ?? identity.name}</h1>
       {hero.lede && <p class="lede">{hero.lede}</p>}
       {hero.action?.href && <a class="button" href={hero.action.href}>{hero.action.label ?? "Find out more"}</a>}
     </div>

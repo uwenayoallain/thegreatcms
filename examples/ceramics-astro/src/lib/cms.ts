@@ -27,7 +27,8 @@ export function workshops(): Workshop[] {
       seats: data.seats,
       image: data.image,
       full: Boolean(data.full),
-      html: marked.parse(body, { async: false }),
+      // A code block scrolls sideways on a narrow screen, so the keyboard has to be able to reach it.
+      html: marked.parse(body, { async: false }).replaceAll("<pre>", '<pre tabindex="0">'),
     }))
     .toSorted((a, b) => Date.parse(a.date) - Date.parse(b.date));
 }
