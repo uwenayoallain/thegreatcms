@@ -55,7 +55,7 @@ const highlighted = await Promise.all(files.map((file) => highlight(file.code, f
 const proofs = cms.blocks<ProofBlock>("home.proofs");
 ---
 
-<Base title={`GreatCMS: ${hero.heading}`} description={hero.subtitle}>
+<Base title={`GreatCMS: ${hero.heading}`} description={hero.subtitle ?? "A Git-backed CMS: content is files in your repository, and publishing is a commit."}>
   <!-- A switch, not a script: with it on, every managed region on this page is labelled with the file it lives in. -->
   <input type="checkbox" id="seams" class="seams-toggle" />
 
@@ -115,6 +115,7 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
   <div class="commit-rule" aria-hidden="true"></div>
   </div>
 
+  {claims.length > 0 && (
   <section class="claims" aria-labelledby="claims-heading">
     <div class="claims-intro">
       <h2 id="claims-heading" class="stamp">What it does</h2>
@@ -132,6 +133,7 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
       }
     </ol>
   </section>
+  )}
 
   <!-- Hand-written: the whole integration surface, shown rather than described. -->
   <section class="files" aria-labelledby="files-heading">
@@ -156,6 +158,7 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
     </p>
   </section>
 
+  {proofs.length > 0 && (
   <section class="proofs" aria-labelledby="proofs-heading">
     <h2 id="proofs-heading" class="stamp">Proofs, not claims</h2>
     <ul>
@@ -170,11 +173,14 @@ const proofs = cms.blocks<ProofBlock>("home.proofs");
       }
     </ul>
   </section>
+  )}
 
+  {(closing.heading || closing.body) && (
   <section class="closing band ink">
     <div class="inner">
-      <h2 class="seam" data-file="content/cms/home.closing.json · heading">{closing.heading}</h2>
-      <p class="seam" data-file="content/cms/home.closing.json · body">{closing.body}</p>
+      {closing.heading && <h2 class="seam" data-file="content/cms/home.closing.json · heading">{closing.heading}</h2>}
+      {closing.body && <p class="seam" data-file="content/cms/home.closing.json · body">{closing.body}</p>}
     </div>
   </section>
+  )}
 </Base>

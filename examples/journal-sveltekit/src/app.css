@@ -6,7 +6,7 @@
   font-style: normal;
   font-weight: 200 800;
   font-display: optional;
-  src: url("@fontsource-variable/newsreader/files/newsreader-latin-opsz-normal.woff2")
+  src: url("@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2")
     format("woff2-variations");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
@@ -18,7 +18,7 @@
   font-style: normal;
   font-weight: 200 800;
   font-display: optional;
-  src: url("@fontsource-variable/newsreader/files/newsreader-latin-ext-opsz-normal.woff2")
+  src: url("@fontsource-variable/newsreader/files/newsreader-latin-ext-wght-normal.woff2")
     format("woff2-variations");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
@@ -31,7 +31,7 @@
   font-style: normal;
   font-weight: 200 800;
   font-display: optional;
-  src: url("@fontsource-variable/newsreader/files/newsreader-vietnamese-opsz-normal.woff2")
+  src: url("@fontsource-variable/newsreader/files/newsreader-vietnamese-wght-normal.woff2")
     format("woff2-variations");
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
@@ -43,7 +43,7 @@
   font-style: italic;
   font-weight: 200 800;
   font-display: optional;
-  src: url("@fontsource-variable/newsreader/files/newsreader-latin-opsz-italic.woff2")
+  src: url("@fontsource-variable/newsreader/files/newsreader-latin-wght-italic.woff2")
     format("woff2-variations");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
@@ -55,7 +55,7 @@
   font-style: italic;
   font-weight: 200 800;
   font-display: optional;
-  src: url("@fontsource-variable/newsreader/files/newsreader-latin-ext-opsz-italic.woff2")
+  src: url("@fontsource-variable/newsreader/files/newsreader-latin-ext-wght-italic.woff2")
     format("woff2-variations");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
@@ -68,7 +68,7 @@
   font-style: italic;
   font-weight: 200 800;
   font-display: optional;
-  src: url("@fontsource-variable/newsreader/files/newsreader-vietnamese-opsz-italic.woff2")
+  src: url("@fontsource-variable/newsreader/files/newsreader-vietnamese-wght-italic.woff2")
     format("woff2-variations");
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
@@ -81,9 +81,9 @@
   font-style: normal;
   src:
     local("Times New Roman"), local("TimesNewRomanPSMT"), local("Liberation Serif"), local("Tinos");
-  size-adjust: 99.84%;
-  ascent-override: 73.61%;
-  descent-override: 26.54%;
+  size-adjust: 104.1%;
+  ascent-override: 70.6%;
+  descent-override: 25.45%;
   line-gap-override: 0%;
 }
 
@@ -93,9 +93,9 @@
   src:
     local("Times New Roman Italic"), local("TimesNewRomanPS-ItalicMT"),
     local("Liberation Serif Italic"), local("Tinos Italic");
-  size-adjust: 91.64%;
-  ascent-override: 80.21%;
-  descent-override: 28.92%;
+  size-adjust: 98.56%;
+  ascent-override: 74.58%;
+  descent-override: 26.89%;
   line-gap-override: 0%;
 }
 
@@ -147,6 +147,8 @@ body {
   font: 400 1.2rem/1.6 var(--serif);
   font-optical-sizing: auto;
   font-kerning: normal;
+  /* A word longer than its column breaks instead of widening the page. */
+  overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -356,6 +358,7 @@ main {
 
 .more {
   display: inline-block;
+  padding-block: 0.3rem;
   font: 600 0.95rem var(--sans);
 }
 
@@ -523,6 +526,18 @@ main {
   content: "* * *";
   letter-spacing: 0.5em;
   color: var(--ink-soft);
+}
+
+/* Code and tables scroll inside themselves; the page never does. */
+.prose pre {
+  overflow-x: auto;
+  font-size: 0.85em;
+}
+
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .prose img {

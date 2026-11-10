@@ -13,6 +13,8 @@ export default defineNuxtConfig({
     public: {
       cmsUrl: process.env.PUBLIC_CMS_URL ?? "",
       cmsSite: process.env.PUBLIC_CMS_SITE_ID ?? "sundial",
+      // The address the site is published at: canonical links, the sitemap and share cards are built on it.
+      siteUrl: process.env.SITE_URL ?? "https://sundial.example",
     },
   },
   app: {
@@ -28,7 +30,11 @@ export default defineNuxtConfig({
   nitro: {
     // Written where the rest of the repository's builds go, and what greatcms-deploy serves.
     output: { publicDir: "dist" },
-    prerender: { crawlLinks: true, failOnError: true, routes: ["/404"] },
+    prerender: {
+      crawlLinks: true,
+      failOnError: true,
+      routes: ["/404", "/sitemap.xml", "/robots.txt"],
+    },
     hooks: {
       close: () => {
         // Nuxt's built-in 404.html is the unrendered SPA shell; replace it with the prerendered 404 page.

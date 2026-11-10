@@ -161,8 +161,9 @@ async function shot(page: Page): Promise<Shot> {
   }, LANDMARKS);
 }
 
-async function visit(width: number, url: string): Promise<Shot> {
+async function visit(width: number, url: string, withoutFonts = false): Promise<Shot> {
   const page = await open(width);
+  if (withoutFonts) await page.route("**/*.woff2", (route) => route.abort());
   await page.goto(url);
   const result = await shot(page);
   await page.context().close();
@@ -216,6 +217,60 @@ describe.skipIf(!browser).each(WIDTHS)("at %ipx wide", (width) => {
       await page.context().close();
       expect(after.cls).toBe(0);
       expect(pick(after.boxes)).toEqual(pick(before.boxes));
+    },
+    BUDGET,
+  );
+});
+
+describe.skipIf(!browser)("whichever face is drawn", () => {
+  // The face is optional: a visit may be drawn in it or in its stand-in, and the frame must not care which.
+  it.each([375, 1280])(
+    "at %ipx every landmark sits in the same place with the web font and without it",
+    async (width) => {
+      for (const path of PAGES) {
+        // oxlint-disable-next-line no-await-in-loop -- one page at a time, in front, so it paints
+        const loaded = await visit(width, origins.onTime + path);
+        // oxlint-disable-next-line no-await-in-loop
+        const standIn = await visit(width, origins.onTime + path, true);
+        expect(standIn.cls, `${path} shifted without its font`).toBe(0);
+        for (const [name, keys] of Object.entries(COMPARED)) {
+          for (const key of keys) {
+            // How many lines the footer's words take is the face's business; where the frame sits is not.
+            if (name === "footer" && key === "height") continue;
+            // Within a pixel: two faces round to different sub-pixel sizes.
+            expect(
+              Math.abs(loaded.boxes[name]![key] - standIn.boxes[name]![key]),
+              `${path} ${name}.${key} at ${width}px moves without the font`,
+            ).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    },
+    BUDGET,
+  );
+
+  // 320px is the narrowest phone still in use, and what a desktop window zoomed to 400% lays out as.
+  it(
+    "at 320px no page scrolls sideways",
+    async () => {
+      const page = await open(320);
+      for (const path of PAGES) {
+        // oxlint-disable-next-line no-await-in-loop -- one tab, one page after another
+        await page.goto(origins.onTime + path, { waitUntil: "load" });
+        // A phone draws its scrollbar over the page; this browser takes room for it, so give that room back.
+        // oxlint-disable-next-line no-await-in-loop
+        const bar = await page.evaluate(() => innerWidth - document.documentElement.clientWidth);
+        // oxlint-disable-next-line no-await-in-loop
+        await page.setViewportSize({ width: 320 + bar, height: 900 });
+        // oxlint-disable-next-line no-await-in-loop
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} scrolls sideways by ${overflow}px`).toBeLessThanOrEqual(0);
+        // oxlint-disable-next-line no-await-in-loop
+        await page.setViewportSize({ width: 320, height: 900 });
+      }
+      await page.context().close();
     },
     BUDGET,
   );

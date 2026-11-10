@@ -43,7 +43,8 @@ const nav = [
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={new URL("/og.png", Astro.site).href} />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt" />
   </head>
   <body>
@@ -77,11 +78,13 @@ const nav = [
       <Fragment set:html={pixelWord("GreatCMS")} />
       <div class="inner">
         <p>{footer.note}</p>
-        <ul>
-          {(footer.links ?? []).map((link) => (
-            <li><a href={link.href}>{link.label ?? link.href}</a></li>
-          ))}
-        </ul>
+        {footer.links?.length ? (
+          <ul>
+            {footer.links.map((link) => (
+              <li><a href={link.href}>{link.label ?? link.href}</a></li>
+            ))}
+          </ul>
+        ) : null}
         <p>{footer.claim}</p>
       </div>
     </footer>

@@ -50,6 +50,8 @@ body {
   background: var(--paper);
   color: var(--ink);
   font: 400 clamp(1rem, 0.96rem + 0.2vw, 1.08rem) / 1.6 var(--sans);
+  /* A word longer than its column breaks instead of widening the page. */
+  overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -919,6 +921,7 @@ textarea:focus-visible {
 
 .colophon summary {
   width: fit-content;
+  padding-block: 0.2rem;
   cursor: pointer;
 }
 

@@ -1,11 +1,10 @@
-/** The page shell: the notice bar, the masthead and the footer, all from `site.identity`. */
+/** The document and the footer; each page brings its own header through `Shell`, which knows where it is. */
 
 import { GreatcmsPreview } from "@greatcms/reader/next";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
-import { content } from "#lib/cms";
-import { Nav } from "./nav";
+import { content, origin } from "#lib/cms";
 import { Lines } from "./parts";
 import "./site.css";
 
@@ -24,8 +23,11 @@ const instrumentSerif = localFont({
 export function generateMetadata(): Metadata {
   const { identity } = content();
   return {
+    metadataBase: new URL(origin),
     title: { default: identity.name, template: `%s · ${identity.name}` },
     description: identity.tagline,
+    openGraph: { type: "website", images: ["/og.png"] },
+    twitter: { card: "summary_large_image" },
   };
 }
 
@@ -41,23 +43,14 @@ export default function Layout({ children }: { children: ReactNode }) {
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <header>
-          {identity.notice ? <p className="notice">{identity.notice}</p> : null}
-          <div className="masthead">
-            <a className="wordmark" href="/">
-              {identity.name}
-            </a>
-            <Nav />
-          </div>
-        </header>
-        <main id="main">{children}</main>
+        {children}
         <footer className="footer">
           <div>
             <p className="wordmark">{identity.name}</p>
             <p>{identity.tagline}</p>
           </div>
           <address>
-            <Lines text={identity.address} />
+            {identity.address ? <Lines text={identity.address} /> : null}
             {identity.phone ? (
               <>
                 <a href={`tel:${identity.phone.replaceAll(" ", "")}`}>{identity.phone}</a>

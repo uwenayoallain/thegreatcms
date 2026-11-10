@@ -4,12 +4,23 @@ import "../styles/site.css";
 import serif from "@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2?url";
 import { cms } from "../lib/cms";
 
-interface Props { title?: string; description?: string }
-const { title, description } = Astro.props;
+interface Props {
+  title?: string;
+  description?: string;
+  /** A page nobody should land on from a search. */
+  noindex?: boolean;
+  /** Structured data for the page, as schema.org JSON-LD. */
+  schema?: Record<string, unknown>;
+}
+const { title, noindex, schema } = Astro.props;
 const identity = cms.region("site.identity");
 const visit = cms.region("visit");
 const pageTitle = title ? `${title} · ${identity.name}` : `${identity.name}: ${identity.tagline ?? "ceramics"}`;
+const description = Astro.props.description ?? identity.tagline ?? `${identity.name}: ceramics and clay workshops.`;
 const here = Astro.url.pathname;
+const canonical = new URL(here, Astro.site).href;
+// A studio that has not written its address yet has none to show.
+const address = (visit.address ?? "").split("\n").filter(Boolean);
 const nav = [
   { href: "/workshops/", label: "Workshops" },
   { href: "/visit/", label: "Visit" },
@@ -23,7 +34,16 @@ const nav = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>{pageTitle}</title>
-    {(description ?? identity.tagline) && <meta name="description" content={description ?? identity.tagline} />}
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={identity.name} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL("/og.png", Astro.site).href} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {schema && <script type="application/ld+json" is:inline set:html={JSON.stringify({ "@context": "https://schema.org", ...schema }).replaceAll("<", "\\u003c")} />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />
     <script type="speculationrules" is:inline>
@@ -53,10 +73,12 @@ const nav = [
         <p class="colophon__name">{identity.name}</p>
         {identity.tagline && <p>{identity.tagline}</p>}
       </div>
-      <address>
-        {visit.address.split("\n").map((line) => <span>{line}</span>)}
-        {identity.email && <a href={`mailto:${identity.email}`}>{identity.email}</a>}
-      </address>
+      {(address.length > 0 || identity.email) && (
+        <address>
+          {address.map((line) => <span>{line}</span>)}
+          {identity.email && <a href={`mailto:${identity.email}`}>{identity.email}</a>}
+        </address>
+      )}
     </footer>
   </body>
 </html>

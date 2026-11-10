@@ -54,12 +54,28 @@ describe.each(PAGES)("%s", (file) => {
     expect(document.querySelector("a.skip")?.getAttribute("href")).toBe("#main");
   });
 
-  it("ships no JavaScript, only speculation rules data, and none of the studio's preview", () => {
+  it("ships no JavaScript, only speculation rules and structured data, and none of the studio's preview", () => {
     const scripts = [...dom(file).querySelectorAll("script")];
-    expect(scripts.map((script) => script.type)).toEqual(["speculationrules"]);
-    const rules = JSON.parse(scripts[0]!.textContent ?? "") as { prerender: unknown[] };
+    const types = scripts.map((script) => script.type);
+    expect(types.filter((type) => type !== "application/ld+json")).toEqual(["speculationrules"]);
+    for (const script of scripts) expect(script.getAttribute("src")).toBeNull();
+    const rules = JSON.parse(scripts.at(-1)!.textContent ?? "") as { prerender: unknown[] };
     expect(rules.prerender.length).toBeGreaterThan(0);
     expect(read(file)).not.toContain("data-greatcms");
+  });
+
+  it("can be found and shared: a description, an address of its own, and a card with an image", () => {
+    const document = dom(file);
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content");
+    expect(meta('meta[name="description"]')?.length).toBeGreaterThan(0);
+    expect(meta('meta[property="og:description"]')).toBe(meta('meta[name="description"]'));
+    expect(meta('meta[property="og:title"]')).toBe(document.title);
+    expect(meta('meta[property="og:image"]')).toBe("https://ibumba.example/og.png");
+    expect(meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+    // A page with no address worth indexing says so instead of naming one.
+    if (meta('meta[name="robots"]') === "noindex") expect(canonical).toBeUndefined();
+    else expect(canonical).toBe(`https://ibumba.example/${file.replace(/index\.html$/, "")}`);
   });
 
   it("names each element that carries over between pages once, so a page change knows what became what", () => {
@@ -114,6 +130,34 @@ describe("content", () => {
       (option) => option.textContent,
     );
     expect(options.join(" ")).not.toContain("Glaze chemistry");
+  });
+});
+
+describe("for search engines", () => {
+  it("lists every page worth finding in the sitemap, points robots.txt at it, and publishes the share image", () => {
+    const listed = [
+      ...read("sitemap.xml").matchAll(/<loc>https:\/\/ibumba\.example([^<]*)<\/loc>/g),
+    ]
+      .map((match) => match[1]!)
+      .toSorted();
+    const built = PAGES.filter((file) => !["404.html", "book/thanks/index.html"].includes(file))
+      .map((file) => `/${file.replace(/index\.html$/, "")}`)
+      .toSorted();
+    expect(listed).toEqual(built);
+    expect(read("robots.txt")).toContain("Sitemap: https://ibumba.example/sitemap.xml");
+    expect(existsSync(join(DIST, "og.png"))).toBe(true);
+  });
+
+  it("describes the studio as a place and each workshop as an event with a date and a price", () => {
+    const data = (file: string) =>
+      JSON.parse(
+        dom(file).querySelector('script[type="application/ld+json"]')!.textContent!,
+      ) as Record<string, unknown>;
+    expect(data("index.html")["@type"]).toBe("LocalBusiness");
+    const event = data("workshops/first-evening-at-the-wheel/index.html");
+    expect(event["@type"]).toBe("Event");
+    expect(Date.parse(event.startDate as string)).not.toBeNaN();
+    expect((event.offers as { priceCurrency: string }).priceCurrency).toBe("RWF");
   });
 });
 

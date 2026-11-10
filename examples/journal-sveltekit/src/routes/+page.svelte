@@ -1,17 +1,24 @@
 <script>
   import { formatDate } from "#lib/cms.js";
+  import Head from "#lib/Head.svelte";
 
   let { data } = $props();
 </script>
 
-<svelte:head>
-  <title>{data.identity.title} · {data.identity.author}</title>
-  <meta name="description" content={data.identity.tagline} />
-</svelte:head>
+<Head
+  title="{data.identity.title} · {data.identity.author}"
+  description={data.identity.tagline}
+  schema={{
+    "@type": "Blog",
+    name: data.identity.title,
+    description: data.identity.tagline,
+    author: { "@type": "Person", name: data.identity.author },
+  }}
+/>
 
 <section class="intro">
   <p class="kicker">{data.identity.author}</p>
-  <h1>{data.intro.heading}</h1>
+  <h1>{data.intro.heading ?? data.identity.title}</h1>
   {#if data.intro.body}<div class="lede">{@html data.intro.body.html}</div>{/if}
 </section>
 
@@ -36,6 +43,11 @@
   </article>
 {/if}
 
+{#if !data.lead}
+  <p class="lede">The first essay is being written.</p>
+{/if}
+
+{#if data.rest.length}
 <section aria-labelledby="archive">
   <h2 id="archive" class="section-label">Earlier</h2>
   <ol class="archive">
@@ -56,3 +68,4 @@
     {/each}
   </ol>
 </section>
+{/if}

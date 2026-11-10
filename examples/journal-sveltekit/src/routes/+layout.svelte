@@ -1,6 +1,6 @@
 <script>
-  import roman from "@fontsource-variable/newsreader/files/newsreader-latin-opsz-normal.woff2?url";
-  import italic from "@fontsource-variable/newsreader/files/newsreader-latin-opsz-italic.woff2?url";
+  import roman from "@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2?url";
+  import italic from "@fontsource-variable/newsreader/files/newsreader-latin-wght-italic.woff2?url";
   import "../app.css";
   import { page } from "$app/state";
 

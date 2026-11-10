@@ -79,6 +79,8 @@ body {
   background: var(--paper);
   color: var(--ink);
   font: 1.0625rem/1.65 var(--sans);
+  /* A word longer than its column breaks instead of widening the page. */
+  overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -256,6 +258,8 @@ main {
   }
 }
 .more {
+  display: inline-block;
+  padding-block: 0.15rem;
   font-weight: 600;
 }
 
@@ -351,7 +355,7 @@ main {
 }
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
   gap: 1.25rem;
   margin-top: 1.5rem;
 }
@@ -498,7 +502,7 @@ main {
   color: inherit;
 }
 .cards--wide {
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
 }
 .empty {
   color: var(--muted);
@@ -506,6 +510,15 @@ main {
 
 .workshop {
   max-width: var(--measure);
+}
+/* Code and tables scroll inside themselves; the page never does. */
+.prose pre {
+  overflow-x: auto;
+}
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
 }
 .workshop__image {
   margin-bottom: 2rem;

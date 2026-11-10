@@ -1,16 +1,37 @@
 /** The home page: hero, what is in the oven, the story, opening hours and the pre-order form. */
 
-import { categoryLabel, content, dietary, studio } from "#lib/cms";
+import type { Metadata } from "next";
+import { address, categoryLabel, content, dietary, origin, studio } from "#lib/cms";
 import { Lines, Price } from "./parts";
+import { Shell } from "./shell";
+
+export const metadata: Metadata = address("/");
 
 export default function Home() {
   const { identity, hero, story, visit, featured, sections } = content();
   const orderable = sections.filter((section) => section.value !== "coffee");
   const today = visit.hours?.[0];
   const street = identity.address?.split("\n")[0];
+  const hours = visit.hours ?? [];
+  // What a search engine shows beside the name: where the bakery is and when it is open.
+  const bakery = {
+    "@context": "https://schema.org",
+    "@type": "Bakery",
+    name: identity.name,
+    description: identity.tagline,
+    url: origin,
+    telephone: identity.phone,
+    email: identity.email,
+    address: identity.address?.replaceAll("\n", ", "),
+    openingHours: hours.map((row) => `${row.days} ${row.open}`),
+  };
 
   return (
-    <>
+    <Shell>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(bakery).replaceAll("<", "\\u003c") }}
+      />
       <section className="hero">
         <div className="hero-text">
           {hero.eyebrow ? <p className="eyebrow">{hero.eyebrow}</p> : null}
@@ -80,30 +101,40 @@ export default function Home() {
         </section>
       ) : null}
 
-      <section className="story" aria-labelledby="story">
-        <h2 id="story">{story.heading}</h2>
-        {/* Rich text is stored sanitized by the studio, so it is printed as it is. */}
-        <div className="prose" dangerouslySetInnerHTML={{ __html: story.body?.html ?? "" }} />
-      </section>
+      {story.heading && story.body?.html ? (
+        <section className="story" aria-labelledby="story">
+          <h2 id="story">{story.heading}</h2>
+          {/* Rich text is stored sanitized by the studio, so it is printed as it is. */}
+          <div className="prose" dangerouslySetInnerHTML={{ __html: story.body.html }} />
+        </section>
+      ) : null}
 
       <section className="visit" id="visit" aria-labelledby="visit-heading">
         <h2 id="visit-heading">Visit</h2>
-        <div className="visit-grid">
-          <dl className="hours">
-            {(visit.hours ?? []).map((row) => (
-              <div key={row.days}>
-                <dt>{row.days}</dt>
-                <dd>{row.open}</dd>
-              </div>
-            ))}
-          </dl>
-          <div>
-            <address>
-              <Lines text={identity.address} />
-            </address>
-            {visit.note ? <p className="note">{visit.note}</p> : null}
+        {hours.length > 0 || identity.address || visit.note ? (
+          <div className="visit-grid">
+            {hours.length > 0 ? (
+              <dl className="hours">
+                {hours.map((row) => (
+                  <div key={row.days}>
+                    <dt>{row.days}</dt>
+                    <dd>{row.open}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            <div>
+              {identity.address ? (
+                <address>
+                  <Lines text={identity.address} />
+                </address>
+              ) : null}
+              {visit.note ? <p className="note">{visit.note}</p> : null}
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="note">Our address and opening hours will be here soon.</p>
+        )}
       </section>
 
       <section className="order" id="order" aria-labelledby="order-heading">
@@ -129,19 +160,21 @@ export default function Home() {
             <label htmlFor="pickup">Pickup day</label>
             <input id="pickup" name="pickup" type="date" required />
           </div>
-          <fieldset className="field wide">
-            <legend>What would you like?</legend>
-            <div className="choices">
-              {orderable.flatMap((section) =>
-                section.items.map((item) => (
-                  <label className="choice" key={item.slug}>
-                    <input type="checkbox" name="items" value={item.name} />{" "}
-                    <span>{item.name}</span>
-                  </label>
-                )),
-              )}
-            </div>
-          </fieldset>
+          {orderable.length > 0 ? (
+            <fieldset className="field wide">
+              <legend>What would you like?</legend>
+              <div className="choices">
+                {orderable.flatMap((section) =>
+                  section.items.map((item) => (
+                    <label className="choice" key={item.slug}>
+                      <input type="checkbox" name="items" value={item.name} />{" "}
+                      <span>{item.name}</span>
+                    </label>
+                  )),
+                )}
+              </div>
+            </fieldset>
+          ) : null}
           <div className="field wide">
             <label htmlFor="notes">
               Anything else? <span className="hint">Quantities, sliced or whole.</span>
@@ -158,6 +191,6 @@ export default function Home() {
           </button>
         </form>
       </section>
-    </>
+    </Shell>
   );
 }

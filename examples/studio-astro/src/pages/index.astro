@@ -4,15 +4,21 @@ import Base from '../layouts/Base.astro';
 import { cms } from '../lib/cms';
 
 const hero = cms.region('home.hero');
+const identity = cms.region('site.identity');
 const sections = cms.region('home.sections').blocks;
-const lines = hero.lines ?? [];
+// Before anyone has written a headline, the studio's own line or name is one.
+const lines = hero.lines?.length ? hero.lines : [identity.tagline ?? identity.name];
+const primary = hero.primary?.href ? hero.primary : { href: '/work/', label: undefined };
 const rotating = hero.rotating ?? [];
 let word = 0;
 // Each rotating word holds for a beat, then the next rises into its place.
 const cycle = Math.max(rotating.length, 1) * 2.4;
 ---
 
-<Base description={hero.lede}>
+<Base
+  description={hero.lede}
+  schema={{ '@type': 'Organization', name: identity.name, url: Astro.site?.href, email: identity.email, description: identity.tagline }}
+>
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero__mesh" aria-hidden="true"><span></span><span></span><span></span></div>
     <span class="hero__grain" aria-hidden="true"></span>
@@ -46,7 +52,7 @@ const cycle = Math.max(rotating.length, 1) * 2.4;
       <div class="hero__foot">
         {hero.lede && <p class="hero__lede">{hero.lede}</p>}
         <div class="hero__actions">
-          <a class="button button--solid" href={hero.primary.href} data-magnetic>{hero.primary.label ?? 'See the work'}</a>
+          <a class="button button--solid" href={primary.href} data-magnetic>{primary.label ?? 'See the work'}</a>
           {hero.secondary?.href && <a class="button" href={hero.secondary.href} data-magnetic>{hero.secondary.label ?? 'Contact'}</a>}
         </div>
       </div>

@@ -31,7 +31,8 @@ export function essays() {
       tags: entry.data.tags ?? [],
       featured: Boolean(entry.data.featured),
       minutes: Math.max(1, Math.round(entry.body.split(/\s+/).length / WORDS_PER_MINUTE)),
-      html: marked.parse(entry.body, { async: false }),
+      // A code block scrolls sideways on a narrow screen, so the keyboard has to be able to reach it.
+      html: marked.parse(entry.body, { async: false }).replaceAll("<pre>", '<pre tabindex="0">'),
     }))
     .map((essay) => Object.assign(essay, { opening: opening(essay.html) }))
     .toSorted((a, b) => b.date.localeCompare(a.date));
