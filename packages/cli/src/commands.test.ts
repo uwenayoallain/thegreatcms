@@ -144,9 +144,7 @@ describe("shell completion", () => {
   it("completes commands, options and their values in bash", async () => {
     const { out: script } = await cli(["completion", "bash"]);
     expect(bash(script, "greatcms ch")).toBe("check");
-    expect(bash(script, 'greatcms init --framework ""')).toBe(
-      "astro next nuxt sveltekit eleventy generic",
-    );
+    expect(bash(script, 'greatcms init --framework ""')).toBe("astro next nuxt sveltekit generic");
     expect(bash(script, 'greatcms add ""')).toBe("region section block collection");
     expect(bash(script, "greatcms add region x --bl")).toBe("--blocks");
     expect(bash(script, "greatcms types -")).toContain("--out");

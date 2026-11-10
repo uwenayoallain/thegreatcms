@@ -29,7 +29,6 @@ describe("detecting a framework", () => {
       ["next.config.js", "next"],
       ["nuxt.config.ts", "nuxt"],
       ["svelte.config.js", "sveltekit"],
-      [".eleventy.js", "eleventy"],
     ];
     for (const [configFile, id] of cases) {
       expect(detectFramework({ files: [configFile] }).framework.id, configFile).toBe(id);
@@ -60,7 +59,6 @@ describe("detecting a framework", () => {
   });
 
   it("puts content where each generator already looks for it", () => {
-    expect(FRAMEWORKS.eleventy.regionsDir).toBe("_data/cms");
     expect(FRAMEWORKS.astro.regionsDir).toBe("src/content/cms");
     expect(FRAMEWORKS.next.regionsDir).toBe("content/cms");
   });
@@ -171,8 +169,8 @@ describe("what init generates", () => {
 
 describe("next steps", () => {
   it("shows how to read the region in the detected framework", () => {
-    const eleventy = answers({ framework: FRAMEWORKS.eleventy, regionsDir: "_data/cms" });
-    expect(nextSteps(eleventy, planInit(eleventy))).toContain("global data in Eleventy");
+    const next = answers({ framework: FRAMEWORKS.next, regionsDir: "content/cms" });
+    expect(nextSteps(next, planInit(next))).toContain("a server component");
 
     const astro = answers();
     const output = nextSteps(astro, planInit(astro));

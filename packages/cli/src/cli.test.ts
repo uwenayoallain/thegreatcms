@@ -266,14 +266,14 @@ describe("greatcms init", () => {
   });
 
   it("tells you how to read the region in the framework it found", async () => {
-    writeFileSync(join(fresh, ".eleventy.js"), "module.exports = () => {};\n");
+    writeFileSync(join(fresh, "next.config.mjs"), "export default {};\n");
 
     await initIn(fresh, ["init", "--yes"]);
 
     const text = out.join("");
-    expect(text).toContain("Detected Eleventy");
-    expect(text).toContain("global data in Eleventy");
-    expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain("regions: _data/cms");
+    expect(text).toContain("Detected Next.js");
+    expect(text).toContain("a server component");
+    expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain("regions: content/cms");
   });
 
   it("honours explicit flags over detection", async () => {
@@ -283,7 +283,7 @@ describe("greatcms init", () => {
       "init",
       "--yes",
       "--framework",
-      "eleventy",
+      "nuxt",
       "--template",
       "landing",
       "--name",
@@ -298,7 +298,7 @@ describe("greatcms init", () => {
     expect(readFileSync(join(fresh, ".cms/config.yaml"), "utf8")).toContain(
       "regions: _data/managed",
     );
-    expect(out.join("")).toContain("Using Eleventy (--framework)");
+    expect(out.join("")).toContain("Using Nuxt (--framework)");
     expect(out.join("")).not.toContain("Detected Astro");
   });
 

@@ -1,4 +1,4 @@
-/** Collection entries are Markdown with YAML frontmatter, because that is what Hugo, Jekyll, Eleventy and Astro already read. */
+/** Collection entries are Markdown with YAML frontmatter, because that is what Hugo, Jekyll and Astro already read. */
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { NOT_FLAT, parseFlatYaml } from "./flat-yaml.js";

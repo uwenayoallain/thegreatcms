@@ -24,7 +24,7 @@ command, started and stopped with it. `--port`, `--dev-url`, `--no-dev` and
 `@greatcms/studio` package, which it offers to install (it prints the command
 and asks first). Every other command runs on Node.js 20.
 
-`init` detects Astro, Next, Nuxt, SvelteKit and Eleventy and writes a note for
+`init` detects Astro, Next, Nuxt and SvelteKit and writes a note for
 coding agents into AGENTS.md. `add` edits the schema as text, keeping your
 comments. `check` and `types --check` are the two commands CI should run.
 

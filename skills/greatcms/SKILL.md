@@ -26,7 +26,7 @@ npx greatcms studio                # for a person, not for you: opens the visual
 `init` writes `.cms/schema.yaml`, `.cms/config.yaml` and a note in `AGENTS.md`
 for the next agent. It also adds `@greatcms/reader` to `package.json` and the
 live-preview line to the framework's config (see below); run the package
-manager's install afterwards. Flags for an unattended run: `--framework astro|next|nuxt|sveltekit|eleventy|generic`,
+manager's install afterwards. Flags for an unattended run: `--framework astro|next|nuxt|sveltekit|generic`,
 `--template hero|landing|business|blog|blank`, `--name "<site>"`, `--dir <content dir>`,
 `--no-wire` to leave `package.json` and framework config alone.
 

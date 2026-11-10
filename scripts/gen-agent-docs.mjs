@@ -34,7 +34,7 @@ const summary = [
   "Publishing writes files to a repository, and the commit triggers whatever deploy pipeline already existed.",
   "",
   "It is not a framework plugin. The integration surface is a schema file and some JSON: the tooling",
-  "scaffolds Astro, Next.js, Nuxt, SvelteKit and Eleventy, and any language that reads JSON can consume it.",
+  "scaffolds Astro, Next.js, Nuxt and SvelteKit, and any language that reads JSON can consume it.",
   "If you are an agent wiring a site up to it, read the standard below and write files: there is no",
   "SDK to install and no runtime to call.",
 ].join("\n");

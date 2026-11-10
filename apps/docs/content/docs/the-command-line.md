@@ -35,7 +35,7 @@ greatcms completion fish > ~/.config/fish/completions/greatcms.fish
 npx greatcms init
 ```
 
-Detects the framework (Astro, Next, Nuxt, SvelteKit, Eleventy, or nothing in
+Detects the framework (Astro, Next, Nuxt, SvelteKit, or nothing in
 particular), puts content where that generator already looks for it, writes a
 commented `.cms/schema.yaml` and `.cms/config.yaml` with the editor's `$schema`
 line for autocomplete, and prints the snippet that reads your first region in

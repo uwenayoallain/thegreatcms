@@ -1,7 +1,7 @@
 /** Working out what a site is built with, so `init` can propose the right. */
 
 /** The frameworks `init` scaffolds for. */
-export type FrameworkId = "astro" | "next" | "nuxt" | "sveltekit" | "eleventy" | "generic";
+export type FrameworkId = "astro" | "next" | "nuxt" | "sveltekit" | "generic";
 
 export interface Framework {
   id: FrameworkId;
@@ -104,27 +104,6 @@ export const FRAMEWORKS: Record<FrameworkId, Framework> = {
         `<h1>{data.${nameFor(regionId)}.heading}</h1>`,
       ].join("\n"),
   },
-  eleventy: {
-    id: "eleventy",
-    label: "Eleventy",
-    // One global data module makes every schema region available to templates.
-    regionsDir: "_data/cms",
-    collectionsDir: "content/blog",
-    mediaDir: "public/media",
-    mediaUrlPrefix: "/media",
-    snippet: (regionId) =>
-      [
-        "// _data/cms.mjs",
-        'import { createReader } from "@greatcms/reader";',
-        "export default function () {",
-        "  const cms = createReader();",
-        "  return Object.fromEntries(cms.regionIds().map((id) => [id, cms.region(id)]));",
-        "}",
-        "",
-        "<!-- Every schema region is now global data in Eleventy: -->",
-        `<h1>{{ cms["${regionId}"].heading }}</h1>`,
-      ].join("\n"),
-  },
   generic: {
     id: "generic",
     label: "Something else",
@@ -171,7 +150,6 @@ export function detectFramework(input: DetectionInput): Detection {
     ["next", ["next.config.js", "next.config.mjs", "next.config.ts"]],
     ["nuxt", ["nuxt.config.ts", "nuxt.config.js"]],
     ["sveltekit", ["svelte.config.js"]],
-    ["eleventy", [".eleventy.js", "eleventy.config.js", "eleventy.config.mjs"]],
   ];
 
   for (const [id, candidates] of byFile) {
@@ -186,7 +164,6 @@ export function detectFramework(input: DetectionInput): Detection {
     ["next", "next"],
     ["nuxt", "nuxt"],
     ["sveltekit", "@sveltejs/kit"],
-    ["eleventy", "@11ty/eleventy"],
   ];
 
   for (const [id, dependency] of byDep) {

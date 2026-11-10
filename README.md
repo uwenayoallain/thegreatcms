@@ -15,7 +15,7 @@ one thing Git can't hold, form submissions, in a single inbox.
 
 It is not a framework plugin. The integration surface is a schema file and some
 JSON, so a site reads it with an import and ships no runtime. `greatcms init`
-scaffolds for Astro, Next.js, Nuxt, SvelteKit and Eleventy, and a Python reader
+scaffolds for Astro, Next.js, Nuxt and SvelteKit, and a Python reader
 passes the same conformance suite as the TypeScript one.
 
 The product is the file standard: read [SPEC.md](./SPEC.md).

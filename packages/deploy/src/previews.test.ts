@@ -102,7 +102,7 @@ describe("finding a site's dev server", () => {
     expect(
       devCommand(site("kit", { devDependencies: { "@sveltejs/kit": "2", vite: "7" } })),
     ).toEqual({ command: expect.stringContaining("node_modules/.bin/vite dev") });
-    expect(devCommand(site("other", { scripts: { dev: "eleventy --serve" } }))).toEqual({
+    expect(devCommand(site("other", { scripts: { dev: "node server.js" } }))).toEqual({
       command: "exec npm run dev",
     });
     expect(devCommand(site("none", {}))).toHaveProperty("problem");
