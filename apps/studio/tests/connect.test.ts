@@ -146,21 +146,21 @@ describe("the sites folder", () => {
   });
 
   it("connects a folder with one click, named after it, with a preview address", async () => {
-    folder("nesa-petroleum", { ".cms/schema.yaml": SCHEMA });
-    const response = await post(app(), "/sites", { path: join(root, "nesa-petroleum") });
+    folder("harbour-cafe", { ".cms/schema.yaml": SCHEMA });
+    const response = await post(app(), "/sites", { path: join(root, "harbour-cafe") });
 
     expect(response.status).toBe(303);
     const [site] = store.listSites();
-    expect(site?.name).toBe("Nesa petroleum");
-    expect(site?.devUrl).toBe("https://nesa-petroleum-preview.example.com");
+    expect(site?.name).toBe("Harbour cafe");
+    expect(site?.devUrl).toBe("https://harbour-cafe-preview.example.com");
     expect(JSON.parse(readFileSync(previewsFile, "utf8"))).toEqual({
       version: 1,
       sites: [
         {
           id: site?.id,
-          name: "Nesa petroleum",
-          host: "nesa-petroleum-preview.example.com",
-          path: join(root, "nesa-petroleum"),
+          name: "Harbour cafe",
+          host: "harbour-cafe-preview.example.com",
+          path: join(root, "harbour-cafe"),
         },
       ],
     });

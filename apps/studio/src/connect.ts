@@ -130,7 +130,7 @@ export function isInside(root: string, path: string): boolean {
   return target === base || target.startsWith(`${base}/`);
 }
 
-/** A readable name from a folder name: `nesa-petroleum` becomes `Nesa petroleum`. */
+/** A readable name from a folder name: `harbour-cafe` becomes `Harbour cafe`. */
 export function nameFromFolder(folder: string): string {
   const words = folder.replace(/[-_.]+/g, " ").trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : folder;
@@ -524,7 +524,7 @@ export class PreviewAddresses {
     return this.pattern.exec(devUrl)?.[1] ?? null;
   }
 
-  /** A free address for a new site, from its folder name: `nesa`, then `nesa-2`. */
+  /** A free address for a new site, from its folder name: `shop`, then `shop-2`. */
   suggest(folder: string, sites: Site[]): string {
     const base =
       folder
