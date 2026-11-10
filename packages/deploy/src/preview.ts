@@ -609,7 +609,7 @@ NUXT_PUBLIC_*, npm_config_* or *_TELEMETRY_DISABLED, and what PREVIEW_ENV names:
 this process's environment. A dev server that keeps failing is retried with a growing wait.
 
 Point the studio's dev URL (through your proxy) at PREVIEW_PORT. GET /__greatcms/preview reports
-the state; GET /__greatcms/health answers 200 while the proxy is up.
+the state; \`greatcms-preview health\` exits 0 while the proxy is up, for a container healthcheck.
 
 Many sites from one process, routed by the host each request names:
   PREVIEW_SITES     the list the studio writes (STUDIO_PREVIEWS_FILE); replaces PREVIEW_SOURCE
@@ -661,6 +661,11 @@ export async function previewMain(argv: string[], env: NodeJS.ProcessEnv): Promi
   if (argv[0] === "--help" || argv[0] === "-h" || argv[0] === "help") {
     process.stdout.write(PREVIEW_HELP);
     return 0;
+  }
+  if (argv[0] === "health") {
+    const port = Number(env.PREVIEW_PORT || 4321);
+    const answer = await fetch(`http://127.0.0.1:${port}${HEALTH_PATH}`).catch(() => null);
+    return answer?.ok ? 0 : 1;
   }
   if (env.PREVIEW_SITES) return previewSitesMain(env);
   let options: PreviewOptions;

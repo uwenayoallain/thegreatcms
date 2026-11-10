@@ -22,7 +22,7 @@ const run = promisify(execFile);
 // The source may be a repository the studio writes into; nothing in it may run here.
 const SAFE_GIT = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
 // A remote that wants a password is a failed check, not a prompt nobody will answer.
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+const gitEnv = () => ({ ...process.env, GIT_TERMINAL_PROMPT: "0" });
 const GIT_QUICK_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60_000;
 
@@ -232,13 +232,13 @@ export class Deployer {
       const timeout = this.options.timeout ?? DEFAULT_TIMEOUT_MS;
       await run("git", [...SAFE_GIT, "clone", "-q", "--no-checkout", source, work], {
         timeout,
-        env: GIT_ENV,
+        env: gitEnv(),
       });
-      await run(
-        "git",
-        [...SAFE_GIT, "-C", work, "checkout", "-q", "--detach", "--end-of-options", sha],
-        { timeout, env: GIT_ENV },
-      );
+      // No --end-of-options: the git in Debian 12 refuses it after --detach, and `sha` is forty hex digits.
+      await run("git", [...SAFE_GIT, "-C", work, "checkout", "-q", "--detach", sha], {
+        timeout,
+        env: gitEnv(),
+      });
       await this.build(work);
       const release = join(root, "releases", sha);
       const output = resolve(work, this.options.output);
@@ -283,7 +283,7 @@ export class Deployer {
     const { stdout } = await run(
       "git",
       [...SAFE_GIT, "ls-remote", this.options.source, `refs/heads/${this.options.branch}`],
-      { timeout: GIT_QUICK_MS, env: GIT_ENV },
+      { timeout: GIT_QUICK_MS, env: gitEnv() },
     );
     const sha = stdout.split(/\s/)[0];
     if (!sha) throw new Error(`${this.options.source} has no branch "${this.options.branch}".`);
@@ -304,7 +304,7 @@ export class Deployer {
           "--end-of-options",
           sha,
         ],
-        { timeout: GIT_QUICK_MS, env: GIT_ENV },
+        { timeout: GIT_QUICK_MS, env: gitEnv() },
       );
       return stdout.trim();
     } catch {

@@ -189,6 +189,27 @@ describe("two builders in one root", () => {
   });
 });
 
+describe("the git in the image", () => {
+  it("builds with a git that refuses --end-of-options after --detach, as Debian 12's does", async () => {
+    const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+    const shims = join(sandbox, "bin");
+    mkdirSync(shims);
+    writeFileSync(
+      join(shims, "git"),
+      `#!/bin/sh\ncase " $* " in *" checkout "*" --end-of-options "*) echo "fatal: --detach does not take a path argument" >&2; exit 128;; esac\nexec ${real} "$@"\n`,
+      { mode: 0o755 },
+    );
+    const path = process.env.PATH;
+    process.env.PATH = `${shims}:${path}`;
+    try {
+      expect((await deployer().once()).outcome).toBe("deployed");
+    } finally {
+      process.env.PATH = path;
+    }
+    expect(live()).toBe("initial");
+  });
+});
+
 describe("the files the builder shares", () => {
   it("keeps status.json whole JSON through failures, with nothing half-written beside it", async () => {
     await deployer().once();
