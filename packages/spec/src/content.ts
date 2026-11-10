@@ -1,7 +1,15 @@
 /** Defaults and fallback: the mechanics of the hybrid model. */
 
 import type { FieldDef } from "./fields.js";
-import { type CmsSchema, type RegionDef, blockVariants, isBlocksRegion } from "./schema.js";
+import { boundedDepth } from "./errors.js";
+import {
+  type BlockDef,
+  type CmsSchema,
+  type RegionDef,
+  blockVariants,
+  isBlocksRegion,
+} from "./schema.js";
+import { own, set } from "./shape.js";
 
 export type RegionDocument = Record<string, unknown>;
 
@@ -18,22 +26,22 @@ export function fieldDefaults(fields: Record<string, FieldDef>): RegionDocument 
   for (const [name, def] of Object.entries(fields)) {
     if (def.type === "group") {
       const nested = fieldDefaults(def.fields);
-      if (Object.keys(nested).length > 0) out[name] = nested;
+      if (Object.keys(nested).length > 0) set(out, name, nested);
       continue;
     }
     if (def.type === "list") {
       continue; // an empty list is the only sensible default
     }
     if (def.type === "blocks") {
-      if (def.default) out[name] = def.default;
+      if (def.default) set(out, name, def.default);
       continue;
     }
     if (def.type === "reference") {
-      if (def.multiple) out[name] = [];
+      if (def.multiple) set(out, name, []);
       continue;
     }
     if ("default" in def && def.default !== undefined) {
-      out[name] = def.default;
+      set(out, name, def.default);
     }
   }
   return out;
@@ -57,15 +65,18 @@ export function resolveRegion(
   regionId: string,
   stored: RegionDocument | null | undefined,
 ): RegionDocument | null {
-  const region = schema.regions[regionId];
+  const region = own(schema.regions, regionId) as RegionDef | undefined;
   if (!region) return null;
-  const defaults = defaultsFor(region);
-  const document = stored ?? {};
-  if (isBlocksRegion(region)) {
-    if (!Array.isArray(document.blocks)) return defaults;
-    return { ...document, blocks: document.blocks.map((block) => resolveBlock(schema, block)) };
-  }
-  return resolveNested(schema, region.fields, deepMerge(defaults, document));
+  return boundedDepth(undefined, () => {
+    const defaults = defaultsFor(region);
+    const document = stored ?? {};
+    if (isBlocksRegion(region)) {
+      const blocks = document.blocks;
+      if (!Array.isArray(blocks)) return defaults;
+      return { ...document, blocks: blocks.map((block) => resolveBlock(schema, block)) };
+    }
+    return resolveNested(schema, region.fields, deepMerge(defaults, document));
+  });
 }
 
 /**
@@ -74,14 +85,16 @@ export function resolveRegion(
  * content actually has, or a nested block renders without its defaults.
  */
 function resolveBlock(schema: CmsSchema, block: unknown): unknown {
-  const type = (block as { _type?: unknown })?._type;
-  const def = typeof type === "string" ? schema.blocks[type] : undefined;
-  if (!def || !isPlainObject(block)) return block;
+  if (!isPlainObject(block)) return block;
+  const type = own(block, "_type");
+  const def =
+    typeof type === "string" ? (own(schema.blocks, type) as BlockDef | undefined) : undefined;
+  if (!def) return block;
   const resolved = resolveNested(schema, def.fields, deepMerge(fieldDefaults(def.fields), block));
   // A block with variants always has one: the first, unless the content names another.
   const variants = blockVariants(def);
   if (variants.length > 0) {
-    const named = resolved._variant;
+    const named = own(resolved, "_variant");
     resolved._variant = variants.some((v) => v.value === named) ? named : variants[0]!.value;
   }
   return resolved;
@@ -95,13 +108,16 @@ function resolveNested(
 ): RegionDocument {
   const out: RegionDocument = { ...document };
   for (const [name, def] of Object.entries(fields)) {
-    const value = out[name];
+    if (def.type !== "blocks" && def.type !== "group") continue;
+    const value = own(out, name);
     if (def.type === "blocks" && Array.isArray(value)) {
-      out[name] = value.map((entry) => resolveBlock(schema, entry));
-      continue;
-    }
-    if (def.type === "group" && isPlainObject(value)) {
-      out[name] = resolveNested(schema, def.fields, value);
+      set(
+        out,
+        name,
+        value.map((entry) => resolveBlock(schema, entry)),
+      );
+    } else if (def.type === "group" && isPlainObject(value)) {
+      set(out, name, resolveNested(schema, def.fields, value));
     }
   }
   return out;
@@ -111,12 +127,12 @@ function deepMerge(base: RegionDocument, over: RegionDocument): RegionDocument {
   const out: RegionDocument = { ...base };
   for (const [key, value] of Object.entries(over)) {
     if (value === undefined) continue;
-    const existing = out[key];
-    if (isPlainObject(existing) && isPlainObject(value)) {
-      out[key] = deepMerge(existing, value);
-    } else {
-      out[key] = value;
-    }
+    const existing = own(out, key);
+    set(
+      out,
+      key,
+      isPlainObject(existing) && isPlainObject(value) ? deepMerge(existing, value) : value,
+    );
   }
   return out;
 }
@@ -130,16 +146,20 @@ function isPlainObject(value: unknown): value is RegionDocument {
  * two-space indent, trailing newline. Regions and JSON collection entries both use it.
  */
 export function serializeRegion(document: RegionDocument, meta?: RegionMeta): string {
-  const ordered = sortKeys(document) as RegionDocument;
-  if (meta) ordered._meta = sortKeys(meta) as RegionMeta;
-  return `${JSON.stringify(ordered, null, 2)}\n`;
+  return boundedDepth(undefined, () => {
+    const ordered = sortKeys(document) as RegionDocument;
+    if (meta) ordered._meta = sortKeys(meta) as RegionMeta;
+    return `${JSON.stringify(ordered, null, 2)}\n`;
+  });
 }
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (!isPlainObject(value)) return value;
   const ordered: RegionDocument = {};
-  for (const key of Object.keys(value).toSorted(machineryLast)) ordered[key] = sortKeys(value[key]);
+  for (const key of Object.keys(value).toSorted(machineryLast)) {
+    set(ordered, key, sortKeys(value[key]));
+  }
   return ordered;
 }
 
@@ -159,8 +179,7 @@ export function parseRegionFile(source: string, file: string): RegionDocument {
     }
     return parsed as RegionDocument;
   } catch (err) {
-    throw new Error(`${file}: could not read region content: ${(err as Error).message}`, {
-      cause: err,
-    });
+    const reason = err instanceof RangeError ? "it is nested too deeply" : (err as Error).message;
+    throw new Error(`${file}: could not read region content: ${reason}`, { cause: err });
   }
 }

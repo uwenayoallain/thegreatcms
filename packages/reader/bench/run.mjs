@@ -37,9 +37,7 @@ try {
   });
 
   const dev = createReader({ root, drafts: true });
-  once(`region() x ${ids.length} in development`, () =>
-    ids.forEach((id) => dev.region(id)),
-  );
+  once(`region() x ${ids.length} in development`, () => ids.forEach((id) => dev.region(id)));
   once("collection('blog') in development", () => dev.collection("blog"));
 } finally {
   rmSync(root, { recursive: true, force: true });
