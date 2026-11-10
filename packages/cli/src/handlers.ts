@@ -13,10 +13,12 @@ import {
   parseConfig,
   parseSchema,
   regionFilePath,
+  usePatternMatcher,
   type CmsConfig,
   type CollectionFormat,
   type CmsSchema,
 } from "@greatcms/spec";
+import { boundedMatch } from "@greatcms/spec/node";
 import {
   checkSite,
   formatReport,
@@ -599,6 +601,8 @@ export async function checkCommand(options: RunOptions & { flags: Flags }): Prom
   const { cwd, stdout, stderr, flags } = options;
   const root = resolve(cwd);
 
+  // A build waits for this: a pattern that backtracks without end is stopped and reported.
+  usePatternMatcher(boundedMatch);
   const schemaSource = await schemaSourceOf(root);
   const report: CheckReport = await checkSite({
     schema: parseSchema(schemaSource.source, { file: schemaSource.name }),
