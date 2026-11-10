@@ -20,6 +20,7 @@ YAML: it keeps indentation, field syntax and paths right.
 npx greatcms init --yes            # detects Astro, Next.js, Nuxt, SvelteKit
 npx greatcms doctor                # prints what it set up and where content lives
 npx greatcms describe              # every field, its type and limits, and the file it lives in: read before writing content
+npx greatcms studio                # for a person, not for you: opens the visual editor for this folder in their browser and runs until Ctrl+C
 ```
 
 `init` writes `.cms/schema.yaml`, `.cms/config.yaml` and a note in `AGENTS.md`

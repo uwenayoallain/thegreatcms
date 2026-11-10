@@ -167,6 +167,37 @@ export const COMMANDS: CommandSpec[] = [
     examples: ["greatcms describe", "greatcms describe --json"],
   },
   {
+    name: "studio",
+    maxArgs: 0,
+    summary: "open the visual editor for this site, on this machine",
+    description:
+      "Starts the GreatCMS studio on 127.0.0.1 with this folder as its one site, signs your browser in through a one-time link, and shows the site's dev server as the live preview: the one already running, or the site's own dev command started here and stopped with it. Publishing commits to this working copy as you; nothing is pushed. Needs Node.js 22.13 or newer and the @greatcms/studio package, which it offers to install.",
+    options: [
+      {
+        name: "port",
+        value: "<number>",
+        help: "the studio's port (default: 4983, or the next free one)",
+      },
+      {
+        name: "host",
+        value: "<address>",
+        help: "listen somewhere other than 127.0.0.1; anything but loopback needs STUDIO_PASSWORD",
+      },
+      {
+        name: "dev-url",
+        value: "<url>",
+        help: "the site's dev server, when it is already running",
+      },
+      { name: "no-dev", help: "do not look for or start a dev server: edit without the preview" },
+      { name: "no-open", help: "print the sign-in link without opening a browser" },
+    ],
+    examples: [
+      "greatcms studio",
+      "greatcms studio --port 5000 --no-open",
+      "greatcms studio --dev-url http://localhost:4321",
+    ],
+  },
+  {
     name: "completion",
     args: "<bash|zsh|fish>",
     maxArgs: 1,

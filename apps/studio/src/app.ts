@@ -187,6 +187,8 @@ export interface AppOptions {
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
   notificationLimiter?: RateLimiter;
+  /** `greatcms studio`: one project, the folder it was started in, and nothing about other sites or people. */
+  local?: boolean;
 }
 
 /** Bodies a public visitor can post, past which this is not a contact form. */
@@ -524,7 +526,11 @@ export function createApp(options: AppOptions) {
     c.set("actor", who.name);
     c.set("viewer", who);
     c.set("session", session.actor);
-    const shell = { ...panesOf(c.req.header("cookie")), unread: () => store.countUnread() };
+    const shell = {
+      ...panesOf(c.req.header("cookie")),
+      unread: () => store.countUnread(),
+      local: options.local,
+    };
     return withViewer(who, () => withChrome(shell, next));
   });
 
@@ -547,6 +553,28 @@ export function createApp(options: AppOptions) {
     }
     return c.redirect(isSafeRedirect(back) ? back : "/", 303);
   });
+
+  if (options.local) {
+    // One project: there is nothing to connect, copy, hand to other people, or disconnect.
+    for (const route of [
+      "/sites/new",
+      "/sites/setup",
+      "/sites/clone",
+      "/sites/clone/*",
+      "/git-access",
+      "/git-access/*",
+      "/editors",
+      "/editors/*",
+      "/sites/:id/delete",
+    ]) {
+      app.all(route, (c) => c.notFound());
+    }
+    app.post("/sites", (c) => c.notFound());
+    app.get("/", (c) => {
+      const [site] = store.listSites();
+      return site ? c.redirect(`/sites/${site.id}`, 303) : c.notFound();
+    });
+  }
 
   // Sites and people are the owner's to change; editors change content. Attached to the
   // routes through the router, so no spelling of a path reaches one without passing here.

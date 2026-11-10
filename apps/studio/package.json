@@ -1,9 +1,49 @@
 {
   "name": "@greatcms/studio",
   "version": "0.1.2",
-  "private": true,
-  "description": "The GreatCMS studio: manage many Git-backed sites from one place.",
+  "description": "The GreatCMS studio: the visual editor for Git-backed sites, run locally with `greatcms studio` or as a server.",
+  "keywords": [
+    "cms",
+    "content",
+    "editor",
+    "git",
+    "studio"
+  ],
+  "homepage": "https://github.com/uwenayoallain/thegreatcms/tree/main/apps/studio#readme",
+  "bugs": {
+    "url": "https://github.com/uwenayoallain/thegreatcms/issues"
+  },
+  "license": "MIT",
+  "author": "UWENAYO Alain Pacifique",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uwenayoallain/thegreatcms.git",
+    "directory": "apps/studio"
+  },
+  "bin": {
+    "greatcms-studio": "./bin/greatcms-studio.mjs"
+  },
+  "files": [
+    "dist",
+    "public",
+    "bin",
+    "start.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "main": "./dist/start.js",
+  "types": "./start.d.ts",
+  "exports": {
+    ".": {
+      "types": "./start.d.ts",
+      "default": "./dist/start.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "tsdown && (tsdown --watch & node --watch --enable-source-maps dist/main.js)",
     "start": "node --enable-source-maps dist/main.js",
@@ -11,13 +51,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
+  "devDependencies": {
     "@greatcms/cli": "workspace:*",
+    "@greatcms/conformance": "workspace:*",
+    "@greatcms/reader": "workspace:*",
     "@greatcms/spec": "workspace:*",
     "@hono/node-server": "^2.1.6",
+    "axe-core": "^4.13.0",
     "hono": "^4.13.12",
+    "html-validate": "~11.17.0",
     "htmlparser2": "^12.0.0",
+    "jsdom": "^30.0.1",
     "marked": "^15.0.12",
+    "playwright": "^1.62.1",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.5.0",
     "prosemirror-inputrules": "^1.5.1",
@@ -26,15 +72,7 @@
     "prosemirror-schema-basic": "^1.2.4",
     "prosemirror-schema-list": "^1.5.1",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.8"
-  },
-  "devDependencies": {
-    "@greatcms/conformance": "workspace:*",
-    "@greatcms/reader": "workspace:*",
-    "axe-core": "^4.13.0",
-    "html-validate": "~11.17.0",
-    "jsdom": "^30.0.1",
-    "playwright": "^1.62.1",
+    "prosemirror-view": "^1.42.8",
     "vitest": "^4.1.11"
   },
   "engines": {

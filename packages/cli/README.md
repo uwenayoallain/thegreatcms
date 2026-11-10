@@ -13,7 +13,16 @@ npx greatcms types --out src/cms.d.ts   # TypeScript from the schema
 npx greatcms check [--json]  # validate every content file; non-zero for CI
 npx greatcms doctor [--json] # what the setup looks like, and any unsaved draft
 npx greatcms describe        # the content model in one screen
+npx greatcms studio          # the visual editor for this folder, on this machine
 ```
+
+`studio` starts the GreatCMS studio on `127.0.0.1:4983` with this folder as its
+one site, signs your browser in through a one-time link, and uses the site's
+dev server as the live preview: the one already running, or your own dev
+command, started and stopped with it. `--port`, `--dev-url`, `--no-dev` and
+`--no-open` change the defaults. It needs Node.js 22.13 or newer and the
+`@greatcms/studio` package, which it offers to install (it prints the command
+and asks first). Every other command runs on Node.js 20.
 
 `init` detects Astro, Next, Nuxt, SvelteKit and Eleventy and writes a note for
 coding agents into AGENTS.md. `add` edits the schema as text, keeping your
