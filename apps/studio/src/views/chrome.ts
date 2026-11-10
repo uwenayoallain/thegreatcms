@@ -8,6 +8,8 @@ export interface Chrome {
   /** The width the live preview was dragged to, in pixels. */
   live?: number;
   unread?: () => number;
+  /** A notice an action left for this page, taken by the page that shows it. */
+  flash?: () => { kind: "success" | "error"; message: string } | undefined;
   /** One project, on the machine of whoever started it: nothing about other sites or other people is offered. */
   local?: boolean;
 }

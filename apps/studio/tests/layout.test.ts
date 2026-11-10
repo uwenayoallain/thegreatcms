@@ -10,7 +10,7 @@ import { serve } from "@hono/node-server";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie, editorStamp, sessionKey } from "../src/auth.js";
+import { createSessionCookie, editorStamp, flashCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 import { GitAccess } from "../src/git-access.js";
 import { GitHub } from "../src/github.js";
@@ -174,6 +174,7 @@ interface Measure {
   shifts: Array<{ value: number; sources: string[] }>;
   boxes: Record<string, Box | null>;
   font: string;
+  notice: string;
 }
 
 let server: ReturnType<typeof serve>;
@@ -319,12 +320,16 @@ async function newContext(
 }
 
 /** Loads a screen as a first visit would, with fonts and scripts arriving late, and measures it. */
-async function measure(screen: (typeof SCREENS)[number], width: number): Promise<Measure> {
+async function measure(
+  screen: (typeof SCREENS)[number],
+  width: number,
+  extra: Record<string, string> = {},
+): Promise<Measure> {
   const { path, signedOut } = screen;
   const [cookieName, cookieValue] = githubCookie.split("=") as [string, string];
   const context = await newContext(width, {
     signedOut,
-    cookies: screen.github ? { [cookieName]: cookieValue } : undefined,
+    cookies: { ...extra, ...(screen.github ? { [cookieName]: cookieValue } : {}) },
   });
   // Late fonts and bundles are what make a page jump; routing also turns the HTTP cache off.
   await context.route(/\/assets\/.*\.(woff2|js)/, async (route) => {
@@ -390,6 +395,7 @@ async function measure(screen: (typeof SCREENS)[number], width: number): Promise
         shifts,
         boxes,
         font: h1 ? getComputedStyle(h1).fontSize : "",
+        notice: document.querySelector("main > .flash")?.textContent?.trim() ?? "",
       };
     }, LANDMARKS);
   } finally {
@@ -452,6 +458,23 @@ describe.skipIf(!browser)("layout stability", () => {
     expect.soft(shifted).toEqual([]);
     expect.soft(mismatches(results)).toEqual([]);
   });
+
+  it.each([375, 1280])(
+    "at %ipx, a notice left by an action is on the page from its first paint",
+    async (width) => {
+      const [name, value] = flashCookie(sessionKey(SECRET, PASSWORD), "studio", {
+        kind: "success",
+        message: "Settings saved.",
+      })
+        .split(";")[0]!
+        .split("=") as [string, string];
+      const result = await measure({ name: "site with a notice", path: "/sites/site-1" }, width, {
+        [name]: value,
+      });
+      expect(result.notice).toBe("Settings saved.");
+      expect(result.shifts).toEqual([]);
+    },
+  );
 
   it.each([375, 1280])(
     "at %ipx, lines the GitHub button up with the password form, with no script",

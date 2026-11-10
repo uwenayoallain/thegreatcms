@@ -43,7 +43,11 @@ import { setFlagsFromString } from "node:v8";
 import { SiteAccess } from "./access.js";
 import {
   checkPassword,
+  clearFlash,
   clearGithubTrip,
+  flashCookie,
+  hasFlash,
+  readFlash,
   clearPreviewCookie,
   clearSessionCookie,
   readGithubTrip,
@@ -620,13 +624,40 @@ export function createApp(options: AppOptions) {
     const mine = await sitesFor(who);
     c.set("sites", mine.sites);
     c.set("among", mine.among);
+    // A notice an action left behind: shown by the first page drawn after it, then forgotten.
+    const waiting =
+      c.req.method === "GET" ? readFlash(c.req.header("cookie"), signingKey, session.actor) : null;
+    let shown = false;
     const shell = {
       ...panesOf(c.req.header("cookie")),
       unread: () => store.countUnread(mine.among),
       local: options.local,
+      flash: () => {
+        shown = true;
+        return waiting ?? undefined;
+      },
     };
-    return withViewer(who, () => withChrome(shell, next));
+    await withViewer(who, () => withChrome(shell, next));
+    const stale = c.req.method === "GET" && !waiting && hasFlash(c.req.header("cookie"));
+    if ((shown && waiting) || (stale && c.res.status === 200)) {
+      c.header("Set-Cookie", clearFlash(isSecure(c)), { append: true });
+    }
   });
+
+  /** Answers an action with a redirect, and a notice for the page it lands on. */
+  const done = (
+    c: Context<{ Variables: Variables }>,
+    to: string,
+    message: string,
+    kind: "success" | "error" = "success",
+  ) => {
+    c.header(
+      "Set-Cookie",
+      flashCookie(signingKey, c.get("session"), { kind, message }, isSecure(c)),
+      { append: true },
+    );
+    return c.redirect(to, 303);
+  };
 
   /** A plain form post, so the switch works before any script has loaded, or without one. */
   app.post("/theme", async (c) => {
@@ -1005,8 +1036,9 @@ export function createApp(options: AppOptions) {
 
   app.post("/editors/:id/delete", (c) => {
     const editor = store.getEditor(Number(c.req.param("id")));
-    if (editor) store.removeEditor(editor.id);
-    return c.redirect("/editors", 303);
+    if (!editor) return c.redirect("/editors", 303);
+    store.removeEditor(editor.id);
+    return done(c, "/editors", `${editor.name} can no longer sign in.`);
   });
 
   app.post("/sign-in", async (c) => {
@@ -1121,8 +1153,9 @@ export function createApp(options: AppOptions) {
     const id = submissionId(c.req.param("id"));
     if (id === null || !inInbox(c, id)) return c.notFound();
     const form = await c.req.formData();
-    store.markRead(id, String(form.get("read") ?? "1") === "1");
-    return c.redirect(inboxView(c, form), 303);
+    const read = String(form.get("read") ?? "1") === "1";
+    store.markRead(id, read);
+    return done(c, inboxView(c, form), read ? "Marked as read." : "Marked as unread.");
   });
 
   app.post("/inbox/:id/delete", async (c) => {
@@ -1131,7 +1164,7 @@ export function createApp(options: AppOptions) {
     store.deleteSubmission(id);
     // A bare POST still deletes; it just has no filter to go back to.
     const form = await c.req.formData().catch(() => new FormData());
-    return c.redirect(inboxView(c, form), 303);
+    return done(c, inboxView(c, form), "The submission is deleted.");
   });
 
   /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
@@ -1228,7 +1261,7 @@ export function createApp(options: AppOptions) {
     }
     store.addSite(site);
     sitesChanged();
-    return c.redirect(`/sites/${site.id}`, 303);
+    return done(c, `/sites/${site.id}`, `${site.name} is connected.`);
   };
 
   app.post("/sites", async (c) => {
@@ -1473,7 +1506,7 @@ export function createApp(options: AppOptions) {
         }),
       );
     }
-    return c.redirect("/sites/new#github", 303);
+    return done(c, "/sites/new#github", "GitHub is connected. Choose a repository to copy.");
   });
 
   /** For an app made before sign-in existed: the client secret its owner generated on GitHub. */
@@ -1494,9 +1527,10 @@ export function createApp(options: AppOptions) {
   app.post("/git-access/github/refresh", (c) => {
     github?.forget();
     access?.forget();
-    return c.redirect(
+    return done(
+      c,
       c.req.header("referer")?.includes("/sites/new") ? "/sites/new#github" : "/git-access",
-      303,
+      "Asked GitHub again: this is what it reports now.",
     );
   });
 
@@ -1537,13 +1571,14 @@ export function createApp(options: AppOptions) {
         422,
       );
     }
-    return c.redirect("/git-access", 303);
+    return done(c, "/git-access", `The token for ${hostLabel(host)} is saved.`);
   });
 
   app.post("/git-access/token/delete", async (c) => {
     const form = await c.req.formData();
-    gitAccess?.removeToken(String(form.get("host") ?? ""));
-    return c.redirect("/git-access", 303);
+    const host = String(form.get("host") ?? "");
+    gitAccess?.removeToken(host);
+    return done(c, "/git-access", `The token for ${hostLabel(host)} is removed.`);
   });
 
   app.post("/sites/clone/dismiss", async (c) => {
@@ -1631,7 +1666,7 @@ export function createApp(options: AppOptions) {
       deployRoot: values.deployRoot,
     });
     sitesChanged();
-    return c.redirect(`/sites/${site.id}`, 303);
+    return done(c, `/sites/${site.id}`, "Settings saved.");
   });
 
   /**
@@ -1677,7 +1712,11 @@ export function createApp(options: AppOptions) {
         actor: c.get("session"),
         author: authorOf(who) ?? null,
       });
-      return c.redirect(`/sites/${site.id}#scheduled`, 303);
+      return done(
+        c,
+        `/sites/${site.id}`,
+        "Scheduled. It is listed under Scheduled until it publishes.",
+      );
     });
   }
 
@@ -1685,7 +1724,7 @@ export function createApp(options: AppOptions) {
     const job = store.getScheduled(Number(c.req.param("job")));
     if (!job || job.siteId !== c.req.param("id")) return c.notFound();
     store.settleScheduled(job.id, "cancelled", `cancelled by ${c.get("actor")}`);
-    return c.redirect(`/sites/${job.siteId}#scheduled`, 303);
+    return done(c, `/sites/${job.siteId}`, `The scheduled publish of ${job.label} is cancelled.`);
   });
 
   app.get("/sites/:id/search", async (c) => {
@@ -1711,7 +1750,11 @@ export function createApp(options: AppOptions) {
     if (!(await requestRollback(site.deployRoot, sha))) {
       return c.html(errorPage(site.name, "There is no release of that commit to go back to."), 404);
     }
-    return c.redirect(`/sites/${site.id}#live`, 303);
+    return done(
+      c,
+      `/sites/${site.id}`,
+      `Asked the builder to go back to ${sha.slice(0, 7)}. The live site changes once it has.`,
+    );
   });
 
   app.get("/sites/:id/pending-media/:token/:index", (c) => {
@@ -1819,7 +1862,7 @@ export function createApp(options: AppOptions) {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
     const pushed = await new SiteClient(site).push();
-    if (pushed.ok) return c.redirect(`/sites/${site.id}`, 303);
+    if (pushed.ok) return done(c, `/sites/${site.id}`, `Pushed to ${pushed.upstream}.`);
 
     try {
       return c.html(await renderSitePage(c, site, { kind: "error", message: pushed.reason }), 502);
@@ -1829,9 +1872,15 @@ export function createApp(options: AppOptions) {
   });
 
   app.post("/sites/:id/delete", (c) => {
-    store.removeSite(c.req.param("id"));
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.redirect("/", 303);
+    store.removeSite(site.id);
     sitesChanged();
-    return c.redirect("/", 303);
+    return done(
+      c,
+      "/",
+      `${site.name} is disconnected. Its folder and its content are as they were.`,
+    );
   });
 
   /** Collections are edited with the same generated forms and the same validation as regions. */
@@ -1949,7 +1998,11 @@ export function createApp(options: AppOptions) {
         actor: c.get("actor"),
         author: authorOf(c.get("viewer")),
       });
-      return c.redirect(`/sites/${site.id}/collections/${name}`, 303);
+      return done(
+        c,
+        `/sites/${site.id}/collections/${name}`,
+        `Deleted “${entryTitle(context.schema.collections[name]!, entry.data, slug)}”.`,
+      );
     } catch (error) {
       return c.html(errorPage(site.name, describeError(error)), 502);
     }
@@ -2223,7 +2276,7 @@ export function createApp(options: AppOptions) {
 
     const client = new SiteClient(site);
     await client.clearLiveDraft({ context: await client.context(), regionId });
-    return c.redirect(`/sites/${site.id}/regions/${regionId}`, 303);
+    return done(c, `/sites/${site.id}/regions/${regionId}`, DISCARDED);
   });
 
   app.post("/sites/:id/collections/:name/:slug/draft/discard", async (c) => {
@@ -2235,7 +2288,7 @@ export function createApp(options: AppOptions) {
 
     const client = new SiteClient(site);
     await client.clearLiveDraft({ context: await client.context(), collection: { name, slug } });
-    return c.redirect(`/sites/${site.id}/collections/${name}/${encodeURIComponent(slug)}`, 303);
+    return done(c, `/sites/${site.id}/collections/${name}/${encodeURIComponent(slug)}`, DISCARDED);
   });
 
   app.post("/sites/:id/collections/:name/:slug/draft", async (c) => {
@@ -2682,6 +2735,11 @@ function contentOf(c: { req: { param(name: string): string | undefined } }) {
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(name) || !isSafeSlug(slug)) return null;
   return { collection: { name, slug }, back: `collections/${name}/${encodeURIComponent(slug)}` };
 }
+
+const DISCARDED = "Unsaved edits discarded. This is what is published.";
+
+/** A host as someone typed it, short enough to repeat back. */
+const hostLabel = (host: string) => host.trim().slice(0, 80) || "that host";
 
 /** Compared against when an unknown email signs in, so the reply takes the same time. */
 let dummy: string | undefined;

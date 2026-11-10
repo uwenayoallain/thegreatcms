@@ -60,7 +60,6 @@ export function page(
   const {
     title,
     crumbs = [],
-    flash,
     editor = false,
     liveSite = false,
     section,
@@ -68,6 +67,7 @@ export function page(
     site,
     refresh,
   } = options;
+  const flash = options.flash ?? shell().flash?.();
   const unread = options.unread ?? shell().unread?.() ?? 0;
   const sidebar = chrome ? shell().sidebar : undefined;
   // Top-level screens name themselves, so the bar is there on every screen and nothing below it moves.
