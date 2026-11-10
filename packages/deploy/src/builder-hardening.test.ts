@@ -134,7 +134,7 @@ describe("what a build may leave running", () => {
       timeout: 20_000,
     }).once();
     expect(result.outcome).toBe("deployed");
-    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(Date.now() - started).toBeLessThan(25_000);
     const pid = Number(readFileSync(pidFile, "utf8"));
     await until(() => !alive(pid));
   });

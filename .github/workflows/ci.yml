@@ -85,7 +85,8 @@ jobs:
         run: pnpm --filter @greatcms/studio exec playwright install --with-deps chromium
 
       - name: Test (includes the accessibility gate)
-        run: pnpm test
+        # As many suites at once as the runner has cores: more starve the browser tests of time.
+        run: pnpm exec turbo run test --concurrency=4
 
       # Every site in this repository is managed by GreatCMS, so the content
       # checker runs against them the way a site would run it in its own build.
