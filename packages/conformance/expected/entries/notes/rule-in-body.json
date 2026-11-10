@@ -1,0 +1,7 @@
+{
+  "slug": "rule-in-body",
+  "data": {
+    "title": "A rule is not a fence",
+    "text": "\nAbove the rule.\n\n---\n\ntitle: not frontmatter\n\n---\n"
+  }
+}

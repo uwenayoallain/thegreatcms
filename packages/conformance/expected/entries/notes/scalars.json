@@ -1,0 +1,39 @@
+{
+  "slug": "scalars",
+  "data": {
+    "title": "Quoted: with a colon, an escape é and a tab\t.",
+    "single": "It's single-quoted",
+    "plain": "Amakuru y'ibanze, café & thé ☕",
+    "literal": "Line one.\nLine two.\n",
+    "folded": "Folded into one line.",
+    "empty": null,
+    "tilde": null,
+    "integer": -3,
+    "leading_zero": 7,
+    "octal": 15,
+    "hex": 31,
+    "float": 1.5,
+    "exponent": 1000,
+    "version": "1.0",
+    "date": "2026-08-12",
+    "time": "2026-08-12T18:30:00Z",
+    "yes_is_a_word": "yes",
+    "explicit": "123",
+    "nested": {
+      "list": [
+        {
+          "name": "first",
+          "on": true
+        },
+        {
+          "name": "second"
+        }
+      ],
+      "flow": {
+        "a": 1,
+        "b": ["x", "y"]
+      }
+    },
+    "text": "Body.\n"
+  }
+}
