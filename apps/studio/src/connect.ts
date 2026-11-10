@@ -324,6 +324,7 @@ async function sizeOf(folder: string, limit: number): Promise<number> {
  */
 export class Clones {
   private readonly jobs = new Map<string, CloneState>();
+  private readonly running = new Set<AbortController>();
   private readonly limits: CloneLimits;
 
   constructor(
@@ -336,6 +337,11 @@ export class Clones {
 
   list(): CloneState[] {
     return [...this.jobs.values()];
+  }
+
+  /** Stops every copy in flight, as the studio stops: a git left running would outlive it. */
+  stop(): void {
+    for (const controller of this.running) controller.abort();
   }
 
   /** Forgets a finished clone, once someone has seen how it went. */
@@ -390,6 +396,7 @@ export class Clones {
       temporary,
     ];
     const stop = new AbortController();
+    this.running.add(stop);
     let tooLarge = false;
     const measure = setInterval(() => {
       void sizeOf(temporary, this.limits.maxBytes).then((bytes) => {
@@ -414,6 +421,7 @@ export class Clones {
       })
       .finally(() => {
         clearInterval(measure);
+        this.running.delete(stop);
         const finished = this.list().filter((job) => job.state !== "cloning");
         for (const job of finished.slice(0, Math.max(0, finished.length - MAX_FINISHED))) {
           this.jobs.delete(job.folder);

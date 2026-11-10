@@ -163,7 +163,10 @@ const stop = (code?: number) => {
   void shutDown({
     server,
     settled: publishesSettled,
-    close: () => store.close(),
+    close: () => {
+      app.stop();
+      store.close();
+    },
     log: (line) => process.stderr.write(`${line}\n`),
   }).then((result) => process.exit(code ?? result));
 };

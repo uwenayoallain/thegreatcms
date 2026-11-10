@@ -189,6 +189,21 @@ describe("a clone", () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
+  it("is stopped with the studio, and leaves no folder behind", async () => {
+    const target = app({
+      cloneGit: (args, _config, signal) =>
+        new Promise((_, reject) => {
+          mkdirSync(args.at(-1) as string, { recursive: true });
+          signal?.addEventListener("abort", () => reject(new Error("stopped")));
+        }),
+    });
+    await post(target, "/sites/clone", { url: "https://example.com/slow.git" });
+    expect(readdirSync(root)).toEqual([".slow.cloning"]);
+    target.stop();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(readdirSync(root)).toEqual([]);
+  });
+
   it("forgets the oldest finished copies rather than keeping every one", async () => {
     const clones = new Clones(root, () => Promise.reject(new Error("nope")));
     for (let index = 0; index < 30; index++) {

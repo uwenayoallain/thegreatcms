@@ -2305,7 +2305,10 @@ export function createApp(options: AppOptions) {
     }
   };
 
-  return Object.assign(app, { runDueSchedules });
+  /** Ends background work that would outlive the process: copies from Git still running. */
+  const stop = () => clones?.stop();
+
+  return Object.assign(app, { runDueSchedules, stop });
 }
 
 /** The field an MDX entry keeps as source: its JSX is not HTML, and sanitizing would delete it. */
