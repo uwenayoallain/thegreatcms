@@ -1,7 +1,9 @@
 /** Walking a dev server's pages and modules before anyone sees them. */
 
 import { describe, expect, it } from "vitest";
-import { warmModules } from "./warm.js";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { localFetch, warmModules } from "./warm.js";
 
 type Answer = { type: string; body: string; status?: number };
 
@@ -123,6 +125,36 @@ describe("warming a dev server", () => {
     const late = await warmModules("http://dev", { fetcher: slow, budgetMs: 200, ...quick });
     expect(Date.now() - began).toBeLessThan(3000);
     expect(late.settled).toBe(false);
+  });
+
+  it("reaches a dev dev on a port the built-in fetch refuses", async () => {
+    const dev = createServer((req, res) => {
+      if (req.url === "/app.js") {
+        res.setHeader("content-type", "text/javascript");
+        return res.end("");
+      }
+      if (req.url === "/gone") return res.writeHead(304).end();
+      res.setHeader("content-type", "text/html");
+      res.end(`<script type="module" src="/app.js"></script>`);
+    });
+    // 6000 is on the list of ports fetch will not connect to; any free one of them will do.
+    const port = await new Promise<number>((resolve, reject) => {
+      const tryPort = (candidates: number[]) => {
+        const [next, ...rest] = candidates;
+        if (next === undefined) return reject(new Error("no refused port is free"));
+        dev.once("error", () => tryPort(rest));
+        dev.listen(next, "127.0.0.1", () => resolve((dev.address() as AddressInfo).port));
+      };
+      tryPort([6000, 6665, 6666, 6667, 6668, 6669, 6697, 10080]);
+    });
+    try {
+      await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toThrow();
+      const warmed = await warmModules(`http://127.0.0.1:${port}`, quick);
+      expect(warmed).toEqual({ modules: 1, pages: 1, rounds: 1, settled: true });
+      expect((await localFetch(`http://127.0.0.1:${port}/gone`)).status).toBe(304);
+    } finally {
+      dev.close();
+    }
   });
 
   it("survives a server that fails or answers nothing useful", async () => {

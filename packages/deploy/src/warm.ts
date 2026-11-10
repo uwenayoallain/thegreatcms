@@ -4,6 +4,46 @@
  * and reloads the page: asked for here first, that happens with nobody watching.
  */
 
+import { request } from "node:http";
+
+/**
+ * A GET to a dev server on this machine, shaped like `fetch`. The built-in fetch refuses a list of
+ * port numbers it calls unsafe, and a dev server may be given any port.
+ */
+export const localFetch: typeof fetch = (input, init) =>
+  new Promise<Response>((resolve, reject) => {
+    const asked = request(
+      String(input),
+      {
+        method: "GET",
+        headers: init?.headers as Record<string, string>,
+        signal: init?.signal ?? undefined,
+      },
+      (answer) => {
+        const chunks: Buffer[] = [];
+        answer.on("data", (chunk: Buffer) => chunks.push(chunk));
+        answer.on("error", reject);
+        answer.on("end", () => {
+          const status = answer.statusCode ?? 502;
+          const headers = new Headers();
+          for (const [name, value] of Object.entries(answer.headers)) {
+            if (typeof value === "string") headers.set(name, value);
+          }
+          // A Response may not carry a body on these, nor a status below 200.
+          const bare = status < 200 || status === 204 || status === 205 || status === 304;
+          resolve(
+            new Response(bare ? null : Buffer.concat(chunks), {
+              status: status < 200 ? 502 : status,
+              headers,
+            }),
+          );
+        });
+      },
+    );
+    asked.on("error", reject);
+    asked.end();
+  });
+
 export interface WarmOptions {
   /** The most this may take; whatever is left unwalked is prepared on demand, as before. */
   budgetMs?: number;
@@ -50,7 +90,7 @@ export async function warmModules(origin: string, options: WarmOptions = {}): Pr
     maxModules = 600,
     maxPages = 8,
     rounds = 5,
-    fetcher = fetch,
+    fetcher = localFetch,
     pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
   } = options;
   const deadline = Date.now() + budgetMs;
@@ -60,16 +100,22 @@ export async function warmModules(origin: string, options: WarmOptions = {}): Pr
     const seen = new Set<string>(["/"]);
     const queue: Array<{ path: string; page: boolean }> = [{ path: "/", page: true }];
     let changed = false;
+    // Set when the clock, not the site, ended the walk: what was not reached is not prepared.
+    let cut = false;
     modules = 0;
     pages = 0;
     const walk = async () => {
       for (let next = queue.shift(); next; next = queue.shift()) {
-        if (Date.now() > deadline) return;
+        if (Date.now() >= deadline) {
+          cut = true;
+          return;
+        }
         const { path, page } = next;
         let type = "";
         let body = "";
         try {
           const patience = Math.max(1, Math.min(15_000, deadline - Date.now()));
+          let clock: NodeJS.Timeout | undefined;
           // Raced against a clock of its own: a server that never answers cannot hold the walk.
           // oxlint-disable-next-line no-await-in-loop -- a few walkers, each taking the next in line
           const answer = await Promise.race([
@@ -79,9 +125,12 @@ export async function warmModules(origin: string, options: WarmOptions = {}): Pr
               signal: AbortSignal.timeout(patience),
             }),
             new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error("too slow")), patience).unref();
+              clock = setTimeout(() => {
+                cut = true;
+                reject(new Error("too slow"));
+              }, patience);
             }),
-          ]);
+          ]).finally(() => clearTimeout(clock));
           // Vite's answer for a dependency it has since prepared again.
           if (answer.status === 504) changed = true;
           type = answer.headers.get("content-type") ?? "";
@@ -110,8 +159,8 @@ export async function warmModules(origin: string, options: WarmOptions = {}): Pr
     };
     // oxlint-disable-next-line no-await-in-loop -- each round starts from what the last one changed
     await Promise.all(Array.from({ length: 6 }, walk));
-    const settled = !changed && Date.now() <= deadline;
-    if (settled || round === rounds || Date.now() > deadline) {
+    const settled = !changed && !cut;
+    if (settled || cut || round === rounds) {
       return { modules, pages: pages + 1, rounds: round, settled };
     }
     // oxlint-disable-next-line no-await-in-loop -- the dev server needs a moment to finish preparing

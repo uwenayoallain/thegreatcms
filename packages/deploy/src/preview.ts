@@ -19,7 +19,7 @@ import {
 import { createServer as createNetServer } from "node:net";
 import type { Duplex } from "node:stream";
 import { previewSitesMain } from "./previews.js";
-import { warmModules, type Warmed } from "./warm.js";
+import { localFetch, warmModules, type Warmed } from "./warm.js";
 
 export interface PreviewOptions {
   /** The site's working copy, where the command runs. */
@@ -188,7 +188,7 @@ export class PreviewRunner {
     while (mine()) {
       try {
         // oxlint-disable-next-line no-await-in-loop -- asked again until it answers
-        await fetch(origin, { redirect: "manual", signal: AbortSignal.timeout(5000) });
+        await localFetch(origin, { signal: AbortSignal.timeout(5000) });
         break;
       } catch {
         // oxlint-disable-next-line no-await-in-loop -- not up yet
