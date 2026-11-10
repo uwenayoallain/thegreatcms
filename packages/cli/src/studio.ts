@@ -425,7 +425,13 @@ const realDeps: StudioDeps = {
   nodeVersion: process.versions.node,
   async load(root) {
     const entry = resolveStudio(root);
-    return entry ? ((await import(pathToFileURL(entry).href)) as StudioModule) : null;
+    if (!entry) return null;
+    // Node 22 announces node:sqlite as experimental on every start; that is not news to the person editing.
+    const emit = process.emitWarning.bind(process) as (...args: unknown[]) => void;
+    process.emitWarning = ((warning: unknown, ...rest: unknown[]) => {
+      if (!/SQLite is an experimental feature/.test(String(warning))) emit(warning, ...rest);
+    }) as typeof process.emitWarning;
+    return (await import(pathToFileURL(entry).href)) as StudioModule;
   },
   install: runInherit,
   portFree,
