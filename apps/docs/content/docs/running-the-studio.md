@@ -18,24 +18,24 @@ npx greatcms studio
 ```
 
 It starts the studio on `127.0.0.1:4983`, or the next free port, with this
-folder as its one site, and opens your browser through a sign-in link that
-works once. The live preview is the site's dev server: the one already
-running, or your own dev command, started here and stopped with it.
+folder as its one site, and opens it in your browser with no sign-in. The
+live preview is the site's dev server: the one already running, or your own
+dev command, started here and stopped with it.
 Publishing commits to the working copy as you; nothing is pushed. This
 studio is for that one project: it has no list of sites, nothing to connect
 or disconnect, and no editors to add.
 
-There is no password to type. The studio answers only this machine, at its
-own address, and each start prints a new link. `--host` with anything but a
-loopback address is refused unless `STUDIO_PASSWORD` is set, and then you
-sign in with that instead.
+It trusts whoever can reach it on this machine, other users of a shared one
+included, which is why it only listens on loopback. `--host` with any other
+address is refused unless `STUDIO_PASSWORD` is set, and then you sign in
+with that instead.
 
 | Option            | Meaning                                              |
 | ----------------- | ---------------------------------------------------- |
 | `--port <number>` | The studio's port, exactly; an error if it is taken. |
 | `--dev-url <url>` | Use this dev server and start none.                  |
 | `--no-dev`        | Edit without a preview.                              |
-| `--no-open`       | Print the link without opening a browser.            |
+| `--no-open`       | Print the address without opening a browser.         |
 
 It needs Node.js 22.13 or newer and the `@greatcms/studio` package, which the
 command offers to add to the site the first time, showing the exact install

@@ -91,8 +91,8 @@ The same reader infers types when you run `greatcms types`.
 npx greatcms studio
 ```
 
-That opens the editor for this folder in your browser, signed in, with your
-dev server as the live preview beside the form: no password, no settings. It
+That opens the editor for this folder in your browser, with your
+dev server as the live preview beside the form: no sign-in, no settings. It
 reads and writes the working copy directly, and publishing is a commit as you.
 [Running the studio](/docs/running-the-studio/) covers its options, and a
 studio on a server that several people and sites share.

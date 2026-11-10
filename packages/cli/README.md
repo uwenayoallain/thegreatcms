@@ -17,9 +17,11 @@ npx greatcms studio          # the visual editor for this folder, on this machin
 ```
 
 `studio` starts the GreatCMS studio on `127.0.0.1:4983` with this folder as its
-one site, signs your browser in through a one-time link, and uses the site's
+one site, opens it in your browser with no sign-in, and uses the site's
 dev server as the live preview: the one already running, or your own dev
-command, started and stopped with it. `--port`, `--dev-url`, `--no-dev` and
+command, started and stopped with it. It trusts whoever can reach it on this
+machine, other users of a shared one included, which is why it only listens
+on loopback. `--port`, `--dev-url`, `--no-dev` and
 `--no-open` change the defaults. It needs Node.js 22.13 or newer and the
 `@greatcms/studio` package, which it offers to install (it prints the command
 and asks first). Every other command runs on Node.js 20.
