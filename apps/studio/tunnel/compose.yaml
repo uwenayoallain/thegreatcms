@@ -43,6 +43,8 @@ services:
       # Signing in also opens the previews, which live on sibling names under this domain.
       STUDIO_COOKIE_DOMAIN: ${PREVIEW_DOMAIN:-}
       STUDIO_SITES: ${STUDIO_SITES:-}
+      # GitHub accounts, by login, that are owners here besides the one that owns the app.
+      STUDIO_GITHUB_OWNERS: ${STUDIO_GITHUB_OWNERS:-}
       # The connect page lists this folder's sites, and copies from Git land in it.
       STUDIO_SITES_ROOT: ${SITES_ROOT:-${SITES_DIR}}
       # Each new site previews at its own name; the preview service reads the list written here.
