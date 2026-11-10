@@ -1,14 +1,24 @@
 <script>
   import { formatDate } from "#lib/cms.js";
+  import Head from "#lib/Head.svelte";
 
   let { data } = $props();
   const essay = $derived(data.essay);
 </script>
 
-<svelte:head>
-  <title>{essay.title} · {data.identity.title}</title>
-  <meta name="description" content={essay.dek} />
-</svelte:head>
+<Head
+  title="{essay.title} · {data.identity.title}"
+  description={essay.dek || data.identity.tagline}
+  type="article"
+  schema={{
+    "@type": "Article",
+    headline: essay.title,
+    description: essay.dek || undefined,
+    datePublished: essay.date,
+    keywords: essay.tags.length ? essay.tags.join(", ") : undefined,
+    author: { "@type": "Person", name: data.identity.author },
+  }}
+/>
 
 <article class="essay">
   <header>
@@ -26,6 +36,7 @@
   <div class="prose">{@html essay.html}</div>
 </article>
 
+{#if data.newer || data.older}
 <nav class="pager" aria-label="More essays">
   {#if data.newer}
     <a href="/essays/{data.newer.slug}/"
@@ -42,3 +53,4 @@
     >
   {/if}
 </nav>
+{/if}

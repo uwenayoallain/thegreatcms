@@ -11,7 +11,15 @@ export default defineConfig({
     // Every page is prerendered to HTML; `csr = false` in the root layout keeps them script-free.
     sveltekit({
       adapter: adapter({ pages: "dist", assets: "dist" }),
-      prerender: { handleHttpError: "fail" },
+      prerender: {
+        handleHttpError: "fail",
+        // A journal with no essays yet has no essay page to render; any other unseen route is a mistake.
+        handleUnseenRoutes: ({ routes, message }) => {
+          if (routes.some((route) => route !== "/essays/[slug]")) throw new Error(message);
+        },
+      },
+      // Canonical links and share cards are built on the address the site is published at.
+      paths: { origin: process.env.SITE_URL ?? "https://thelonglight.example" },
     }),
     // Reloads the page when content changes, the studio's unsaved drafts included. Dev only.
     // `hooks.server.js` adds the preview script, since SvelteKit renders its own HTML.

@@ -1,18 +1,21 @@
 <script>
+  import Head from "#lib/Head.svelte";
+
   let { data } = $props();
+  // Before the page is written it still has a name, and says who it will be about.
+  const heading = $derived(data.about.heading ?? "About");
 </script>
 
-<svelte:head>
-  <title>{data.about.heading} · {data.identity.title}</title>
-  <meta name="description" content={data.identity.tagline} />
-</svelte:head>
+<Head title="{heading} · {data.identity.title}" description={data.identity.tagline} />
 
 <article class="essay">
   <header>
     <p class="meta">{data.identity.author}</p>
-    <h1>{data.about.heading}</h1>
+    <h1>{heading}</h1>
   </header>
-  <div class="prose">{@html data.about.body.html}</div>
+  <div class="prose">
+    {#if data.about.body?.html}{@html data.about.body.html}{:else}<p>{data.identity.tagline}</p>{/if}
+  </div>
   {#if data.about.elsewhere?.length}
     <ul class="elsewhere">
       {#each data.about.elsewhere as link (link.href)}

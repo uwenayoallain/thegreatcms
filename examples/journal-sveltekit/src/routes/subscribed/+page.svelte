@@ -1,10 +1,10 @@
 <script>
+  import Head from "#lib/Head.svelte";
+
   let { data } = $props();
 </script>
 
-<svelte:head>
-  <title>Subscribed · {data.identity.title}</title>
-</svelte:head>
+<Head title="Subscribed · {data.identity.title}" description="You are on the list for the next letter." noindex />
 
 <section class="intro">
   <p class="kicker">Newsletter</p>

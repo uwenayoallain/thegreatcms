@@ -44,14 +44,31 @@ describe.each(PAGES)("$name", ({ file }) => {
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 
-  it("ships no JavaScript: its one script element is speculation rules, which the browser reads as data", () => {
+  it("ships no JavaScript: its script elements are speculation rules and structured data, which the browser reads as data", () => {
     const scripts = [...dom(file).querySelectorAll("script")];
-    expect(scripts.map((script) => script.type)).toEqual(["speculationrules"]);
-    const rules = JSON.parse(scripts[0]!.textContent ?? "") as { prerender: unknown[] };
+    const types = scripts.map((script) => script.type);
+    expect(types.filter((type) => type !== "application/ld+json")).toEqual(["speculationrules"]);
+    for (const script of scripts) expect(script.getAttribute("src")).toBeNull();
+    const rules = JSON.parse(
+      scripts.find((script) => script.type === "speculationrules")!.textContent ?? "",
+    ) as { prerender: unknown[] };
     expect(rules.prerender.length).toBeGreaterThan(0);
-    expect(read(file).match(/<script/gi)).toHaveLength(1);
     expect(read(file)).not.toMatch(/modulepreload/i);
     expect(read(file)).not.toContain("data-greatcms");
+  });
+
+  it("can be found and shared: a description, an address of its own, and a card with an image", () => {
+    const document = dom(file);
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content");
+    expect(meta('meta[name="description"]')?.length).toBeGreaterThan(0);
+    expect(meta('meta[property="og:description"]')).toBe(meta('meta[name="description"]'));
+    expect(meta('meta[property="og:title"]')).toBe(document.title);
+    expect(meta('meta[property="og:image"]')).toBe("https://thelonglight.example/og.png");
+    expect(meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+    // A page with no address worth indexing says so instead of naming one.
+    if (meta('meta[name="robots"]') === "noindex") expect(canonical).toBeUndefined();
+    else expect(canonical).toBe(`https://thelonglight.example/${file.replace(/index\.html$/, "")}`);
   });
 
   it("links every page at the address it is built at, so no click waits on a redirect", () => {
@@ -102,5 +119,33 @@ describe("the newsletter form", () => {
     expect(form?.getAttribute("action")).toMatch(/\/f\/[\w-]+\/newsletter$/);
     const email = form?.querySelector('input[type="email"]');
     expect(document.querySelector(`label[for="${email?.id}"]`)).toBeTruthy();
+  });
+});
+
+describe("for search engines", () => {
+  it("lists every page worth finding in the sitemap, points robots.txt at it, and publishes the share image", () => {
+    const listed = [
+      ...read("sitemap.xml").matchAll(/<loc>https:\/\/thelonglight\.example([^<]*)<\/loc>/g),
+    ]
+      .map((match) => match[1]!)
+      .toSorted();
+    expect(listed).toEqual(
+      ["/", "/about/", ...ESSAYS.map((slug) => `/essays/${slug}/`)].toSorted(),
+    );
+    for (const path of listed) expect(existsSync(join(DIST, path, "index.html")), path).toBe(true);
+    expect(read("robots.txt")).toContain("Sitemap: https://thelonglight.example/sitemap.xml");
+    expect(existsSync(join(DIST, "og.png"))).toBe(true);
+  });
+
+  it("describes each essay as an article, with its author and date", () => {
+    for (const slug of ESSAYS) {
+      const data = JSON.parse(
+        dom(`essays/${slug}/index.html`).querySelector(`script[type="application/ld+json"]`)!
+          .textContent!,
+      ) as { "@type": string; datePublished: string; author: { name: string } };
+      expect(data["@type"]).toBe("Article");
+      expect(data.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(data.author.name.length).toBeGreaterThan(0);
+    }
   });
 });

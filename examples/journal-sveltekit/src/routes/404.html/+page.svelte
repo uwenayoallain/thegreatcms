@@ -1,10 +1,10 @@
 <script>
+  import Head from "#lib/Head.svelte";
+
   let { data } = $props();
 </script>
 
-<svelte:head>
-  <title>Not found · {data.identity.title}</title>
-</svelte:head>
+<Head title="Not found · {data.identity.title}" description="There is no page at this address." noindex />
 
 <section class="intro">
   <p class="kicker">404</p>
