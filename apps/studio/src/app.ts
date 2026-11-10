@@ -969,6 +969,8 @@ export function createApp(options: AppOptions) {
 
   /** Records that the signed-in person has this content open, and says who else does. */
   const here = (c: Context<{ Variables: Variables }>, siteId: string, path: string) => {
+    // One person, and a page load there writes nothing.
+    if (options.local) return [];
     return store.presence({ siteId, path, actor: c.get("session"), name: c.get("viewer").name });
   };
 
