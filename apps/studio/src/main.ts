@@ -3,7 +3,7 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
-import { applySites, parseSites } from "./config.js";
+import { applySites, parseSites, withoutSecrets } from "./config.js";
 import { warmAssets } from "./assets.js";
 import { PreviewAddresses, sweepStaleClones } from "./connect.js";
 import { publishesSettled } from "./repo.js";
@@ -65,6 +65,12 @@ try {
   process.stderr.write(`${(error as Error).message}\n`);
   process.exit(1);
 }
+
+const emailed = Boolean(process.env.RESEND_API_KEY);
+const hooked = Boolean(process.env.STUDIO_WEBHOOK_URL);
+const sessionsKept = Boolean(process.env.STUDIO_SECRET);
+// Read above and held in memory: every git this process starts would otherwise inherit them.
+withoutSecrets(process.env);
 
 const store = new Store(databaseFile);
 // A publish the last run had taken but not finished is tried again rather than left hanging.
@@ -128,16 +134,15 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
     process.stdout.write(`  previews: ${process.env.STUDIO_PREVIEW_URL}\n`);
   }
   process.stdout.write(
-    process.env.RESEND_API_KEY
+    emailed
       ? "  submissions: stored and emailed\n"
       : "  submissions: stored (set RESEND_API_KEY, NOTIFY_FROM, NOTIFY_TO to email them)\n",
   );
-  if (process.env.STUDIO_WEBHOOK_URL)
-    process.stdout.write("  webhook: submissions and publishes\n");
+  if (hooked) process.stdout.write("  webhook: submissions and publishes\n");
   if (retentionDays) process.stdout.write(`  submissions kept ${retentionDays} days\n`);
   if (recovered) process.stdout.write(`  scheduled publishes picked up again: ${recovered}\n`);
   for (const name of swept) process.stdout.write(`  removed an unfinished copy: ${name}\n`);
-  if (!process.env.STUDIO_SECRET) {
+  if (!sessionsKept) {
     process.stdout.write("  sessions reset on restart (set STUDIO_SECRET to persist them)\n");
   }
 });

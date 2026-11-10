@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { brotliDecompressSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
+import { withoutSecrets } from "../src/config.js";
 import { Store } from "../src/db.js";
 import { LocalRepository } from "../src/repo.js";
 import { findFolded } from "../src/search.js";
@@ -154,6 +155,44 @@ describe("the built server", () => {
       child.kill("SIGKILL");
       rmSync(data, { recursive: true, force: true });
     }
+  });
+});
+
+describe("a form post", () => {
+  const publish = (headers: Record<string, string>) =>
+    post(
+      site,
+      `/sites/${SITE_ID}/regions/home.hero`,
+      { "f[heading]": "Posted", headSha: site.head() },
+      { ...signedIn, ...headers },
+    );
+
+  it("is refused when the browser says it came from another site, with or without an Origin", async () => {
+    for (const from of ["cross-site", "same-site"]) {
+      // oxlint-disable-next-line no-await-in-loop -- each is its own request
+      expect((await publish({ "sec-fetch-site": from })).status, from).toBe(403);
+    }
+    expect(site.exists("content/cms/home.hero.json")).toBe(false);
+  });
+
+  it("goes through from the studio's own pages, and from a client that sends no such header", async () => {
+    expect((await publish({ "sec-fetch-site": "same-origin" })).status).toBe(200);
+    expect((await publish({})).status).toBe(200);
+  });
+});
+
+describe("what git inherits", () => {
+  it("has none of the studio's own secrets in it", () => {
+    const env: NodeJS.ProcessEnv = {
+      STUDIO_PASSWORD: "p",
+      STUDIO_SECRET: "s",
+      RESEND_API_KEY: "r",
+      STUDIO_WEBHOOK_URL: "https://hooks.example/secret-path",
+      STUDIO_DB: "/data/studio.sqlite",
+      PATH: "/usr/bin",
+    };
+    withoutSecrets(env);
+    expect(env).toEqual({ STUDIO_DB: "/data/studio.sqlite", PATH: "/usr/bin" });
   });
 });
 
