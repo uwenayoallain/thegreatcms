@@ -554,7 +554,6 @@ body.plain { display: block; }
 .site-ticks label { overflow-wrap: anywhere; }
 .editor-sites { flex: 1 1 100%; margin: 0; }
 .folders li > form { margin: 0; }
-.notice.setup { max-width: 44rem; margin: 0 0 1.25rem; padding: .7rem .9rem; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--surface); font-size: .88rem; color: var(--ink-2); }
 .notice.warn { margin: 0 0 .85rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--ink); font-size: .85rem; }
 .app-logo { display: flex; gap: .9rem; align-items: center; margin: 1rem 0; padding: .75rem .9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .app-logo img { flex: none; border-radius: 12px; }

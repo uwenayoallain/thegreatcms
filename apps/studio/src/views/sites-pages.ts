@@ -35,15 +35,6 @@ export function sitesPage(
       </div>
 
       ${
-        owner && chrome().github === "not connected"
-          ? html`<p class="notice setup" role="note">
-              GitHub is not connected yet. <a href="/git-access">Connect GitHub</a> to copy your
-              repositories here with a click, and to let people sign in with GitHub and edit the
-              sites they can push to.
-            </p>`
-          : ""
-      }
-      ${
         sites.length === 0
           ? html`
               <div class="empty">

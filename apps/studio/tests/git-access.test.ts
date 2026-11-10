@@ -159,12 +159,12 @@ describe("the Git access page", () => {
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 
-  it("says on the home page that GitHub is not connected yet, and keeps it out of the sidebar", async () => {
+  it("keeps GitHub out of the sidebar and off the home page", async () => {
     const target = app();
     const { document } = new JSDOM(await (await target.request("/", { headers: signedIn })).text())
       .window;
     expect(document.querySelector('.sidebar a[href="/git-access"]')).toBeNull();
-    expect(document.querySelector(".notice.setup a")?.getAttribute("href")).toBe("/git-access");
+    expect(document.querySelector("main a[href='/git-access']")).toBeNull();
   });
 
   it("is not there without a place to keep them", async () => {
