@@ -1387,10 +1387,12 @@ For a server that also builds and serves the site, see
 | `RESEND_API_KEY`         | With `NOTIFY_FROM` and `NOTIFY_TO`, emails each form submission. Without them, submissions are only stored.      |
 | `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON to this `http(s)` URL. Slack and Discord webhooks work as is.   |
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
-| `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
+| `STUDIO_TIMEZONE`        | The zone times are shown in and "Publish later" is typed in, e.g. `Africa/Kigali`. Defaults to the server's.     |
+| `STUDIO_OWNER_NAME`      | What others see the password's owner called. Defaults to `Owner`.                                                |
 | `STUDIO_SITES_ROOT`      | The folder of sites the connect page lists, and where copies go.                                                 |
 | `STUDIO_CLONE_PRIVATE`   | `1` lets Copy from Git reach this machine and its private network, for a Git server that lives there.            |
 | `STUDIO_GITHUB_OWNERS`   | GitHub logins, comma-separated, that are owners when they sign in. Unset: the person who owns the GitHub App.    |
+| `STUDIO_GITHUB_URL`      | A GitHub Enterprise Server address, when that is your GitHub. Defaults to `https://github.com`.                  |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -1596,8 +1598,9 @@ Debian, for the native packages sites install.
 The link icon above the editor's preview makes a link anyone can open for
 seven days, unpublished edits included, without a studio account. It works
 through the same `forward_auth` check: the link carries a signed token, the
-studio trades it for a cookie that opens that site's preview and nothing else,
-and changing `STUDIO_PASSWORD` revokes every link at once.
+studio trades it for a cookie that opens that site's preview and nothing else.
+**Stop sharing**, on the link's page and in site settings, ends that site's
+links; changing `STUDIO_PASSWORD` ends every site's.
 
 ## Live preview on the server
 
