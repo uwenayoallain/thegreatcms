@@ -109,7 +109,8 @@ one three ways:
   for a private repository, save one on **Git access**. Only files are
   fetched: no hooks, submodules or redirects. The host is looked up once and
   the copy held to that address, so a name cannot answer differently the second
-  time. Two copies run at a time, each up to 2 GB.
+  time. Two copies run at a time, each up to 2 GB, made beside the database
+  where no site's code can write and moved into the sites folder when whole.
 - **By path.** Any other folder; `~` is the studio user's home.
 
 The studio reads `.cms/schema.yaml` from that working copy and builds the

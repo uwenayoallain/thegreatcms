@@ -38,19 +38,20 @@ ship in `json-schema/`.
 
 A field's `pattern` is a regular expression from the schema, and validation
 runs it over the content as it is. A pattern such as `^(a+)+$` can take longer
-than anyone will wait on a long value, and this package does not guard against
-that itself. If the schema or the content comes from somewhere you do not
-control (a pull request, a hosted editor), turn on V8's linear-time fallback
-once, before you first validate:
+than anyone will wait on a long value, and the main entry, which runs anywhere,
+does not guard against that itself. If the schema or the content comes from
+somewhere you do not control (a pull request, a hosted editor), put a time
+limit on patterns once, before you first validate. On Node:
 
 ```ts
-import { setFlagsFromString } from "node:v8";
+import { usePatternMatcher } from "@greatcms/spec";
+import { boundedMatch } from "@greatcms/spec/node";
 
-setFlagsFromString("--enable-experimental-regexp-engine-on-excessive-backtracks");
+usePatternMatcher(boundedMatch);
 ```
 
-The `greatcms` command and the studio both do this at start. It does not cover
-a pattern with a backreference or a lookaround, which V8 cannot run in linear
-time: review those, or validate in a worker you can stop.
+`greatcms check` and the studio both do this. A pattern V8 can run in linear
+time is simply tested; one with a backreference, a lookaround or a large repeat
+count is stopped after a tenth of a second and reported as `pattern_timeout`.
 
 Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/getting-started.md · Source: https://github.com/uwenayoallain/thegreatcms

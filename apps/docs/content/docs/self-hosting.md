@@ -72,6 +72,10 @@ limits. `docker compose up -d` alone restores a stopped stack. What that costs:
   in the machine's own config (`git config --global`), which is the operator's
   and is used as it is. A remote that is a folder on the same machine is pushed
   to without its hooks; `greatcms studio` on your own checkout trusts its config.
+- It can also write `.git/objects/info/alternates`, which tells git to read
+  objects from another repository. The studio runs no git in a folder where
+  that file names anything outside it, and says how to undo it
+  (`git repack -a -d`, then delete the file).
 
 ## Declaring sites up front
 
@@ -148,6 +152,10 @@ else. For that, the studio has to know the domain and its own address:
 | ---------------------- | -------------------------------------------------------------- |
 | `STUDIO_URL`           | Where browsers reach the studio, `https://studio.example.com`. |
 | `STUDIO_COOKIE_DOMAIN` | The parent domain, `example.com`. Unset: this host only.       |
+
+Use both only over HTTPS. Over plain http no cookie can be tied to the
+studio's own host, so a preview under the same domain could set cookies the
+studio reads: the studio prints a warning at start and runs all the same.
 
 A redirect is only ever issued to a host under that domain. With both set, an
 editor who is signed in to the studio sees the preview, in the frame and in a

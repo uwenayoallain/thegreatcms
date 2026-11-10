@@ -122,7 +122,10 @@ non-zero if anything would not render, or would render broken:
   region renders any more, frontmatter that will not parse;
 - an image or file pointing at an upload nobody committed, whether it sits in
   an image field, a link, a rich-text `<img>`, or a Markdown `![]()`;
-- an internal link to an entry that does not exist.
+- an internal link to an entry that does not exist;
+- a `pattern` that could not be checked within a tenth of a second
+  (`pattern_timeout`), so one that backtracks without end fails the build
+  instead of hanging it.
 
 Each report names the file, the field path, and what to do.
 
