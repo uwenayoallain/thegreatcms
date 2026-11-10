@@ -3,7 +3,7 @@
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createShareToken, sessionKey } from "../src/auth.js";
+import { createShareToken, readShareToken, sessionKey } from "../src/auth.js";
 import {
   type Notification,
   replyAddress,
@@ -168,6 +168,90 @@ describe("stopping a site's preview links", () => {
     const response = await app.request(`/sites/${SITE_ID}/share/stop`, { method: "POST" });
     expect(response.status).toBe(401);
     expect(site.store.shareRound(SITE_ID)).toBe(0);
+  });
+});
+
+describe("a preview link for a site whose id is not a plain word", () => {
+  it("is signed as it always was for an id of letters, digits and dashes", () => {
+    const now = Date.now();
+    for (const id of [SITE_ID, "3f2b8c1e-9a4d-4c7b-8e21-5d6f7a8b9c0d", "a"]) {
+      expect(createShareToken(key, id, now).split(".").slice(0, 2)).toEqual([
+        id,
+        String(now + 7 * 86_400_000),
+      ]);
+      expect(createShareToken(key, id, now, 3).split(".").slice(0, 3)).toEqual([
+        id,
+        "r3",
+        String(now + 7 * 86_400_000),
+      ]);
+      expect(readShareToken(createShareToken(key, id, now), key)).toBe(id);
+    }
+  });
+
+  it("names exactly the site it was made for, whatever is in the id", () => {
+    const rounds: Record<string, number> = { foo: 2, "foo.r2": 0, "my.site": 1 };
+    const roundOf = (id: string) => rounds[id] ?? 0;
+    for (const id of ["my.site", "foo.r2", "a.b.c.d", "~odd", "Site One", "r1", "été.rw"]) {
+      const token = createShareToken(key, id, Date.now(), roundOf(id));
+      expect(token.split("."), id).toHaveLength(roundOf(id) > 0 ? 4 : 3);
+      expect(readShareToken(token, key, roundOf), id).toBe(id);
+      // The round it was made in is still the only one it opens.
+      expect(
+        readShareToken(token, key, (other) => roundOf(other) + 1),
+        id,
+      ).toBeNull();
+    }
+    // A link for `foo.r2` is not one for `foo` in its second round, though the two once read alike.
+    expect(readShareToken(createShareToken(key, "foo.r2"), key, roundOf)).toBe("foo.r2");
+  });
+
+  it("is not read from an encoded spelling of a plain id", () => {
+    const now = Date.now();
+    const plain = createShareToken(key, SITE_ID, now);
+    const spelled = `~${Buffer.from(SITE_ID).toString("base64url")}.${plain.split(".").slice(1).join(".")}`;
+    expect(readShareToken(spelled, key)).toBeNull();
+  });
+
+  it("opens that site's preview through the studio, and no other's", async () => {
+    site.store.addSite({
+      id: "dotted.r1",
+      name: "Dotted",
+      path: site.root,
+      devUrl: "https://dotted.example.com",
+      createdAt: "2026-08-16",
+    });
+    site.store.addSite({
+      id: "dotted",
+      name: "Plain",
+      path: site.root,
+      devUrl: "https://plain.example.com",
+      createdAt: "2026-08-16",
+    });
+    site.store.stopSharing("dotted");
+    const made = await app.request(`/sites/${encodeURIComponent("dotted.r1")}/share`, {
+      method: "POST",
+      headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ path: "/" }),
+    });
+    const document = await page(made);
+    const link = document.querySelector<HTMLInputElement>("#share-url")!.value;
+    const token = new URL(link).searchParams.get("greatcms-share")!;
+    const until = document.querySelector("time")?.getAttribute("datetime") ?? "";
+    expect(Date.parse(until) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
+    const opens = async (host: string) =>
+      (
+        await app.request("/auth/check", {
+          headers: {
+            "x-forwarded-host": host,
+            "x-forwarded-proto": "https",
+            "x-forwarded-uri": "/",
+            cookie: `greatcms_share=${encodeURIComponent(token)}`,
+          },
+        })
+      ).status === 204;
+    expect(await opens("dotted.example.com")).toBe(true);
+    expect(await opens("plain.example.com")).toBe(false);
+    expect(await opens("preview.example.com")).toBe(false);
   });
 });
 
