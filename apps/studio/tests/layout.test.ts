@@ -435,6 +435,27 @@ function mismatches(results: Map<string, Measure>): string[] {
   return problems;
 }
 
+/** Where everything on the sign-in screen is, and how many lines its tagline runs to. */
+const places = (page: Page) =>
+  page.evaluate(() => {
+    const found: Record<string, string> = {};
+    let index = 0;
+    for (const element of document.querySelectorAll("body *")) {
+      // The letters inside the wordmark are drawn, not laid out, and are still lifting.
+      if (element.closest("svg") && element.tagName !== "svg") continue;
+      const rect = element.getBoundingClientRect();
+      const name = `${index++} ${element.tagName.toLowerCase()}.${element.getAttribute("class") ?? ""}`;
+      found[name] = `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.height)}`;
+    }
+    found.page = String(document.documentElement.scrollHeight);
+    // Its room is held, so its lines are counted too: a third would spill out of it unseen.
+    const words = document.createRange();
+    words.selectNodeContents(document.querySelector(".sign-in-word p")!);
+    const tops = [...words.getClientRects()].map((rect) => Math.round(rect.y));
+    found.lines = String(new Set(tops).size);
+    return found;
+  });
+
 describe.skipIf(!browser)("layout stability", () => {
   const report: Record<number, Record<string, Measure>> = {};
 
@@ -475,6 +496,51 @@ describe.skipIf(!browser)("layout stability", () => {
       expect(result.shifts).toEqual([]);
     },
   );
+
+  it("lays the sign-in screen out the same before and after its font arrives, at any width", async () => {
+    const pages: Page[] = [];
+    const contexts = await Promise.all(
+      [false, true].map(() => newContext(1280, { signedOut: true })),
+    );
+    try {
+      // One browser never gets the font, the other has it: what a late font moves is their difference.
+      await contexts[0]!.route(/\.woff2/, (route) => route.abort());
+      for (const context of contexts) {
+        // oxlint-disable-next-line no-await-in-loop
+        const page = await context.newPage();
+        // oxlint-disable-next-line no-await-in-loop
+        await page.goto(`${origin}/sign-in`, { waitUntil: "load" });
+        // oxlint-disable-next-line no-await-in-loop
+        await page.evaluate(() => document.fonts.ready.then(() => undefined)).catch(() => {});
+        pages.push(page);
+      }
+      const faces = await Promise.all(
+        pages.map((page) =>
+          page.evaluate(() => document.fonts.check('700 16px "Space Grotesk"', "Sign in")),
+        ),
+      );
+      expect(faces).toEqual([false, true]);
+      const moved: string[] = [];
+      for (let width = 300; width <= 1700; width += 4) {
+        // oxlint-disable-next-line no-await-in-loop
+        await Promise.all(pages.map((page) => page.setViewportSize({ width, height: 900 })));
+        // oxlint-disable-next-line no-await-in-loop
+        const [without, withFont] = (await Promise.all(pages.map(places))) as [
+          Record<string, string>,
+          Record<string, string>,
+        ];
+        if (withFont.lines !== "2")
+          moved.push(`${width}px: ${withFont.lines} lines under the wordmark`);
+        for (const [name, place] of Object.entries(without)) {
+          if (withFont[name] !== place)
+            moved.push(`${width}px ${name}: ${place} -> ${withFont[name]}`);
+        }
+      }
+      expect(moved.slice(0, 12)).toEqual([]);
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()));
+    }
+  });
 
   it.each([375, 1280])(
     "at %ipx, lines the GitHub button up with the password form, with no script",
