@@ -81,6 +81,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_WEBHOOK_URL`     | Posts every submission and every publish as JSON to this `http(s)` URL. Slack and Discord webhooks work as is.   |
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
 | `STUDIO_TIMEZONE`        | The zone times are shown in and "Publish later" is typed in, e.g. `Africa/Kigali`. Defaults to the server's.     |
+| `STUDIO_LOCALE`          | The language tag dates and times are written in, e.g. `en-GB` or `fr`. Defaults to `en`.                         |
 | `STUDIO_OWNER_NAME`      | What others see the password's owner called. Defaults to `Owner`.                                                |
 | `STUDIO_SITES_ROOT`      | The folder of sites the connect page lists, and where copies go.                                                 |
 | `STUDIO_CLONE_PRIVATE`   | `1` lets Copy from Git reach this machine and its private network, for a Git server that lives there.            |
@@ -129,6 +130,8 @@ The owner signs in with `STUDIO_PASSWORD` and leaves the email empty. From
 **Editors** in the sidebar the owner adds people by name, email and a password
 of at least twelve characters. Each signs in as themselves, and each publish
 is committed under their name and address, so `git log` says who changed what.
+An editor opens only the sites the owner ticks for them there, or every site
+if that box is ticked; one added before this choice existed keeps every site.
 
 Sites and people stay the owner's: an editor cannot connect, reconfigure or
 disconnect a site, or manage editors, and reads an MDX entry's body without
@@ -141,7 +144,7 @@ other's name; if both publish, the second is refused, not overwritten.
 Once GitHub is connected on **Git access**, the sign-in page offers
 **Continue with GitHub**. Whoever GitHub lets push to a connected site's
 repository edits that site and sees no other: its content, images, history,
-search and inbox. An editor with a password still sees every site.
+search and inbox.
 
 - The studio asks GitHub who may push, believes the answer for under two
   minutes, and asks again on every publish. Access removed on GitHub ends here.

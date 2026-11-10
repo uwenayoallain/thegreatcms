@@ -236,7 +236,7 @@ type Variables = {
   actor: string;
   viewer: Viewer;
   session: string;
-  /** The sites this person may open: every site, or for a GitHub sign-in those they can push to. */
+  /** The sites this person may open. */
   sites: Site[];
   /** Those sites' ids when they are not all of them, to keep the inbox to the same ones. */
   among?: string[];
