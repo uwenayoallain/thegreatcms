@@ -31,11 +31,11 @@ try {
   rows.push(["greatcms --version", spawn(["--version"], example)]);
   rows.push(["greatcms --help", spawn(["--help"], example)]);
   rows.push(["greatcms check (small site)", spawn(["check"], example)]);
-  rows.push(["greatcms types --stdout (small site)", spawn(["types", "--stdout"], example)]);
+  rows.push(["greatcms types (small site)", spawn(["types"], example)]);
   rows.push(["greatcms describe (small site)", spawn(["describe"], example)]);
   rows.push(["greatcms check (60 regions, 4000 entries)", spawn(["check"], big, 3)]);
   rows.push(["greatcms check --json (same)", spawn(["check", "--json"], big, 3)]);
-  rows.push(["greatcms types --stdout (same)", spawn(["types", "--stdout"], big, 3)]);
+  rows.push(["greatcms types (same)", spawn(["types"], big, 3)]);
 } finally {
   rmSync(big, { recursive: true, force: true });
 }

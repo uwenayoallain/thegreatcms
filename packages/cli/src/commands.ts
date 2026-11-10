@@ -1,7 +1,7 @@
 /** Every command and option the CLI takes: help, flag parsing and shell completion all read this one table. */
 
 import { FRAMEWORKS } from "./detect.js";
-import { TEMPLATES } from "./init.js";
+import { TEMPLATES } from "./templates.js";
 import { UsageError } from "./ports.js";
 import { ui } from "./ui.js";
 import { VERSION } from "./version.js";
