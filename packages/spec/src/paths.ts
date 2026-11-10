@@ -2,11 +2,12 @@
 
 import type { CmsConfig } from "./config.js";
 import { REGION_ID_RE } from "./schema.js";
+import { clip } from "./shape.js";
 
 export function regionFilePath(config: CmsConfig, regionId: string): string {
   if (!REGION_ID_RE.test(regionId)) {
     throw new Error(
-      `Invalid region id "${regionId}". Use dot-separated lowercase segments, e.g. "home.hero".`,
+      `Invalid region id "${clip(String(regionId))}". Use dot-separated lowercase segments, e.g. "home.hero".`,
     );
   }
   return `${trimSlashes(config.content.regions)}/${regionId}.json`;
@@ -19,13 +20,16 @@ export function regionIdFromPath(config: CmsConfig, filePath: string): string | 
   return REGION_ID_RE.test(id) ? id : null;
 }
 
+// oxlint-disable-next-line no-control-regex -- control characters are exactly what is refused
+const CONTROL = /[\u0000-\u001f]/;
+
 /** A slug names one file inside the collection, so it is one path segment and nothing else. */
 export function isSafeSlug(slug: string): boolean {
   if (slug.length === 0 || slug.length > 120) return false;
   if (slug.startsWith(".")) return false; // ".", "..", and dotfiles
   // `%` too: a site's own router may decode `%2f` back into a separator.
   if (/[/\\%]/.test(slug)) return false;
-  return ![...slug].some((character) => (character.codePointAt(0) ?? 0) < 0x20);
+  return !CONTROL.test(slug);
 }
 
 /** How a collection's entries are stored on disk. */
@@ -52,7 +56,7 @@ export function collectionEntryPath(
 ): string {
   if (!isSafeSlug(slug)) {
     throw new Error(
-      `Invalid entry slug ${JSON.stringify(slug)}. A slug names one file inside the collection: no slashes, no leading dot.`,
+      `Invalid entry slug ${JSON.stringify(clip(String(slug)))}. A slug names one file inside the collection: no slashes, no leading dot.`,
     );
   }
   const ext = entryExtension(collection.format);

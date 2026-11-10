@@ -27,6 +27,10 @@ describe("the fixture site", () => {
     expect(ids).toContain("home.seo"); // region default over a group
     expect(ids).toContain("home.cards"); // defaulted blocks, no content file
     expect(ids).toContain("home.featured"); // references, one never filled in
+    expect(ids).toContain("home.merge"); // objects merge, arrays and nulls replace
+    expect(ids).toContain("home.mixed"); // blocks the schema does not know
+    expect(ids).toContain("home.unset"); // a file with no blocks in it
+    expect(ids).toContain("pricing.faq-2.items_list"); // every character an id may hold
   });
 });
 
@@ -99,6 +103,16 @@ describe("the verifier", () => {
   });
 });
 
+function everyEntry(): Record<string, unknown> {
+  const actual: Record<string, unknown> = {};
+  for (const name of Object.keys(fixtureSchema().collections)) {
+    for (const entry of readFixtureEntries(name)) actual[`${name}/${entry.slug}`] = entry;
+  }
+  return actual;
+}
+
+const note = (slug: string) => readFixtureEntries("notes").find((e) => e.slug === slug)?.data;
+
 const blogEntry = (slug: string) => readFixtureEntries("blog").find((e) => e.slug === slug);
 
 describe("collections", () => {
@@ -153,19 +167,13 @@ describe("collections", () => {
   });
 
   it("matches the expected entries, which is what a third-party reader is held to", () => {
-    const actual: Record<string, unknown> = {};
-    for (const name of ["blog", "guides"]) {
-      for (const entry of readFixtureEntries(name)) actual[`${name}/${entry.slug}`] = entry;
-    }
+    const actual = everyEntry();
 
-    expect(verifyEntries(actual)).toMatchObject({ ok: true, checked: 4 });
+    expect(verifyEntries(actual)).toMatchObject({ ok: true, checked: 13 });
   });
 
   it("fails a reader that reformats an MDX body", () => {
-    const actual: Record<string, unknown> = {};
-    for (const name of ["blog", "guides"]) {
-      for (const entry of readFixtureEntries(name)) actual[`${name}/${entry.slug}`] = entry;
-    }
+    const actual = everyEntry();
     const guide = actual["guides/measuring-latency"] as { data: { content: string } };
     guide.data = { ...guide.data, content: guide.data.content.replace(/<Chart[^>]*\/>/, "<p/>") };
 
@@ -185,5 +193,117 @@ describe("nested blocks", () => {
     };
 
     expect(showcase.blocks[0]?.cards.map((card) => card.tone)).toEqual(["plain", "accent"]);
+  });
+});
+
+const merged = () => readFixtureRegion("home.merge") as Record<string, unknown>;
+
+describe("stored content over defaults", () => {
+  it("merges a stored object into its default, and replaces an array outright", () => {
+    expect(merged().cta).toEqual({ href: "/pricing", label: "Start here" });
+    expect(merged().seo).toEqual({
+      title: "Stored title",
+      description: "A site managed by GreatCMS",
+    });
+    expect(merged().tags).toEqual([]);
+  });
+
+  it("takes null, false and 0 as the values they are, not as nothing stored", () => {
+    expect(merged()).toMatchObject({ note: null, shown: false, count: 0 });
+  });
+
+  it("leaves a key the schema does not define where it is, whatever it is called", () => {
+    expect(merged().legacy).toEqual({ kept: true });
+    expect(Object.getOwnPropertyDescriptor(merged(), "__proto__")?.value).toEqual({
+      also: "kept",
+    });
+  });
+
+  it("passes through a block it has no definition for, and corrects a variant it has none for", () => {
+    const { blocks } = readFixtureRegion("home.mixed") as { blocks: unknown[] };
+    expect(blocks[0]).toMatchObject({ _variant: "panel", style: "primary" });
+    expect(blocks[1]).toEqual({ _type: "retired", anything: [1, 2], nested: { left: "alone" } });
+    expect(blocks[2]).toEqual({ _type: "card", title: "Null beats a default", tone: null });
+    expect(blocks[3]).toBe("not a block at all");
+  });
+
+  it("resolves a blocks file with no blocks in it to the region's default", () => {
+    expect(readFixtureRegion("home.unset")).toEqual({
+      blocks: [{ _type: "card", title: "Default card" }],
+    });
+  });
+});
+
+describe("the verifier and odd keys", () => {
+  it("compares a stored __proto__ key instead of losing it on both sides", () => {
+    const actual = { ...expectedRegions() };
+    const copy = JSON.parse(JSON.stringify(actual["home.merge"])) as Record<string, unknown>;
+    delete copy.__proto__;
+    actual["home.merge"] = copy;
+    expect(verifyRegions(actual).failures.map((failure) => failure.regionId)).toEqual([
+      "home.merge",
+    ]);
+  });
+});
+
+describe("entries as they turn up in real repositories", () => {
+  it("reads a JSON collection entry as the object in the file", () => {
+    expect(readFixtureEntries("people")).toEqual([
+      {
+        slug: "ann-mukamana",
+        data: expect.objectContaining({ name: "Ann Mukamana" }),
+      },
+    ]);
+    expect(readFixtureEntries("people")[0]?.data).not.toHaveProperty("role");
+  });
+
+  it("takes only files of the collection's own extension, directly in its folder", () => {
+    expect(readFixtureEntries("notes").map((entry) => entry.slug)).toEqual([
+      "byte-order-mark",
+      "crlf",
+      "fence-lookalikes",
+      "no-frontmatter",
+      "release-1.2",
+      "rule-in-body",
+      "scalars",
+      "unclosed-fence",
+    ]);
+  });
+
+  it("keeps a body's line endings, and ignores a byte-order mark", () => {
+    expect(note("crlf")).toEqual({
+      title: "Written on Windows",
+      tags: ["a", "b"],
+      text: "\r\nFirst line.\r\nSecond line.\r\n",
+    });
+    expect(note("byte-order-mark")).toEqual({
+      title: "Saved with a byte-order mark",
+      text: "Body.\n",
+    });
+  });
+
+  it("needs both fences, each exactly three dashes, for there to be frontmatter", () => {
+    expect(Object.keys(note("no-frontmatter") ?? {})).toEqual(["text"]);
+    expect(Object.keys(note("unclosed-fence") ?? {})).toEqual(["text"]);
+    expect(Object.keys(note("fence-lookalikes") ?? {})).toEqual(["text"]);
+    expect(note("rule-in-body")?.text).toContain("\n---\n\ntitle: not frontmatter\n");
+  });
+
+  it("reads every scalar as YAML 1.2's core schema does", () => {
+    expect(note("scalars")).toMatchObject({
+      leading_zero: 7,
+      octal: 15,
+      hex: 31,
+      float: 1.5,
+      exponent: 1000,
+      version: "1.0",
+      date: "2026-08-12",
+      yes_is_a_word: "yes",
+      explicit: "123",
+      empty: null,
+      tilde: null,
+      folded: "Folded into one line.",
+      literal: "Line one.\nLine two.\n",
+    });
   });
 });

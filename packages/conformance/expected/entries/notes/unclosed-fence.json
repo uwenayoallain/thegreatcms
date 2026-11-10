@@ -1,0 +1,6 @@
+{
+  "slug": "unclosed-fence",
+  "data": {
+    "text": "---\ntitle: Never closed\n\nThe fence above has no partner, so this is all body.\n"
+  }
+}

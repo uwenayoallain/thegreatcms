@@ -125,7 +125,7 @@ export function verifyRegions(actual: Record<string, unknown>): ConformanceResul
   const failures: Failure[] = [];
 
   for (const [regionId, want] of Object.entries(expected)) {
-    if (!(regionId in actual)) {
+    if (!Object.hasOwn(actual, regionId)) {
       failures.push({ regionId, reason: "missing from output" });
       continue;
     }
@@ -141,7 +141,7 @@ export function verifyRegions(actual: Record<string, unknown>): ConformanceResul
   }
 
   for (const regionId of Object.keys(actual)) {
-    if (!(regionId in expected)) {
+    if (!Object.hasOwn(expected, regionId)) {
       failures.push({ regionId, reason: "unexpected region in output" });
     }
   }
@@ -155,7 +155,7 @@ export function verifyEntries(actual: Record<string, unknown>): ConformanceResul
   const failures: Failure[] = [];
 
   for (const [key, want] of Object.entries(expected)) {
-    if (!(key in actual)) {
+    if (!Object.hasOwn(actual, key)) {
       failures.push({ regionId: key, reason: "missing from output" });
       continue;
     }
@@ -171,7 +171,7 @@ export function verifyEntries(actual: Record<string, unknown>): ConformanceResul
   }
 
   for (const key of Object.keys(actual)) {
-    if (!(key in expected)) {
+    if (!Object.hasOwn(expected, key)) {
       failures.push({ regionId: key, reason: "unexpected entry in output" });
     }
   }
@@ -194,7 +194,8 @@ function stripMeta(value: unknown): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
     if (key === "_meta") continue;
-    out[key] = stripMeta(v);
+    // Defined, not assigned: a stored `__proto__` is a key like any other and must be compared.
+    Object.defineProperty(out, key, { value: stripMeta(v), enumerable: true });
   }
   return out;
 }

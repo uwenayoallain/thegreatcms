@@ -213,7 +213,11 @@ def read_entries(site_dir: str, collection: dict) -> list[dict]:
     for name in sorted(os.listdir(directory)):
         if not name.endswith(extension):
             continue
-        with open(os.path.join(directory, name), encoding="utf-8") as handle:
+        path = os.path.join(directory, name)
+        if not os.path.isfile(path):
+            continue
+        # newline="" keeps a body's line endings as the file has them: the body is verbatim.
+        with open(path, encoding="utf-8", newline="") as handle:
             source = handle.read()
         slug = name[: -len(extension)]
 

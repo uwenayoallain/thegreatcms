@@ -19,4 +19,9 @@ A reader writes one JSON file per region to a folder, plus
 `verify` compares them with `expected/`. The repository's Python reader
 passes it, which is how the format stays language-agnostic.
 
+The fixtures are the valid files readers get wrong: a region with no file, a
+stored `null`, an object merged into its default, blocks of a type the schema
+no longer has, a JSON collection, and Markdown entries with CRLF line endings,
+a byte-order mark, no frontmatter, an unclosed fence and YAML 1.2 scalars.
+
 Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/any-language.md · Source: https://github.com/uwenayoallain/thegreatcms

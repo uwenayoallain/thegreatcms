@@ -270,6 +270,9 @@ was posted to it. The editor's structured document is preserved in `_ast`
 for lossless round-tripping. **Consumers should ignore `_ast`.** Any key
 beginning with `_` is machinery and may be ignored by consumers.
 
+A reader returns `html` as stored and does not sanitize it again: a site that
+takes content from people who may not commit code sanitizes where it renders.
+
 ### Addresses
 
 A link's `href` and an image's or file's `src` are a relative URL, a fragment,
@@ -330,7 +333,9 @@ Body text becomes the field named by the collection's `body` key.
 ```
 
 A slug is one file name: up to 120 characters, not starting with `.`, and with
-no `/`, `\`, `%` or control characters.
+no `/`, `\`, `%` or control characters. Read back, a slug is the file name less
+its extension: `release-1.2.md` is `release-1.2`. A collection's entries are the
+files directly in its folder with its format's extension; nothing else is one.
 
 An `mdx` entry is the same file with an `.mdx` extension, and a body that may
 import and use components:
@@ -357,7 +362,8 @@ it is deliberately none of the CMS's business.
 is everything after that line, verbatim. A trailing carriage return on either
 fence is allowed, and a leading byte-order mark is ignored. Empty frontmatter
 (`---` twice) is an entry with no fields. Without a closing fence the whole file
-is the body.
+is the body. Verbatim includes line endings: a body written with CRLF is read
+with CRLF, so a reader must not let its file API translate them.
 
 **YAML means YAML 1.2, with the core schema.** That applies to frontmatter and
 to `.cms/*.yaml` alike. Only `true` and `false` are booleans, so a tag written
@@ -401,11 +407,19 @@ conformance kit checks.
 
 Merge rules:
 
-- Objects merge **deeply**, key by key.
+- Objects merge **deeply**, key by key. That includes the stored value of a
+  `link`, `image` or `file` field: a default of `{ href, label }` under a stored
+  `{ href }` keeps its `label`.
+- Anything stored is a value, `null`, `false`, `0`, `""` and `[]` included, and
+  replaces the default beneath it. Only an absent key leaves the default showing.
 - Arrays are **replaced wholesale**: merging lists item-by-item produces
   results no author would predict.
+- A blocks region whose file has no `blocks` array resolves to the region's
+  default, as if there were no file.
 - Within a blocks region, each stored block is merged over its block's field
   defaults, so a field added to a block later still renders. A block whose
+  `_type` the schema does not define, or an item that is not an object, is
+  returned as stored. A block whose
   definition has `variants` resolves with `_variant` set: what the content
   names if it is one of them, else the first.
 - **A missing content file is not an error.** The region resolves to its
@@ -521,7 +535,9 @@ Point your reader at the fixture site, dump each resolved region as
 `<region-id>.json` into a directory, and run `verify`. The fixture deliberately
 includes a region with no content file, a region edited before a field was
 added, a blocks region with a block missing a defaulted field, and a decorative
-image with empty alt text: the four cases naive implementations get wrong.
+image with empty alt text: the four cases naive implementations get wrong. It
+also holds a stored `null`, an unknown block type, a JSON collection, and
+entries with CRLF endings, a byte-order mark and no frontmatter.
 
 A reference reader in Python (stdlib + PyYAML, ~120 lines) lives at
 `examples/reader-python/read.py` and passes the suite. It is the shortest honest

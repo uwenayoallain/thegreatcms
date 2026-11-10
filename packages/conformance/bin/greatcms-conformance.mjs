@@ -5,6 +5,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   FIXTURES_DIR,
+  fixtureSchema,
   readFixtureEntries,
   readFixtureRegion,
   runConformance,
@@ -64,7 +65,7 @@ process.exit(1);
 
 function selfCheck() {
   const found = {};
-  for (const name of ["blog", "guides"]) {
+  for (const name of Object.keys(fixtureSchema().collections)) {
     for (const entry of readFixtureEntries(name)) {
       found[`${name}/${entry.slug}`] = entry;
     }

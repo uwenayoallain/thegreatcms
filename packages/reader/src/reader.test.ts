@@ -16,7 +16,7 @@ describe("CmsReader", () => {
 
   it("reads every collection entry exactly as the conformance kit expects", () => {
     const actual: Record<string, unknown> = {};
-    for (const name of ["blog", "guides"]) {
+    for (const name of Object.keys(reader.schema.collections)) {
       for (const { slug, data } of reader.collection(name))
         actual[`${name}/${slug}`] = { slug, data };
     }

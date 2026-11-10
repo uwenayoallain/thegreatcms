@@ -18,6 +18,7 @@ import {
   object,
   oneOf,
   optional,
+  own,
   positiveCount,
   readShape,
   record,
@@ -68,10 +69,7 @@ const common: Shape = {
 export function conditionMet(def: { when?: FieldCondition }, siblings: unknown): boolean {
   const when = def.when;
   if (!when) return true;
-  const value =
-    siblings && typeof siblings === "object"
-      ? (siblings as Record<string, unknown>)[when.field]
-      : undefined;
+  const value = siblings && typeof siblings === "object" ? own(siblings, when.field) : undefined;
   if (when.in) return when.in.includes(String(value ?? ""));
   return value === when.equals || String(value ?? "") === String(when.equals);
 }

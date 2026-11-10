@@ -1,6 +1,7 @@
 /** Collection entries are Markdown with YAML frontmatter, because that is what Hugo, Jekyll, Eleventy and Astro already read. */
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { NOT_FLAT, parseFlatYaml } from "./flat-yaml.js";
 
 export interface Frontmatter {
   data: Record<string, unknown>;
@@ -33,11 +34,11 @@ export function parseFrontmatter(source: string, file = "entry.md"): Frontmatter
   const { yaml, body } = parts;
   let data: unknown;
   try {
-    data = parseYaml(yaml) ?? {};
+    const flat = parseFlatYaml(yaml);
+    data = flat === NOT_FLAT ? (parseYaml(yaml) ?? {}) : flat;
   } catch (err) {
-    throw new Error(`${file}: frontmatter is not valid YAML: ${(err as Error).message}`, {
-      cause: err,
-    });
+    const reason = err instanceof RangeError ? "it is nested too deeply" : (err as Error).message;
+    throw new Error(`${file}: frontmatter is not valid YAML: ${reason}`, { cause: err });
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     throw new Error(`${file}: frontmatter must be a mapping of keys to values.`);

@@ -7,6 +7,7 @@ import {
   type Parser,
   type Problem,
   INVALID,
+  clip,
   count,
   describe,
   fail,
@@ -170,6 +171,25 @@ export interface CmsSchema {
   collections: Record<string, CollectionDef>;
 }
 
+/** The file `parseSchema` read last, so a tool that then asks about the same text does not parse it twice. */
+let lastParse: { source: string; raw: unknown } | undefined;
+
+/** A YAML failure as an issue; a file nested past the stack's depth is named as that. */
+export function yamlProblem(error: unknown): { code: string; message: string; fix: string } {
+  if (error instanceof RangeError) {
+    return {
+      code: "invalid_yaml",
+      message: "File is not valid YAML: it is nested too deeply to read.",
+      fix: "Flatten it: a real file is a few levels deep, not thousands.",
+    };
+  }
+  return {
+    code: "invalid_yaml",
+    message: `File is not valid YAML: ${(error as Error).message}`,
+    fix: "Check indentation: YAML requires spaces, never tabs.",
+  };
+}
+
 /** A block's variants as value/label pairs, or none. */
 export function blockVariants(def: BlockDef | undefined): Array<{ value: string; label: string }> {
   return (def?.variants ?? []).map((option) =>
@@ -206,15 +226,12 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
   try {
     raw = parseYaml(source);
   } catch (err) {
-    bag.add({
-      code: "invalid_yaml",
-      message: `File is not valid YAML: ${(err as Error).message}`,
-      fix: "Check indentation: YAML requires spaces, never tabs.",
-    });
+    bag.add(yamlProblem(err));
     bag.throwIfAny("Could not read schema");
     /* c8 ignore next */
     throw err;
   }
+  lastParse = { source, raw };
 
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     bag.add({
@@ -254,8 +271,8 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     if (!NAME_RE.test(name)) {
       bag.add({
         code: "invalid_block_name",
-        path: `blocks.${name}`,
-        message: `Block name "${name}" must be lowercase letters, digits, "-" or "_".`,
+        path: `blocks.${clip(name)}`,
+        message: `Block name "${clip(name)}" must be lowercase letters, digits, "-" or "_".`,
         fix: "Rename it, e.g. `hero`, `cta-wide`.",
       });
     }
@@ -265,8 +282,8 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     if (!REGION_ID_RE.test(id)) {
       bag.add({
         code: "invalid_region_id",
-        path: `regions.${id}`,
-        message: `Region id "${id}" is not usable as a file name.`,
+        path: `regions.${clip(id)}`,
+        message: `Region id "${clip(id)}" is not usable as a file name.`,
         fix: "Use dot-separated lowercase segments, e.g. `home.hero` or `about.team`.",
       });
     }
@@ -277,8 +294,8 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
           bag.add({
             code: "unknown_block",
             path: `regions.${id}.allow[${i}]`,
-            message: `Region allows block "${allowed}", which is not defined.`,
-            fix: `Add a \`blocks.${allowed}\` definition, or remove it from \`allow\`.`,
+            message: `Region allows block "${clip(allowed)}", which is not defined.`,
+            fix: `Add a \`blocks.${clip(allowed)}\` definition, or remove it from \`allow\`.`,
           });
         }
       }
@@ -304,12 +321,12 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
     if (!NAME_RE.test(name)) {
       bag.add({
         code: "invalid_collection_name",
-        path: `collections.${name}`,
-        message: `Collection name "${name}" must be lowercase letters, digits, "-" or "_".`,
+        path: `collections.${clip(name)}`,
+        message: `Collection name "${clip(name)}" must be lowercase letters, digits, "-" or "_".`,
         fix: "Rename it, e.g. `blog`, `case-studies`.",
       });
     }
-    if (collection.body && !(collection.body in collection.fields)) {
+    if (collection.body && !Object.hasOwn(collection.fields, collection.body)) {
       bag.add({
         code: "unknown_body_field",
         path: `collections.${name}.body`,
@@ -317,7 +334,7 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
         fix: `Add a \`${collection.body}\` field (usually \`type: richtext\`), or change \`body\`.`,
       });
     }
-    if (collection.slug && !(collection.slug in collection.fields)) {
+    if (collection.slug && !Object.hasOwn(collection.fields, collection.slug)) {
       bag.add({
         code: "unknown_slug_field",
         path: `collections.${name}.slug`,
@@ -334,11 +351,11 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
       bag.add({
         code: "unknown_collection",
         path: `${path}.collection`,
-        message: `Field refers to collection "${def.collection}", which is not defined.`,
+        message: `Field refers to collection "${clip(def.collection)}", which is not defined.`,
         fix:
           collectionNames.length > 0
-            ? `Point \`collection\` at one of: ${collectionNames.join(", ")}; or add a \`collections.${def.collection}\` definition.`
-            : `Add a \`collections.${def.collection}\` definition for the entries it points at.`,
+            ? `Point \`collection\` at one of: ${collectionNames.join(", ")}; or add a \`collections.${clip(def.collection)}\` definition.`
+            : `Add a \`collections.${clip(def.collection)}\` definition for the entries it points at.`,
       });
     });
   for (const [name, block] of Object.entries(blocks)) {
@@ -372,7 +389,7 @@ export function parseSchema(source: string, opts: ParseSchemaOptions = {}): CmsS
 export function unknownSchemaKeys(source: string, opts: ParseSchemaOptions = {}): SpecIssue[] {
   let raw: unknown;
   try {
-    raw = parseYaml(source);
+    raw = lastParse?.source === source ? lastParse.raw : parseYaml(source);
   } catch {
     return [];
   }

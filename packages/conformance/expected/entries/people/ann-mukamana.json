@@ -1,0 +1,12 @@
+{
+  "slug": "ann-mukamana",
+  "data": {
+    "links": [
+      {
+        "href": "https://example.com/ann",
+        "label": "Site"
+      }
+    ],
+    "name": "Ann Mukamana"
+  }
+}

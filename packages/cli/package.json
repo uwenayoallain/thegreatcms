@@ -26,6 +26,7 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "bin",
     "README.md",
     "LICENSE"
@@ -49,7 +50,8 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench": "node bench/run.mjs"
   },
   "dependencies": {
     "@greatcms/spec": "workspace:*",

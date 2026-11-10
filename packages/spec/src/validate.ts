@@ -1,8 +1,9 @@
 /** Content validation. */
 
-import { SpecIssue } from "./errors.js";
+import { SpecIssue, boundedDepth } from "./errors.js";
 import { conditionMet, type FieldDef, selectOptions } from "./fields.js";
 import { isSafeSlug } from "./paths.js";
+import { clip, own } from "./shape.js";
 import { isSafeUrl } from "./urls.js";
 import {
   type BlockDef,
@@ -20,7 +21,7 @@ function checkVariant(
   issues: SpecIssue[],
   opts: ValidateOptions,
 ): void {
-  const named = (block as { _variant?: unknown })?._variant;
+  const named = own(block as object, "_variant");
   if (named === undefined || named === null || named === "") return;
   const variants = blockVariants(def);
   if (variants.length === 0) return;
@@ -30,7 +31,7 @@ function checkVariant(
       opts,
       `${path}._variant`,
       "unknown_variant",
-      `"${String(named)}" is not a variant of this block.`,
+      `"${clip(String(named))}" is not a variant of this block.`,
       `One of: ${variants.map((v) => v.value).join(", ")}.`,
     );
   }
@@ -51,6 +52,19 @@ export type ValidationResult =
   | { ok: true; issues: readonly SpecIssue[] }
   | { ok: false; issues: readonly SpecIssue[] };
 
+/** A schema's `pattern`, compiled once however many values it checks. */
+const patterns = new Map<string, RegExp>();
+
+function compiled(source: string): RegExp {
+  let pattern = patterns.get(source);
+  if (!pattern) {
+    if (patterns.size >= 500) patterns.clear();
+    pattern = new RegExp(source);
+    patterns.set(source, pattern);
+  }
+  return pattern;
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 export function validateFields(
@@ -59,8 +73,17 @@ export function validateFields(
   opts: ValidateOptions = {},
 ): ValidationResult {
   const issues: SpecIssue[] = [];
-  const base = opts.basePath ?? "";
+  boundedDepth(opts.file, () => checkFields(fields, value, opts.basePath ?? "", issues, opts));
+  return issues.length === 0 ? { ok: true, issues } : { ok: false, issues };
+}
 
+function checkFields(
+  fields: Record<string, FieldDef>,
+  value: unknown,
+  base: string,
+  issues: SpecIssue[],
+  opts: ValidateOptions,
+): void {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     issues.push(
       issue(
@@ -71,7 +94,7 @@ export function validateFields(
         "Check the file shape.",
       ),
     );
-    return { ok: false, issues };
+    return;
   }
 
   const data = value as Record<string, unknown>;
@@ -79,27 +102,25 @@ export function validateFields(
   for (const [name, def] of Object.entries(fields)) {
     // A field its condition hides is not asked for: whatever it holds is kept, not checked.
     if (!conditionMet(def, data)) continue;
-    validateField(def, data[name], joinPath(base, name), issues, opts);
+    validateField(def, own(data, name), joinPath(base, name), issues, opts);
   }
 
   if (opts.strict) {
     for (const key of Object.keys(data)) {
       if (key.startsWith("_")) continue; // machinery: _meta, _type, _ast
-      if (!(key in fields)) {
+      if (!Object.hasOwn(fields, key)) {
         issues.push(
           issue(
             opts,
             joinPath(base, key),
             "unknown_field",
-            `"${key}" is not defined in the schema.`,
-            `Add \`${key}\` to the schema, or remove it from the content.`,
+            `"${clip(key)}" is not defined in the schema.`,
+            `Add \`${clip(key)}\` to the schema, or remove it from the content.`,
           ),
         );
       }
     }
   }
-
-  return issues.length === 0 ? { ok: true, issues } : { ok: false, issues };
 }
 
 function validateField(
@@ -156,7 +177,7 @@ function validateField(
           `Must be at most ${def.max} characters (has ${value.length}).`,
         );
       }
-      if (def.pattern && !new RegExp(def.pattern).test(value)) {
+      if (def.pattern && !compiled(def.pattern).test(value)) {
         push(
           issues,
           opts,
@@ -223,7 +244,7 @@ function validateField(
             opts,
             path,
             "not_an_option",
-            `"${String(v)}" is not one of the allowed options.`,
+            `"${clip(String(v))}" is not one of the allowed options.`,
             `Allowed: ${allowed.join(", ")}.`,
           );
         }
@@ -386,7 +407,7 @@ function validateField(
       const blocks = opts.blocks;
       value.forEach((block, index) => {
         const at = `${path}[${index}]`;
-        const type = (block as { _type?: unknown })?._type;
+        const type = blockType(block);
         if (typeof type !== "string") {
           push(issues, opts, at, "missing_block_type", "Block has no `_type`.");
           return;
@@ -397,12 +418,12 @@ function validateField(
             opts,
             at,
             "block_not_allowed",
-            `Block type "${type}" is not allowed here.`,
+            `Block type "${clip(type)}" is not allowed here.`,
             `Allowed here: ${def.allow.join(", ")}.`,
           );
           return;
         }
-        const nested = blocks?.[type];
+        const nested = blocks ? (own(blocks, type) as BlockDef | undefined) : undefined;
         if (!nested) {
           if (blocks)
             push(
@@ -415,14 +436,13 @@ function validateField(
           return;
         }
         checkVariant(nested, block, at, issues, opts);
-        issues.push(...validateFields(nested.fields, block, { ...opts, basePath: at }).issues);
+        checkFields(nested.fields, block, at, issues, opts);
       });
       return;
     }
 
     case "group": {
-      const result = validateFields(def.fields, value, { ...opts, basePath: path });
-      issues.push(...result.issues);
+      checkFields(def.fields, value, path, issues, opts);
       return;
     }
   }
@@ -435,22 +455,24 @@ export function validateRegion(
   document: unknown,
   opts: ValidateOptions = {},
 ): ValidationResult {
-  const region = schema.regions[regionId];
+  const region = own(schema.regions, regionId) as RegionDef | undefined;
   if (!region) {
     return {
       ok: false,
       issues: [
         issue(
           opts,
-          regionId,
+          clip(String(regionId)),
           "unknown_region",
-          `Region "${regionId}" is not defined in the schema.`,
+          `Region "${clip(String(regionId))}" is not defined in the schema.`,
           "Add it under `regions:` in .cms/schema.yaml, or delete the content file.",
         ),
       ],
     };
   }
-  return validateRegionAgainst(schema, region, regionId, document, opts);
+  return boundedDepth(opts.file, () =>
+    validateRegionAgainst(schema, region, regionId, document, opts),
+  );
 }
 
 function validateRegionAgainst(
@@ -506,7 +528,7 @@ function validateRegionAgainst(
 
   blocks.forEach((block, i) => {
     const path = `blocks[${i}]`;
-    const type = (block as { _type?: unknown })?._type;
+    const type = blockType(block);
     if (typeof type !== "string") {
       push(
         issues,
@@ -524,12 +546,12 @@ function validateRegionAgainst(
         opts,
         path,
         "block_not_allowed",
-        `Block type "${type}" is not allowed in region "${regionId}".`,
+        `Block type "${clip(type)}" is not allowed in region "${regionId}".`,
         `Allowed here: ${region.allow.join(", ")}.`,
       );
       return;
     }
-    const def: BlockDef | undefined = schema.blocks[type];
+    const def = own(schema.blocks, type) as BlockDef | undefined;
     if (!def) {
       push(
         issues,
@@ -540,8 +562,8 @@ function validateRegionAgainst(
       );
       return;
     }
-    checkVariant(def, block, path, issues, opts);
-    issues.push(...validateFields(def.fields, block, { ...withBlocks, basePath: path }).issues);
+    checkVariant(def, block, path, issues, withBlocks);
+    checkFields(def.fields, block, path, issues, withBlocks);
   });
 
   return issues.length === 0 ? { ok: true, issues } : { ok: false, issues };
@@ -569,7 +591,7 @@ export function referencesIn(
     if (data === null || typeof data !== "object" || Array.isArray(data)) return;
     for (const [name, def] of Object.entries(defs)) {
       if (!conditionMet(def, data)) continue;
-      walkField(def, (data as Record<string, unknown>)[name], joinPath(base, name));
+      walkField(def, own(data, name), joinPath(base, name));
     }
   };
   const walkField = (def: FieldDef, data: unknown, path: string): void => {
@@ -594,8 +616,11 @@ export function referencesIn(
       case "blocks":
         if (!Array.isArray(data)) return;
         data.forEach((block, index) => {
-          const type = (block as { _type?: unknown })?._type;
-          const nested = typeof type === "string" ? opts.blocks?.[type] : undefined;
+          const type = blockType(block);
+          const nested =
+            typeof type === "string" && opts.blocks
+              ? (own(opts.blocks, type) as BlockDef | undefined)
+              : undefined;
           if (nested) walkFields(nested.fields, block, `${path}[${index}]`);
         });
         return;
@@ -603,12 +628,16 @@ export function referencesIn(
         return;
     }
   };
-  walkFields(fields, value, opts.basePath ?? "");
+  boundedDepth(undefined, () => walkFields(fields, value, opts.basePath ?? ""));
   return found;
 }
 
+function blockType(block: unknown): unknown {
+  return block !== null && typeof block === "object" ? own(block, "_type") : undefined;
+}
+
 function shown(value: unknown): string {
-  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "string") return JSON.stringify(clip(value));
   if (Array.isArray(value)) return "a list";
   return value !== null && typeof value === "object" ? "an object" : String(value);
 }
@@ -646,5 +675,6 @@ function issue(
 }
 
 function joinPath(base: string, key: string): string {
-  return base ? `${base}.${key}` : key;
+  const name = key.length > 80 ? clip(key) : key;
+  return base ? `${base}.${name}` : name;
 }
