@@ -3,18 +3,13 @@
 import { html } from "hono/html";
 import type { Editor, Site } from "../db.js";
 import { brandMark, flashNotice, page, type PageOptions, themeSwitch } from "./layout.js";
+import { when } from "./locale.js";
 import { personAvatar, pixelWord } from "./pixel.js";
 
-export function signInPage(
-  options: { error?: string; next?: string; email?: string; editors?: boolean } = {},
-): string {
-  // A `next` that is a full address is a sibling host, such as the preview, asking us to vouch.
-  const onward = options.next?.startsWith("/") === false ? new URL(options.next).host : null;
+/** The screen someone without a session sees: the studio's name on one side, what to do on the other. */
+function outside(title: string, body: ReturnType<typeof html>): string {
   return page(
-    {
-      title: "Sign in",
-      chrome: false,
-    },
+    { title, chrome: false },
     html`
       <div class="sign-in">
         <section class="sign-in-art" aria-label="GreatCMS Studio">
@@ -28,59 +23,121 @@ export function signInPage(
           </div>
           <p class="pixel-rule" aria-hidden="true"></p>
         </section>
-        <section class="sign-in-form">
-          ${options.error ? flashNotice({ kind: "error", message: options.error }) : ""}
-          <div class="page-head">
-            <h1>Sign in</h1>
-            <p class="lede">
-              ${
-                onward
-                  ? html`One password for the studio and the preview. You will continue to
-                      <code>${onward}</code>.`
-                  : html`Edit the sites connected to this studio. Content stays in their
-                    repositories.`
-              }
-            </p>
-          </div>
-          <form method="POST" action="/sign-in">
-            ${options.next ? html`<input type="hidden" name="next" value="${options.next}" />` : ""}
-            ${
-              options.editors
-                ? html`<div class="field">
-                    <label for="email">Email</label>
-                    <span class="hint" id="email-hint">Leave empty to sign in as the owner.</span>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      autocomplete="username"
-                      aria-describedby="email-hint"
-                      value="${options.email ?? ""}"
-                    />
-                  </div>`
-                : ""
-            }
-            <div class="field">
-              <label for="password">Password</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                autocomplete="current-password"
-                required
-                autofocus
-              />
-            </div>
-            <div class="actions"><button type="submit">Sign in</button></div>
-          </form>
-          ${themeSwitch()}
-        </section>
+        <section class="sign-in-form">${body} ${themeSwitch()}</section>
       </div>
     `,
   );
 }
 
-export function sharePage(options: { site: Site; url: string }): string {
+/** What someone sees when a preview link does not open: what happened, and what to ask for. */
+export function shareProblemPage(): string {
+  return outside(
+    "Preview link",
+    html`
+      <div class="page-head">
+        <h1>This preview link no longer works</h1>
+        <p class="lede">
+          Preview links open for seven days, and whoever runs the studio can withdraw them sooner.
+          This one has run out, was withdrawn, or was not copied whole.
+        </p>
+      </div>
+      <p>Ask the person who sent it for a new link. Nothing is wrong on your side.</p>
+      <p class="hint">Have an account on this studio? <a href="/sign-in">Sign in</a> instead.</p>
+    `,
+  );
+}
+
+/**
+ * What a chat app draws when the link is pasted into it: that this is a private preview and of
+ * what, with none of the site's unpublished content and nothing from the link itself.
+ */
+export function shareCard(siteName: string, open: string): string {
+  const title = `Preview of ${siteName}`;
+  const about = "A private preview of work in progress, shared from GreatCMS. The link opens it.";
+  return html`<!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="robots" content="noindex, nofollow" />
+        <title>${title}</title>
+        <meta name="description" content="${about}" />
+        <meta property="og:title" content="${title}" />
+        <meta property="og:description" content="${about}" />
+        <meta property="og:site_name" content="GreatCMS" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+      </head>
+      <body>
+        <h1>${title}</h1>
+        <p>${about}</p>
+        <p><a href="${open}" rel="nofollow">Open the preview</a></p>
+      </body>
+    </html>`.toString();
+}
+
+export function signInPage(
+  options: { error?: string; next?: string; email?: string; editors?: boolean } = {},
+): string {
+  // A `next` that is a full address is a sibling host, such as the preview, asking us to vouch.
+  const onward = options.next?.startsWith("/") === false ? new URL(options.next).host : null;
+  return outside(
+    "Sign in",
+    html`
+      ${options.error ? flashNotice({ kind: "error", message: options.error }) : ""}
+      <div class="page-head">
+        <h1>Sign in</h1>
+        <p class="lede">
+          ${
+            onward
+              ? html`<code>${onward}</code> is a private preview. Sign in to the studio to see it.`
+              : html`Edit the sites connected to this studio. Content stays in their repositories.`
+          }
+        </p>
+      </div>
+      <form method="POST" action="/sign-in">
+        ${options.next ? html`<input type="hidden" name="next" value="${options.next}" />` : ""}
+        ${
+          options.editors
+            ? html`<div class="field">
+                <label for="email">Email</label>
+                <span class="hint" id="email-hint">Leave empty to sign in as the owner.</span>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  autocomplete="username"
+                  aria-describedby="email-hint"
+                  value="${options.email ?? ""}"
+                />
+              </div>`
+            : ""
+        }
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            autocomplete="current-password"
+            required
+            autofocus
+          />
+        </div>
+        <div class="actions"><button type="submit">Sign in</button></div>
+      </form>
+      ${
+        onward
+          ? html`<p class="hint outsider">
+              Sent here by a preview link? It has run out: ask the person who shared it for a new
+              one.
+            </p>`
+          : ""
+      }
+    `,
+  );
+}
+
+export function sharePage(options: { site: Site; url: string; until: string }): string {
   const { site, url } = options;
   return page(
     {
@@ -95,15 +152,42 @@ export function sharePage(options: { site: Site; url: string }): string {
       <div class="page-head">
         <h1>Preview link</h1>
         <p class="lede">
-          Anyone with this link sees the preview of ${site.name}, unpublished edits included, for
-          seven days. It opens nothing in the studio. Changing the studio password revokes every
-          link.
+          Send this to someone without an account. It opens the preview of ${site.name} and nothing
+          in the studio.
         </p>
       </div>
-      <div class="field">
-        <label for="share-url">Link</label>
-        <input type="text" id="share-url" value="${url}" readonly />
+      <div class="field share-link">
+        <label for="share-url">Link to copy</label>
+        <input
+          type="text"
+          id="share-url"
+          class="source"
+          value="${url}"
+          readonly
+          autofocus
+          spellcheck="false"
+          aria-describedby="share-url-hint"
+        />
+        <span class="hint" id="share-url-hint">
+          Select it all and copy, or
+          <a href="${url}" target="_blank" rel="noopener noreferrer">open it yourself</a> to see
+          what they will.
+        </span>
       </div>
+      <ul class="share-terms">
+        <li>
+          <strong>What it shows.</strong> The site as the preview has it now, unpublished edits
+          included, and every page of it, not only this one.
+        </li>
+        <li>
+          <strong>How long.</strong> Seven days, until ${when(options.until)}. Anyone the link is
+          passed on to can open it until then.
+        </li>
+        <li>
+          <strong>Taking it back.</strong> Changing the studio's password ends every preview link at
+          once, along with every session. One link cannot be withdrawn on its own.
+        </li>
+      </ul>
       <p><a class="button secondary" href="/sites/${site.id}">Back to ${site.name}</a></p>
     `,
   );

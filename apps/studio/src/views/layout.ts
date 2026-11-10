@@ -1154,6 +1154,10 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
   @keyframes lift { from { transform: translate(3px, 3px); } }
 }
 body.plain .flash { margin-bottom: 1rem; }
+.sign-in-form .outsider { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.share-link input { font-family: var(--mono); font-size: .8rem; }
+.share-terms { max-width: 44rem; margin: 0 0 1.5rem; padding: 0; list-style: none; display: grid; gap: .6rem; color: var(--ink-2); font-size: .9rem; }
+.share-terms strong { color: var(--ink); }
 
 /* Visual editor. */
 /* The editor opens at the height of the textarea it replaces. */

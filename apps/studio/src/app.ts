@@ -64,6 +64,7 @@ import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
 import { ALLOWED_TYPES, MAX_BYTES, UploadError, type UploadResult } from "./media.js";
 import {
+  replyAddress,
   assessSpam,
   contentFields,
   type Notifier,
@@ -83,7 +84,9 @@ import {
   editorsPage,
   gitAccessPage,
   githubCreatePage,
+  shareCard,
   sharePage,
+  shareProblemPage,
   signInPage,
 } from "./views/account-pages.js";
 import { collectionPage, editEntryPage } from "./views/collection-pages.js";
@@ -412,6 +415,14 @@ export function createApp(options: AppOptions) {
         kind: "submission",
         subject: `${site.name}: new ${form} submission`,
         lines: Object.entries(data).map(([key, value]) => `${key}: ${value}`),
+        site: site.name,
+        form,
+        fields: data,
+        replyTo: replyAddress(data),
+        // Only an address the operator set: the request's own host is the visitor's to choose.
+        inbox: options.publicUrl
+          ? `${options.publicUrl}/inbox?site=${encodeURIComponent(site.id)}`
+          : undefined,
       });
     }
 
@@ -618,6 +629,10 @@ export function createApp(options: AppOptions) {
     const uri = c.req.header("x-forwarded-uri") ?? "/";
     const token =
       new URL(uri, "http://preview.invalid").searchParams.get("greatcms-share") ?? undefined;
+    // A link that has run out says so, rather than asking a stranger for the studio's password.
+    if (token && options.publicUrl && !shareFits(token, host)) {
+      return c.redirect(`${options.publicUrl}/share`, 302);
+    }
     if (token && options.publicUrl && shareFits(token, host)) {
       const clean = new URL(uri, "http://preview.invalid");
       clean.searchParams.delete("greatcms-share");
@@ -646,10 +661,12 @@ export function createApp(options: AppOptions) {
     const next = allowedNext(c.req.query("next"));
     const siteId = readShareToken(token, signingKey);
     if (!token || !siteId || !next || next.startsWith("/")) {
-      return c.html(
-        errorPage("Preview link", "This preview link has expired or is not valid."),
-        403,
-      );
+      return c.html(shareProblemPage(), 403);
+    }
+    // A chat app unfurling the link gets a card about the preview, not a session or the site's contents.
+    if (!c.req.query("open") && LINK_PREVIEWER.test(c.req.header("user-agent") ?? "")) {
+      const open = new URLSearchParams({ token, next, open: "1" });
+      return c.html(shareCard(store.getSite(siteId)?.name ?? "a site", `/share?${open}`));
     }
     c.header("Set-Cookie", shareCookie(token, isSecure(c), options.cookieDomain));
     return c.redirect(next, 302);
@@ -665,8 +682,10 @@ export function createApp(options: AppOptions) {
     let url = new URL(path.startsWith("/") ? path : "/", preview);
     // `//elsewhere` is a path to another host: the token would travel with it.
     if (url.origin !== preview.origin) url = new URL("/", preview);
-    url.searchParams.set("greatcms-share", createShareToken(signingKey, site.id));
-    return c.html(sharePage({ site, url: url.href }));
+    const token = createShareToken(signingKey, site.id);
+    url.searchParams.set("greatcms-share", token);
+    const until = new Date(Number(token.split(".").at(-2))).toISOString();
+    return c.html(sharePage({ site, url: url.href, until }));
   });
 
   app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|greatcms-logo\\.png}", (c) => {
@@ -866,7 +885,9 @@ export function createApp(options: AppOptions) {
   app.get("/inbox.csv", (c) => {
     const siteId = c.req.query("site") || undefined;
     const rows = store.listSubmissions({ siteId, includeSpam: false, limit: 5000 });
-    return c.body(toCsv(rows), 200, {
+    const names = new Map(store.listSites().map((site) => [site.id, site.name]));
+    const named = rows.map((row) => ({ ...row, site: names.get(row.siteId) ?? row.siteId }));
+    return c.body(toCsv(named), 200, {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": 'attachment; filename="submissions.csv"',
     });
@@ -884,7 +905,9 @@ export function createApp(options: AppOptions) {
     const id = submissionId(c.req.param("id"));
     if (id === null) return c.notFound();
     store.deleteSubmission(id);
-    return c.redirect(inboxView(await c.req.formData()), 303);
+    // A bare POST still deletes; it just has no filter to go back to.
+    const form = await c.req.formData().catch(() => new FormData());
+    return c.redirect(inboxView(form), 303);
   });
 
   /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
@@ -2409,6 +2432,10 @@ function baseOf(entries: Array<[string, string]>): string | undefined {
   const sha = entries.find(([key]) => key === "headSha")?.[1];
   return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
 }
+
+/** Programs that fetch a pasted link to draw a card for it. */
+const LINK_PREVIEWER =
+  /bot\b|crawler|spider|facebookexternalhit|WhatsApp\/|SkypeUriPreview|Iframely|Embedly/i;
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;
