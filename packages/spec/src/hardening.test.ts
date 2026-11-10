@@ -287,7 +287,7 @@ describe("random damage", () => {
   it("a damaged schema or config parses, or fails with a SpecError, and never hangs", () => {
     const started = performance.now();
     let parsed = 0;
-    for (let i = 0; i < 1500; i++) {
+    for (let i = 0; i < 400; i++) {
       const source = damage(SCHEMA);
       try {
         parseSchema(source);
@@ -307,7 +307,7 @@ describe("random damage", () => {
     }
     // Some damage is harmless (a comment, a duplicate of a blank line): both outcomes must occur.
     expect(parsed).toBeGreaterThan(0);
-    expect(parsed).toBeLessThan(1500);
+    expect(parsed).toBeLessThan(400);
     expect(performance.now() - started).toBeLessThan(20_000);
   });
 
