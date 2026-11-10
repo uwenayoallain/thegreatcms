@@ -29,6 +29,11 @@ The rules are in [section 6 of the standard](/spec/#6-resolution-rules-the-impor
 objects merge deeply, arrays are replaced wholesale, and a missing schema is a
 loud error where a missing content file is not.
 
+The fixtures also hold the valid files that trip a reader in practice: a stored
+`null` (a value, not a gap), a body with CRLF line endings (verbatim means your
+file API must not translate them), a byte-order mark, and an entry with no
+frontmatter at all.
+
 ## Proving it
 
 ```sh

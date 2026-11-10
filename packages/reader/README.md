@@ -19,6 +19,15 @@ const posts = cms.collection("posts"); // [{ slug, data, body }]
 const sections = cms.blocks("home.sections"); // a blocks region, in order
 ```
 
+`createReader()` is cheap to call wherever content is needed, a page, a layout,
+a component: the schema and every content file are parsed once per process and
+read again only when the file on disk has changed. Rich text comes back as the
+HTML the file holds; the reader does not sanitize it, so a site that takes
+content from people it would not let commit code should sanitize where it
+renders. A content file over 32 MB, or a `.cms` file over 4 MB, is refused with
+an error that names it. A content file that is a link to somewhere outside the
+site root is not read.
+
 In development the reader prefers an unsaved edit in `.cms/draft/` over the
 committed file, which is what lets the studio preview a change in your own dev
 server as you type. A production build never reads a draft.
