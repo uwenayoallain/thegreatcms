@@ -233,10 +233,14 @@ export function sitePage(options: {
       </div>
 
       <dl class="workspace-meta">
-        <div>
-          <dt>Working copy</dt>
-          <dd><code title="${site.path}">${shortPath(site.path)}</code></dd>
-        </div>
+        ${
+          owner
+            ? html`<div>
+                <dt>Working copy</dt>
+                <dd><code title="${site.path}">${shortPath(site.path)}</code></dd>
+              </div>`
+            : ""
+        }
         <div>
           <dt>Live preview</dt>
           <dd>

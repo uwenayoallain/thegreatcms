@@ -56,9 +56,13 @@ export function sitesPage(
                       ${siteAvatar(site.id)}
                       <div class="site-card-body">
                         <h2><a href="/sites/${site.id}">${site.name}</a></h2>
-                        <p class="path" title="${site.path}">
-                          <code>${shortPath(site.path)}</code>
-                        </p>
+                        ${
+                          owner
+                            ? html`<p class="path" title="${site.path}">
+                                <code>${shortPath(site.path)}</code>
+                              </p>`
+                            : ""
+                        }
                         ${previewStatus(site, running.get(site.id))}
                       </div>
                     </li>

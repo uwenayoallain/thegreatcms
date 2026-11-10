@@ -440,6 +440,21 @@ describe("the trip to GitHub and back", () => {
     }
   });
 
+  it("shows where a site's folder is to an owner, and not to someone GitHub let in", async () => {
+    const folder = alpha.root.split("/").at(-1) as string;
+    const ada = await signInAs("ada");
+    for (const path of ["/", `/sites/${ALPHA}`]) {
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time keeps the failure readable
+      const shown = await text(get(path, ada));
+      expect(shown, path).toContain("Alpha Site");
+      expect(shown, path).not.toContain(folder);
+      // oxlint-disable-next-line no-await-in-loop
+      expect(await text(get(path, signedIn)), path).toContain(`title="${alpha.root}"`);
+    }
+    const boss = await signInAs("boss");
+    expect(await text(get(`/sites/${ALPHA}`, boss))).toContain(`title="${alpha.root}"`);
+  });
+
   it("refuses an answer that this browser did not ask for", async () => {
     const { authorize, trip } = await roundTrip("ada");
     const state = authorize.searchParams.get("state");
