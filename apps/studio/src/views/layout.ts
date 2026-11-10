@@ -362,7 +362,7 @@ function navigation(
             : ""
         }
         ${
-          viewer() && !viewer()?.owner
+          viewer() && (viewer()?.github || !viewer()?.owner)
             ? html`<p class="signed-in">${personAvatar(viewer()?.name ?? "")} ${viewer()?.name}</p>`
             : ""
         }
@@ -553,6 +553,9 @@ body.plain { display: block; }
 .connect-section { max-width: 44rem; margin: 0 0 2rem; }
 .connect-section > h2, .connect-heading { font-size: 1rem; margin: 0 0 .35rem; }
 .connect-section > p { color: var(--ink-2); font-size: .88rem; margin: 0 0 .85rem; }
+.connect-section > h3 { font-size: .9rem; margin: 1.5rem 0 .35rem; }
+.connect-section .steps { margin: 0 0 1rem; padding-left: 1.25rem; font-size: .88rem; color: var(--ink-2); }
+.connect-section .steps li { margin: .25rem 0; overflow-wrap: anywhere; }
 .choice { display: flex; gap: .55rem; align-items: start; margin: 0 0 .55rem; }
 .choice:last-child { margin-bottom: 0; }
 .choice input { margin-top: .25rem; }
@@ -1145,6 +1148,10 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
 .sign-in-form .actions { margin-top: 1.25rem; }
 .sign-in-form .actions button { width: 100%; min-height: 2.75rem; font-size: .9rem; }
 .sign-in-form > .theme-switch { width: max-content; margin: 2.5rem auto 0; }
+.sign-in-github { margin: 0; }
+.sign-in-github .button { width: 100%; min-height: 2.75rem; justify-content: center; font-size: .9rem; }
+.sign-in-or { display: flex; align-items: center; gap: .75rem; margin: 1.1rem 0; font-size: .75rem; color: var(--ink-2); }
+.sign-in-or::before, .sign-in-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 @media (max-width: 52rem) {
   .sign-in { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .sign-in-art { gap: 1.5rem; padding: 1.1rem 1.25rem 1.25rem; }

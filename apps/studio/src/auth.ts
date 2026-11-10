@@ -1,13 +1,13 @@
 /** Authentication: the owner's password from the environment, editors' passwords hashed, one signed cookie. */
 
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const COOKIE = "greatcms_session";
 const PREVIEW_COOKIE = "greatcms_preview";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
 
 export interface Session {
-  /** `studio` for the owner, `editor:<id>` for an editor. */
+  /** `studio` for the owner, `editor:<id>` for an editor, `github:<id>` for a GitHub account. */
   actor: string;
   /** For an editor, a fingerprint of their password hash: changing the password ends the session. */
   stamp: string;
@@ -88,6 +88,79 @@ export function readShareCookie(cookieHeader: string | undefined): string | unde
   return parseCookies(cookieHeader)[SHARE_COOKIE];
 }
 
+const GITHUB_COOKIE = "greatcms_github";
+const GITHUB_MINUTES = 10;
+
+/** One trip to GitHub and back: what the callback must be handed, and where to go afterwards. */
+export interface GithubTrip {
+  /** Sent to GitHub and expected back unchanged. */
+  state: string;
+  /** PKCE: its hash goes out with the browser, the verifier itself only from server to GitHub. */
+  verifier: string;
+  challenge: string;
+  next: string;
+  /** Names this trip, so it can be marked as used. */
+  id: string;
+  expiresAt: number;
+}
+
+function githubTrip(key: string, nonce: string, next: string, expiresAt: number): GithubTrip {
+  const verifier = sign(`verifier ${nonce}`, key);
+  return {
+    state: sign(`state ${nonce}`, key),
+    verifier,
+    challenge: createHash("sha256").update(verifier).digest("base64url"),
+    next,
+    id: `github-trip:${sign(`id ${nonce}`, key)}`,
+    expiresAt,
+  };
+}
+
+/**
+ * Starts a sign-in with GitHub: a cookie that ties the answer to this browser for ten minutes.
+ * Only the callback path sees it, and the state GitHub carries cannot be worked out without it.
+ */
+export function startGithubTrip(
+  secret: string,
+  next: string,
+  secure = false,
+  now = Date.now(),
+): { cookie: string; trip: GithubTrip } {
+  const key = keyFor(secret, "github");
+  const nonce = randomBytes(32).toString("base64url");
+  const expiresAt = now + GITHUB_MINUTES * 60_000;
+  const payload = `${nonce}.${expiresAt}.${Buffer.from(next).toString("base64url")}`;
+  return {
+    cookie: `${GITHUB_COOKIE}=${payload}.${sign(payload, key)}; Path=/sign-in/github; HttpOnly; SameSite=Lax; Max-Age=${GITHUB_MINUTES * 60}${cookieScope(secure)}`,
+    trip: githubTrip(key, nonce, next, expiresAt),
+  };
+}
+
+/** The trip this browser began, or null when its cookie is missing, forged or has run out. */
+export function readGithubTrip(
+  cookieHeader: string | undefined,
+  secret: string,
+  now = Date.now(),
+): GithubTrip | null {
+  const parts = parseCookies(cookieHeader)[GITHUB_COOKIE]?.split(".");
+  if (parts?.length !== 4) return null;
+  const [nonce, expiry, next, signature] = parts as [string, string, string, string];
+  const key = keyFor(secret, "github");
+  if (!constantTimeEqual(sign(`${nonce}.${expiry}.${next}`, key), signature)) return null;
+  const expiresAt = Number(expiry);
+  if (!Number.isFinite(expiresAt) || expiresAt < now) return null;
+  return githubTrip(key, nonce, Buffer.from(next, "base64url").toString(), expiresAt);
+}
+
+export function clearGithubTrip(secure = false): string {
+  return `${GITHUB_COOKIE}=; Path=/sign-in/github; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
+}
+
+/** Whether two strings match, taking as long whether or not they do. */
+export function sameText(a: string, b: string): boolean {
+  return constantTimeEqual(sign(a, "compare"), sign(b, "compare"));
+}
+
 export function clearSessionCookie(secure = false): string {
   return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
 }
@@ -124,7 +197,7 @@ function readSigned(raw: string | undefined, key: string): Session | null {
   const parts = decoded(raw)?.split(".");
   if (parts?.length !== 4) return null;
   const [actor, stamp, expiry, signature] = parts as [string, string, string, string];
-  if (!/^(studio|editor:\d+)$/.test(actor)) return null;
+  if (!/^(studio|editor:\d+|github:\d+)$/.test(actor)) return null;
   if (!constantTimeEqual(sign(`${actor}.${stamp}.${expiry}`, key), signature)) return null;
   const expiresAt = Number(expiry);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
@@ -132,7 +205,10 @@ function readSigned(raw: string | undefined, key: string): Session | null {
 }
 
 /** One key per kind of token, so none of them can be passed off as another. */
-function keyFor(secret: string, purpose: "session" | "preview" | "share" | "stamp"): string {
+function keyFor(
+  secret: string,
+  purpose: "session" | "preview" | "share" | "stamp" | "github",
+): string {
   return createHmac("sha256", secret).update(`greatcms ${purpose}`).digest("hex");
 }
 
