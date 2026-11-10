@@ -43,6 +43,7 @@ async function editorCookie(password = "an editor's long password") {
     name: "Ed",
     email: "ed@example.com",
     passwordHash: hashPassword(password),
+    allSites: true,
   });
   const response = await signInAs(site.app, "ed@example.com", password);
   return cookiesOf(response).find((cookie) => cookie.startsWith("greatcms_session="))!;
@@ -151,6 +152,7 @@ describe("sessions", () => {
       name: "Ed",
       email: "ed@example.com",
       passwordHash: hashPassword("an editor's long password"),
+      allSites: true,
     });
     const app = createApp({
       store: site.store,

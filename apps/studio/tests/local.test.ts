@@ -582,6 +582,7 @@ describe("editors", () => {
       name: "Alice Uwase",
       email: "alice@example.com",
       password: "a long passphrase",
+      all: "1",
     });
 
   it("lets the owner add someone who then signs in as themselves", async () => {

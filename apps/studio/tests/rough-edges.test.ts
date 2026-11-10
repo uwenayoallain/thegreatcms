@@ -61,6 +61,7 @@ async function editor() {
     name: "Ed",
     email: "ed@example.com",
     passwordHash: hashPassword("an editor's long password"),
+    allSites: true,
   });
   const response = await site.app.request("/sign-in", {
     method: "POST",

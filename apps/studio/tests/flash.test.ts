@@ -93,6 +93,7 @@ describe("a notice after an action", () => {
       name: "Ed",
       email: "ed@example.com",
       passwordHash: hashPassword("an editor's long password"),
+      allSites: true,
     });
     const [editor] = site.store.listEditors();
     expect(await said(post(site, `/editors/${editor!.id}/delete`, {}))).toBe(

@@ -9,6 +9,8 @@ export interface Viewer {
   owner: boolean;
   /** An editor with a password here. Never shown to anyone but the owner. */
   email?: string;
+  /** That editor's id here, by which their sites are looked up. */
+  editor?: number;
   /** Someone who signed in with GitHub, as GitHub named them at that moment. */
   github?: {
     id: number;

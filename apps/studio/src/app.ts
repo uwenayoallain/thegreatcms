@@ -40,7 +40,7 @@ import { html } from "hono/html";
 import { bodyLimit } from "hono/body-limit";
 import { pack } from "./pack.js";
 import { setFlagsFromString } from "node:v8";
-import { SiteAccess } from "./access.js";
+import { editorSites, SiteAccess } from "./access.js";
 import {
   checkPassword,
   clearFlash,
@@ -69,7 +69,7 @@ import {
   shareCookie,
   verifyPassword,
 } from "./auth.js";
-import type { GithubPerson, Site, Store } from "./db.js";
+import type { Editor, GithubPerson, Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
 import { ALLOWED_TYPES, MAX_BYTES, UploadError, type UploadResult } from "./media.js";
 import {
@@ -538,7 +538,7 @@ export function createApp(options: AppOptions) {
     }
     const editor = store.getEditor(Number(session.actor.slice("editor:".length)));
     if (!editor || session.stamp !== editorStamp(signingKey, editor.passwordHash)) return null;
-    return { name: editor.name, email: editor.email, owner: false };
+    return { name: editor.name, email: editor.email, editor: editor.id, owner: false };
   };
   const stampFor = (actor: string) => {
     if (actor === "studio") return "-";
@@ -549,12 +549,23 @@ export function createApp(options: AppOptions) {
     const editor = store.getEditor(Number(actor.slice("editor:".length)));
     return editor ? editorStamp(signingKey, editor.passwordHash) : "-";
   };
-  /** The sites someone may open: all of them, unless GitHub is what let them in. */
+  /** The sites someone may open: all of them for an owner, their own for everyone else. */
   const sitesFor = async (who: Viewer) => {
     const all = store.listSites();
-    if (!who.github || who.owner) return { sites: all };
-    const sites = access ? await access.among(who.github, all) : [];
+    if (who.owner) return { sites: all };
+    let sites: Site[] = [];
+    if (who.github) sites = access ? await access.among(who.github, all) : [];
+    else if (who.editor !== undefined) {
+      const editor = store.getEditor(who.editor);
+      sites = editor ? editorSites(editor, all) : [];
+    }
     return { sites, among: sites.map((site) => site.id) };
+  };
+  /** What someone who has just signed in can open, to send them straight to an only site. */
+  const sitesAfterSignIn = async (actor: string) => {
+    if (actor === "studio") return store.listSites();
+    const editor = store.getEditor(Number(actor.slice("editor:".length)));
+    return editor ? editorSites(editor, store.listSites()) : [];
   };
   /** The studio's own session, plus the preview's cookie when the preview lives on a sibling host. */
   const signIn = (c: Context, actor: string) => {
@@ -743,11 +754,14 @@ export function createApp(options: AppOptions) {
   // changes the site asks GitHub again first, so access taken away there ends here at once.
   const reachable: MiddlewareHandler = async (c, next) => {
     const who = c.get("viewer") as Viewer | undefined;
-    if (!who?.github || who.owner) return next();
+    if (!who || who.owner) return next();
     const site = (c.get("sites") as Site[]).find((known) => known.id === c.req.param("id"));
     if (!site) return c.notFound();
+    // An editor's sites were read from the database for this request; GitHub's answer may be older.
     const changes = c.req.method !== "GET" && !c.req.path.endsWith("/draft");
-    if (changes && !(await access?.reaches(who.github, site, true))) return c.notFound();
+    if (who.github && changes && !(await access?.reaches(who.github, site, true))) {
+      return c.notFound();
+    }
     return next();
   };
   app.use("/sites/:id", reachable);
@@ -806,10 +820,10 @@ export function createApp(options: AppOptions) {
     const who =
       viewerOf(readPreviewSession(cookies, signingKey)) ??
       viewerOf(readSession(cookies, signingKey));
-    // A GitHub sign-in opens the previews of the sites it opens, and no one else's.
+    // Anyone but an owner opens the previews of the sites they open, and no one else's.
     const theirs = async (person: Viewer) =>
       (await sitesFor(person)).sites.some((site) => previewHost(site.devUrl) === host);
-    if (who && (!who.github || who.owner || (await theirs(who)))) return c.body(null, 204);
+    if (who && (who.owner || (await theirs(who)))) return c.body(null, 204);
     if (shareFits(readShareCookie(c.req.header("cookie")), host)) return c.body(null, 204);
     if (who) return c.text("That preview is not of a site you can open.", 403);
     // A share link: trade the token for a cookie at the studio, which can set one for the whole domain.
@@ -1005,7 +1019,10 @@ export function createApp(options: AppOptions) {
     return c.redirect(next ?? (sites.length === 1 ? `/sites/${sites[0]!.id}` : "/"), 303);
   });
 
-  app.get("/editors", (c) => c.html(editorsPage({ editors: store.listEditors() })));
+  const editorsView = (extra: Partial<Parameters<typeof editorsPage>[0]> = {}) =>
+    editorsPage({ editors: store.listEditors(), sites: store.listSites(), ...extra });
+
+  app.get("/editors", (c) => c.html(editorsView()));
 
   app.post("/editors", async (c) => {
     const form = await c.req.formData();
@@ -1023,21 +1040,43 @@ export function createApp(options: AppOptions) {
             : null;
     if (problem) {
       return c.html(
-        editorsPage({
-          editors: store.listEditors(),
+        editorsView({
           flash: { kind: "error", message: problem },
-          values: { name, email },
+          values: { name, email, ...tickedSites(form) },
         }),
         422,
       );
     }
-    store.addEditor({ name, email, passwordHash: hashPassword(chosen) });
+    const added = store.addEditor({
+      name,
+      email,
+      passwordHash: hashPassword(chosen),
+      ...tickedSites(form),
+    });
+    const opens =
+      added.allSites || added.sites.length > 0
+        ? ""
+        : " They can open no site until you tick one for them.";
     return c.html(
-      editorsPage({
-        editors: store.listEditors(),
-        flash: { kind: "success", message: `${name} can sign in with ${email}.` },
+      editorsView({
+        flash: { kind: "success", message: `${name} can sign in with ${email}.${opens}` },
       }),
     );
+  });
+
+  app.post("/editors/:id/sites", async (c) => {
+    const editor = store.getEditor(Number(c.req.param("id")));
+    if (!editor) return c.notFound();
+    store.setEditorSites(editor.id, tickedSites(await c.req.formData()));
+    const now = store.getEditor(editor.id) as Editor;
+    const opens = now.allSites
+      ? "every site"
+      : now.sites.length === 0
+        ? "no site"
+        : now.sites.length === 1
+          ? "one site"
+          : `${now.sites.length} sites`;
+    return done(c, "/editors", `${editor.name} can now open ${opens}.`);
   });
 
   app.post("/editors/:id/password", async (c) => {
@@ -1046,8 +1085,7 @@ export function createApp(options: AppOptions) {
     const chosen = String((await c.req.formData()).get("password") ?? "");
     if (chosen.length < 12) {
       return c.html(
-        editorsPage({
-          editors: store.listEditors(),
+        editorsView({
           flash: { kind: "error", message: "Use a password of at least 12 characters." },
         }),
         422,
@@ -1055,8 +1093,7 @@ export function createApp(options: AppOptions) {
     }
     store.setEditorPassword(editor.id, hashPassword(chosen));
     return c.html(
-      editorsPage({
-        editors: store.listEditors(),
+      editorsView({
         flash: { kind: "success", message: `${editor.name}'s password is changed.` },
       }),
     );
@@ -1116,7 +1153,7 @@ export function createApp(options: AppOptions) {
 
     signInLimiter.clear(`sign-in:${address}`);
     signIn(c, actor);
-    const sites = store.listSites();
+    const sites = await sitesAfterSignIn(actor);
     const only = sites.length === 1 ? `/sites/${sites[0]!.id}` : "/";
     return c.redirect(next ?? only, 303);
   });
@@ -1129,9 +1166,9 @@ export function createApp(options: AppOptions) {
   app.get("/", async (c) => {
     const sites = c.get("sites");
     const who = c.get("viewer");
-    // Signed in, and GitHub lets them push to nothing here: said plainly, with the way out.
-    if (who.github && !who.owner && sites.length === 0) {
-      return c.html(noAccessPage({ name: who.name, login: who.github.login }));
+    // Signed in, and nothing here is theirs to open: said plainly, with the way out.
+    if (!who.owner && sites.length === 0) {
+      return c.html(noAccessPage({ name: who.name, login: who.github?.login }));
     }
     return c.html(
       sitesPage(sites, store.countUnread(c.get("among")), undefined, await liveness.all(sites)),
@@ -2817,6 +2854,11 @@ function authorOf(who: Viewer): Author | undefined {
 function baseOf(entries: Array<[string, string]>): string | undefined {
   const sha = entries.find(([key]) => key === "headSha")?.[1];
   return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
+}
+
+/** The sites ticked in a form: every one, or the ones named. */
+function tickedSites(form: FormData): { allSites: boolean; sites: string[] } {
+  return { allSites: form.get("all") === "1", sites: form.getAll("sites").map(String) };
 }
 
 /** The inbox as it was filtered when a submission in it was acted on. */

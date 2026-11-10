@@ -33,6 +33,7 @@ describe("a page that refuses or finds nothing", () => {
       name: "Ed",
       email: "ed@example.com",
       passwordHash: hashPassword("an editor's long password"),
+      allSites: true,
     });
     const signIn = await site.app.request("/sign-in", {
       method: "POST",

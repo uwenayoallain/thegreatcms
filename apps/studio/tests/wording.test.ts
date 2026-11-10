@@ -61,6 +61,7 @@ async function editorOf(app: App) {
     name: "Ed",
     email: "ed@example.com",
     passwordHash: hashPassword("an editor's long password"),
+    allSites: true,
   });
   const response = await form(
     app,
