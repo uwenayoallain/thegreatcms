@@ -118,3 +118,32 @@ describe("other shapes of that file", () => {
     expect((await publish("After")).status).toBe(200);
   });
 });
+
+describe("a repository whose object store is linked to another one's", () => {
+  it("is read by no git of the studio's when its pack folder leads outside it", async () => {
+    const pack = join(site.root, ".git/objects/pack");
+    rmSync(pack, { recursive: true, force: true });
+    symlinkSync(join(outside, "other/.git/objects/pack"), pack);
+
+    const guard = await gitIn(site.root);
+    expect(guard?.blocked).toBe(true);
+    expect(guard?.refusal?.message).toContain("objects/pack");
+    expect((await publish("After")).status).not.toBe(200);
+  });
+
+  it("is refused when the whole store is a link out of the repository", async () => {
+    const objects = join(site.root, ".git/objects");
+    rmSync(objects, { recursive: true, force: true });
+    symlinkSync(join(outside, "other/.git/objects"), objects);
+    expect((await gitIn(site.root))?.blocked).toBe(true);
+  });
+
+  it("is fine when a link in the store stays inside the repository", async () => {
+    const inside = join(site.root, ".git/own-packs");
+    mkdirSync(inside);
+    const pack = join(site.root, ".git/objects/pack");
+    rmSync(pack, { recursive: true, force: true });
+    symlinkSync(inside, pack);
+    expect((await gitIn(site.root))?.blocked).toBe(false);
+  });
+});

@@ -14,7 +14,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { lstat, mkdir, open, stat } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -344,6 +344,35 @@ async function borrowedStore(objects: string, within: string, depth = 0): Promis
   return null;
 }
 
+/**
+ * A link in the object store that leads outside the repository, or null: `objects` itself, or a
+ * folder in it such as `pack`, pointed at another repository reads that one's objects just as
+ * an alternates file would.
+ */
+async function linkedStore(objects: string, within: string): Promise<string | null> {
+  // The repository's own real path: its folder may itself be reached through a link.
+  const home = await realpath(within).catch(() => within);
+  const outside = async (path: string) => {
+    const real = await realpath(path).catch(() => null);
+    return real === null || !(real === home || real.startsWith(`${home}${sep}`));
+  };
+  const top = await lstat(objects).catch(() => null);
+  if (!top) return null;
+  if (top.isSymbolicLink()) return (await outside(objects)) ? "objects" : null;
+  const entries = await readdir(objects, { withFileTypes: true }).catch(() => []);
+  const links = entries.filter((entry) => entry.isSymbolicLink());
+  const answers = await Promise.all(links.map((entry) => outside(join(objects, entry.name))));
+  const found = links.find((_, index) => answers[index]);
+  return found ? `objects/${found.name.replace(/[^\w.-]/g, "?").slice(0, 60)}` : null;
+}
+
+function linkedRefusal(name: string): Refusal {
+  return {
+    message: `This folder's repository reaches git objects outside itself (.git/${name} is a link that leads out of it), so the studio does not run git in it. Nothing was changed.`,
+    fix: "the site's own code can make that link, and through it git would read another repository on this machine. In the site's folder replace the link with a real folder holding the repository's own objects, or clone the site afresh.",
+  };
+}
+
 /** Why the studio runs no git in a folder whose objects come from outside it, for its owner. */
 function borrowedRefusal(store: string): Refusal {
   return {
@@ -434,6 +463,9 @@ export async function gitIn(root: string): Promise<GitRun | null> {
   const checked = checkConfig(await readPlain(configFile));
   const copy = await copyFor(layout, checked.text);
   const borrowed = await borrowedStore(join(layout.commonDir, "objects"), layout.commonDir);
+  const linked = borrowed
+    ? null
+    : await linkedStore(join(layout.commonDir, "objects"), layout.commonDir);
   return {
     args: GUARDED_GIT,
     env: {
@@ -447,10 +479,12 @@ export async function gitIn(root: string): Promise<GitRun | null> {
     problems: checked.problems,
     refusal: borrowed
       ? borrowedRefusal(borrowed)
-      : checked.problems.length > 0
-        ? configRefusal(checked.problems)
-        : null,
-    blocked: borrowed !== null,
+      : linked
+        ? linkedRefusal(linked)
+        : checked.problems.length > 0
+          ? configRefusal(checked.problems)
+          : null,
+    blocked: borrowed !== null || linked !== null,
     configFile,
   };
 }
