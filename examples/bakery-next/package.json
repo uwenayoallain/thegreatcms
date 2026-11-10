@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/strip-runtime.mjs",
     "typecheck": "greatcms check && tsc --noEmit",
     "test": "vitest run"
   },
