@@ -118,6 +118,15 @@ export async function run(options: RunOptions): Promise<number> {
         return await (await load()).doctorCommand({ ...options, flags });
       case "describe":
         return await (await load()).describeCommand({ ...options, flags });
+      case "studio": {
+        const { studioCommand } = await import("./studio.js");
+        const prompt =
+          options.prompt ??
+          (isInteractive()
+            ? terminalPrompt({ input: process.stdin, output: process.stdout })
+            : undefined);
+        return await studioCommand({ cwd: options.cwd, flags, stdout, stderr, prompt });
+      }
       case "completion": {
         const [shell] = flags.positionals;
         if (!shell) {

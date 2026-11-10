@@ -12,7 +12,9 @@ screen to the commit. Installing it is covered in
 
 ## Connecting a site
 
-Connecting is the owner's job, done once per site from **Connect a site**:
+On your own machine `npx greatcms studio`, run in the site's folder, opens the
+studio with that site already connected. On a shared studio, connecting is the
+owner's job, done once per site from **Connect a site**:
 
 - **In the sites folder.** Folders in the studio's sites folder are listed;
   one with a schema connects with a click.

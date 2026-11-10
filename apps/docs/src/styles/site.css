@@ -31,15 +31,23 @@
 /* When it is not, a local face scaled to its width stands in; line heights are fixed, so width is what matters. */
 @font-face {
   font-family: "Grotesk Fallback";
-  font-weight: 100 600;
-  src: local("Arial"), local("Liberation Sans"), local("Helvetica");
+  font-weight: 100 400;
+  src: local("Arial"), local("Liberation Sans");
   size-adjust: 105%;
+}
+
+/* Medium runs wider: the header's links are set in it, and must be as wide either way. */
+@font-face {
+  font-family: "Grotesk Fallback";
+  font-weight: 500 600;
+  src: local("Arial"), local("Liberation Sans");
+  size-adjust: 108%;
 }
 
 @font-face {
   font-family: "Grotesk Fallback";
   font-weight: 700 900;
-  src: local("Arial Bold"), local("Liberation Sans Bold"), local("Helvetica Bold");
+  src: local("Arial Bold"), local("Liberation Sans Bold");
   size-adjust: 99.4%;
 }
 

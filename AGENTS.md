@@ -45,7 +45,7 @@ apps/studio/            the CMS: auth, editor, publishing, inbox
 apps/docs/              the website: landing page and docs, managed by GreatCMS
 packages/spec/          schema parsing, validation, resolution rules
 packages/reader/        build-time reader for JS frameworks
-packages/cli/           greatcms init / setup / add / types / check / doctor
+packages/cli/           greatcms init / setup / add / types / check / doctor / studio
 packages/conformance/   fixtures + verifier proving a reader is correct
 packages/deploy/        greatcms-deploy: builds each commit, swaps the live folder
 examples/               six sites (minimal Astro, the Paraline showcase with its self-hosting
