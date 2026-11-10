@@ -74,8 +74,8 @@ const answers = new Map<
 const MAX_ANSWERS = 500;
 /** Folders where reading `.git` gave the same commit as git did, so it can stand in for it. */
 const headFromFiles = new Map<string, boolean>();
-/** Folders where git had an identity of its own to commit as; asked again when a commit fails. */
-const identified = new Set<string>();
+/** Whether git had an identity of its own to commit as, per folder; asked again when a commit fails. */
+const identified = new Map<string, boolean>();
 /** The branch and remote per folder, for as long as the files git keeps them in are unchanged. */
 const branches = new Map<string, { key: string; at: number; value: Promise<BranchState> }>();
 /** Past this a change outside the folder, such as the machine's own git config, is picked up. */
@@ -434,27 +434,30 @@ export class LocalRepository implements Repository {
       ? ["--author", `${clean(request.author.name)} <${clean(request.author.email)}>`]
       : [];
     const args = ["commit", "--no-verify", ...author, "-m", request.message, "--", ...paths];
-    const known = identified.has(this.root);
+    const before = identified.get(this.root);
     try {
       await this.git(args, await this.committer(request.author));
     } catch (error) {
-      if (!known) throw error;
-      // The identity git had when last asked may be gone, so it is asked again, once.
+      if (before === undefined || !request.author) throw error;
+      // The answer remembered may no longer hold, so git is asked again, once.
       identified.delete(this.root);
       const committer = await this.committer(request.author);
-      if (!committer) throw error;
+      if (identified.get(this.root) === before) throw error;
       await this.git(args, committer);
     }
   }
 
   /** A machine with no git identity still publishes: the editor commits as themselves. */
   private async committer(author?: Author): Promise<Record<string, string> | undefined> {
-    if (!author || identified.has(this.root)) return undefined;
-    if (await this.tryGit(["var", "GIT_COMMITTER_IDENT"])) {
-      identified.add(this.root);
-      return undefined;
+    if (!author) return undefined;
+    let has = identified.get(this.root);
+    if (has === undefined) {
+      has = Boolean(await this.tryGit(["var", "GIT_COMMITTER_IDENT"]));
+      identified.set(this.root, has);
     }
-    return { GIT_COMMITTER_NAME: clean(author.name), GIT_COMMITTER_EMAIL: clean(author.email) };
+    return has
+      ? undefined
+      : { GIT_COMMITTER_NAME: clean(author.name), GIT_COMMITTER_EMAIL: clean(author.email) };
   }
 
   /**
