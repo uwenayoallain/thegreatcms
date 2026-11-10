@@ -434,7 +434,7 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
                     <strong>${clone.folder}</strong>
                     <span class="error-text"
                       >Not copied:
-                      ${clone.state === "failed" ? clone.reason : ""}${
+                      ${clone.state === "failed" ? withRemedy(clone.reason).join(" ") : ""}${
                         gitAccess && clone.state === "failed" && clone.reason.includes("sign-in")
                           ? html` <a href="/git-access">Set up Git access</a>.`
                           : ""
