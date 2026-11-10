@@ -219,6 +219,19 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     name: "014-share-round",
     sql: "ALTER TABLE sites ADD COLUMN share_round INTEGER NOT NULL DEFAULT 0;",
   },
+  {
+    // Which sites each editor may open. Editors from before this keep every site, said outright.
+    name: "015-editor-sites",
+    sql: `
+      ALTER TABLE editors ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 0;
+      UPDATE editors SET all_sites = 1;
+      CREATE TABLE editor_sites (
+        editor_id INTEGER NOT NULL REFERENCES editors(id) ON DELETE CASCADE,
+        site_id   TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+        PRIMARY KEY (editor_id, site_id)
+      );
+    `,
+  },
 ];
 
 export interface GithubPerson {
@@ -248,6 +261,10 @@ export interface Editor {
   email: string;
   passwordHash: string;
   createdAt: string;
+  /** May open every site, including ones connected later. */
+  allSites: boolean;
+  /** The sites ticked for them, which is all they open unless `allSites`. */
+  sites: string[];
 }
 
 export interface Scheduled {
@@ -561,33 +578,69 @@ export class Store {
     this.db.prepare("DELETE FROM submissions WHERE id = ?").run(id);
   }
 
+  private editorSites(id: number): string[] {
+    return (
+      this.db
+        .prepare("SELECT site_id FROM editor_sites WHERE editor_id = ? ORDER BY site_id")
+        .all(id) as Array<{ site_id: string }>
+    ).map((row) => row.site_id);
+  }
+
   listEditors(): Editor[] {
     return (
       this.db
         .prepare("SELECT * FROM editors ORDER BY name COLLATE NOCASE")
         .all() as unknown as RawEditor[]
-    ).map(toEditor);
+    ).map((row) => toEditor(row, this.editorSites(Number(row.id))));
   }
 
   getEditor(id: number): Editor | null {
     const row = this.db.prepare("SELECT * FROM editors WHERE id = ?").get(id) as unknown as
       | RawEditor
       | undefined;
-    return row ? toEditor(row) : null;
+    return row ? toEditor(row, this.editorSites(Number(row.id))) : null;
   }
 
   findEditor(email: string): Editor | null {
     const row = this.db.prepare("SELECT * FROM editors WHERE email = ?").get(email.trim()) as
       | RawEditor
       | undefined;
-    return row ? toEditor(row) : null;
+    return row ? toEditor(row, this.editorSites(Number(row.id))) : null;
   }
 
-  addEditor(editor: { name: string; email: string; passwordHash: string }): Editor {
-    const result = this.db
-      .prepare("INSERT INTO editors (name, email, password_hash) VALUES (?, ?, ?)")
-      .run(editor.name.trim(), editor.email.trim(), editor.passwordHash);
-    return this.getEditor(Number(result.lastInsertRowid)) as Editor;
+  /** A new editor opens no site until some are given. */
+  addEditor(editor: {
+    name: string;
+    email: string;
+    passwordHash: string;
+    allSites?: boolean;
+    sites?: string[];
+  }): Editor {
+    let id = 0;
+    this.transaction(() => {
+      const result = this.db
+        .prepare("INSERT INTO editors (name, email, password_hash) VALUES (?, ?, ?)")
+        .run(editor.name.trim(), editor.email.trim(), editor.passwordHash);
+      id = Number(result.lastInsertRowid);
+      this.writeEditorSites(id, { allSites: editor.allSites ?? false, sites: editor.sites ?? [] });
+    });
+    return this.getEditor(id) as Editor;
+  }
+
+  /** Replaces what an editor may open; a site that is not connected here is left out. */
+  setEditorSites(id: number, access: { allSites: boolean; sites: string[] }): void {
+    this.transaction(() => this.writeEditorSites(id, access));
+  }
+
+  private writeEditorSites(id: number, access: { allSites: boolean; sites: string[] }): void {
+    this.db
+      .prepare("UPDATE editors SET all_sites = ? WHERE id = ?")
+      .run(access.allSites ? 1 : 0, id);
+    this.db.prepare("DELETE FROM editor_sites WHERE editor_id = ?").run(id);
+    const add = this.db.prepare(
+      "INSERT OR IGNORE INTO editor_sites (editor_id, site_id) SELECT ?, id FROM sites WHERE id = ?",
+    );
+    for (const site of access.sites) add.run(id, site);
   }
 
   setEditorPassword(id: number, passwordHash: string): void {
@@ -826,15 +879,18 @@ interface RawEditor {
   email: string;
   password_hash: string;
   created_at: string;
+  all_sites: number;
 }
 
-function toEditor(row: RawEditor): Editor {
+function toEditor(row: RawEditor, sites: string[]): Editor {
   return {
     id: Number(row.id),
     name: row.name,
     email: row.email,
     passwordHash: row.password_hash,
     createdAt: row.created_at,
+    allSites: Number(row.all_sites) === 1,
+    sites,
   };
 }
 

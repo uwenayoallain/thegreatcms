@@ -14,6 +14,8 @@ export interface Chrome {
   flash?: () => { kind: "success" | "error"; message: string } | undefined;
   /** One project, on the machine of whoever started it: nothing about other sites or other people is offered. */
   local?: boolean;
+  /** The folders of the sites this person can open, which an error may name relative to. */
+  roots?: () => string[];
 }
 
 const current = new AsyncLocalStorage<Chrome>();

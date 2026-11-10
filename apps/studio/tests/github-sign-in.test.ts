@@ -723,6 +723,7 @@ describe("two people, each seeing only their own things", () => {
       name: "Eve Editor",
       email: "eve@example.com",
       passwordHash: hashPassword("a long enough password"),
+      sites: [ALPHA],
     });
     alphaMessage = alpha.store.addSubmission({
       siteId: ALPHA,

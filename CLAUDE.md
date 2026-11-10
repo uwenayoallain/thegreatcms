@@ -99,7 +99,8 @@ The layering:
   `deploys.ts` (reads the builder's folder, asks it to roll back),
   `views/viewer.ts` (who is signed in, per request), `github.ts` (the studio's
   GitHub App: tokens for git, and signing people in), `access.ts` (which sites
-  a GitHub sign-in opens: those GitHub lets the person push to). A middleware
+  a person opens: those GitHub lets a GitHub sign-in push to, those the owner
+  ticked for an editor with a password). A middleware
   on `/sites/:id` turns every other site into a 404, so a new site route needs
   no check of its own; a route outside it (the inbox, `/auth/check`) must use
   the request's `sites`.

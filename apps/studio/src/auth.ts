@@ -71,8 +71,13 @@ export function createShareToken(
   round = 0,
 ): string {
   // A site that never stopped sharing signs what it always did, so links made before still open.
-  const payload = `${siteId}${round > 0 ? `.r${round}` : ""}.${now + SHARE_DAYS * 86_400_000}`;
+  const payload = `${shareName(siteId)}${round > 0 ? `.r${round}` : ""}.${now + SHARE_DAYS * 86_400_000}`;
   return `${payload}.${sign(payload, keyFor(secret, "share"))}`;
+}
+
+/** A site's id as a token carries it: as it is, or encoded when a dot in it would read as a separator. */
+function shareName(siteId: string): string {
+  return /^[A-Za-z0-9_-]+$/.test(siteId) ? siteId : `~${Buffer.from(siteId).toString("base64url")}`;
 }
 
 /**
@@ -90,7 +95,10 @@ export function readShareToken(
   if (!constantTimeEqual(sign(parts.join("."), keyFor(secret, "share")), signature)) return null;
   const expiry = parts.pop() as string;
   if (!(Number(expiry) > Date.now())) return null;
-  const [siteId, round = "r0"] = parts as [string, string?];
+  const [name, round = "r0"] = parts as [string, string?];
+  const siteId = name.startsWith("~") ? Buffer.from(name.slice(1), "base64url").toString() : name;
+  // Only the spelling this studio signs for that id, so no id is ever read two ways.
+  if (shareName(siteId) !== name) return null;
   if (!/^r\d+$/.test(round) || Number(round.slice(1)) !== roundOf(siteId)) return null;
   return siteId;
 }

@@ -17,6 +17,7 @@ import { hostOf, shortPath } from "./sites-pages.js";
 import { describeRegion } from "./region-page.js";
 import { plural } from "./collection-pages.js";
 import { viewer } from "./viewer.js";
+import { withoutServerPaths } from "../redact.js";
 
 /** Publishes waiting for their time, and how the last week's went. */
 function scheduledPanel(site: Site, jobs: Scheduled[], timeZone: string, owner = "Owner") {
@@ -61,6 +62,11 @@ function scheduledPanel(site: Site, jobs: Scheduled[], timeZone: string, owner =
 /** What the builder has live, what it could not build, and the releases a rollback can return to. */
 function livePanelFor(site: Site, live: LiveSite) {
   const current = live.live?.sha;
+  // A build log names the builder's folders, which are the owner's to know.
+  const log =
+    !live.failed || viewer()?.owner !== false
+      ? live.failed?.log
+      : withoutServerPaths(live.failed.log, [site.path, site.deployRoot]);
   const older = live.releases.filter((release) => release.sha !== current);
   return html`
     <section class="resource-section live-site" id="live" aria-labelledby="live-site-heading">
@@ -102,7 +108,7 @@ function livePanelFor(site: Site, live: LiveSite) {
                 <strong>The last publish did not build:</strong> ${live.failed.message}
                 (<code>${live.failed.sha.slice(0, 7)}</code>). The site above stays live.
               </summary>
-              <pre><code>${live.failed.log}</code></pre>
+              <pre><code>${log}</code></pre>
             </details>`
           : ""
       }

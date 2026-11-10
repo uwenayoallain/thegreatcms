@@ -146,9 +146,10 @@ see [The builder](/docs/self-hosting/#the-builder).
 
 The owner signs in with the studio password and is the only one who connects
 sites, changes their settings and manages people. From **Editors** the owner
-adds each person with a name, an email and a password of their own. Editors
-change content: regions, entries, images, drafts and publishes. When two
-people have the same content open, each sees the other's name.
+adds each person with a name, an email and a password of their own, and ticks
+the sites that person may open. Editors change content: regions, entries,
+images, drafts and publishes. When two people have the same content open, each
+sees the other's name.
 
 With GitHub connected, people can **Continue with GitHub** instead. Whoever can
 push to a site's repository on GitHub edits that site here, and sees only that

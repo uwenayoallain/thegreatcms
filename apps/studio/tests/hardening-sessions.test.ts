@@ -249,6 +249,7 @@ describe("property 4: share links and editor access control", () => {
       name: "Alice Editor",
       email: "alice@example.com",
       passwordHash: hashPassword(editorPassword),
+      allSites: true,
     });
     const editor = site.store.findEditor("alice@example.com");
     expect(editor).toBeDefined();
@@ -360,7 +361,12 @@ describe("property 6: security headers on HTML pages including error pages", () 
 
   it("403 Forbidden HTML error page carries security headers", async () => {
     const signingKey = sessionKey(SECRET, PASSWORD);
-    site.store.addEditor({ name: "Ed", email: "ed@example.com", passwordHash: "dummy" });
+    site.store.addEditor({
+      name: "Ed",
+      email: "ed@example.com",
+      passwordHash: "dummy",
+      allSites: true,
+    });
     const stamp = editorStamp(signingKey, "dummy");
     const editorCookie = createSessionCookie(signingKey, { actor: "editor:1", stamp }).split(
       ";",

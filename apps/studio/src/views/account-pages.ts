@@ -76,21 +76,31 @@ export function shareCard(siteName: string, open: string): string {
     </html>`.toString();
 }
 
-/** For someone GitHub signed in who can push to none of the connected sites' repositories. */
-export function noAccessPage(options: { name: string; login: string }): string {
+/** For someone signed in who can open none of the sites: GitHub lets them push to none, or none was given to them. */
+export function noAccessPage(options: { name: string; login?: string }): string {
   return outside(
     "No sites to edit",
     html`
       <div class="page-head">
         <h1>No sites to edit</h1>
         <p class="lede">
-          You are signed in as ${options.name} (<code>${options.login}</code> on GitHub), and that
-          account cannot push to the repository of any site connected to this studio.
+          ${
+            options.login
+              ? html`You are signed in as ${options.name} (<code>${options.login}</code> on GitHub),
+                  and that account cannot push to the repository of any site connected to this
+                  studio.`
+              : html`You are signed in as ${options.name}, and no site in this studio has been given
+                to you to edit.`
+          }
         </p>
       </div>
       <p>
-        Access here follows GitHub. Ask whoever owns the site's repository to give your account
-        write access to it, then open this page again: the site appears within a couple of minutes.
+        ${
+          options.login
+            ? `Access here follows GitHub. Ask whoever owns the site's repository to give your account
+        write access to it, then open this page again: the site appears within a couple of minutes.`
+            : "Ask whoever runs this studio to choose your sites, then open this page again."
+        }
       </p>
       <form method="POST" action="/sign-out">
         <div class="actions"><button class="secondary" type="submit">Sign out</button></div>
@@ -250,12 +260,47 @@ export function stopSharing(site: Site) {
   </details>`;
 }
 
+/** One checkbox per site, and one for every site, as a group a plain form posts. */
+function siteTicks(
+  id: string,
+  legend: string,
+  sites: Site[],
+  chosen: { allSites: boolean; sites: string[] },
+) {
+  return html`<fieldset class="site-ticks">
+    <legend>${legend}</legend>
+    <div class="checkbox">
+      <input
+        type="checkbox"
+        id="${id}-all"
+        name="all"
+        value="1"
+        ${chosen.allSites ? "checked" : ""}
+      />
+      <label for="${id}-all">Every site, and any connected later</label>
+    </div>
+    ${sites.map(
+      (site, index) => html`<div class="checkbox">
+        <input
+          type="checkbox"
+          id="${id}-${index}"
+          name="sites"
+          value="${site.id}"
+          ${chosen.sites.includes(site.id) ? "checked" : ""}
+        />
+        <label for="${id}-${index}">${site.name}</label>
+      </div>`,
+    )}
+  </fieldset>`;
+}
+
 export function editorsPage(options: {
   editors: Editor[];
+  sites: Site[];
   flash?: PageOptions["flash"];
-  values?: { name?: string; email?: string };
+  values?: { name?: string; email?: string; allSites?: boolean; sites?: string[] };
 }): string {
-  const { editors, values = {} } = options;
+  const { editors, sites, values = {} } = options;
   return page(
     {
       title: "Editors",
@@ -266,8 +311,8 @@ export function editorsPage(options: {
       <div class="page-head">
         <h1>Editors</h1>
         <p class="lede">
-          People who sign in as themselves. Their publishes are committed under their name; sites
-          and people stay yours to change.
+          People who sign in as themselves, and open only the sites ticked for them. Their publishes
+          are committed under their name; sites and people stay yours to change.
         </p>
       </div>
 
@@ -281,6 +326,10 @@ export function editorsPage(options: {
                     <strong>${editor.name}</strong>
                     <span class="muted">${editor.email}</span>
                   </div>
+                  <form method="POST" action="/editors/${editor.id}/sites" class="editor-sites">
+                    ${siteTicks(`sites-${editor.id}`, `Sites ${editor.name} can open`, sites, editor)}
+                    <button class="secondary" type="submit">Save sites</button>
+                  </form>
                   <details class="inline-confirm">
                     <summary>New password</summary>
                     <form method="POST" action="/editors/${editor.id}/password" class="row-form">
@@ -347,6 +396,10 @@ export function editorsPage(options: {
             required
           />
         </div>
+        ${siteTicks("sites-new", "Sites they can open", sites, {
+          allSites: values.allSites ?? false,
+          sites: values.sites ?? [],
+        })}
         <div class="form-actions"><button type="submit">Add editor</button></div>
       </form>
     `,

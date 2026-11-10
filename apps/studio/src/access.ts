@@ -1,4 +1,4 @@
-/** Which sites someone who signed in with GitHub may open: those GitHub lets them push to. */
+/** Which sites someone may open: those GitHub lets them push to, or those the owner gave an editor. */
 
 import { originOf } from "./connect.js";
 import type { Site } from "./db.js";
@@ -11,6 +11,11 @@ const MAX_ANSWERS = 5000;
 export interface Person {
   id: number;
   login: string;
+}
+
+/** The sites an editor with a password may open: the ones ticked for them, or every one. */
+export function editorSites(editor: { allSites: boolean; sites: string[] }, all: Site[]): Site[] {
+  return editor.allSites ? all : all.filter((site) => editor.sites.includes(site.id));
 }
 
 export class SiteAccess {

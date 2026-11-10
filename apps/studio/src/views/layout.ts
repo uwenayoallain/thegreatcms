@@ -7,6 +7,7 @@ import { icon } from "./icons.js";
 import { personAvatar, siteAvatar } from "./pixel.js";
 import { locale } from "./locale.js";
 import { viewer } from "./viewer.js";
+import { withoutServerPaths } from "../redact.js";
 import { theme, type Theme } from "./theme.js";
 import { chrome as shell } from "./chrome.js";
 
@@ -172,7 +173,8 @@ export function themeSwitch() {
 }
 
 /** A result or an error, announced on arrival; a page may place it itself, as sign-in does. */
-export function flashNotice(flash: NonNullable<PageOptions["flash"]>) {
+export function flashNotice(shown: NonNullable<PageOptions["flash"]>) {
+  const flash = viewer()?.owner ? shown : withoutPaths(shown);
   return html`
     <div
       class="flash ${flash.kind}"
@@ -545,6 +547,10 @@ body.plain { display: block; }
 :is(.editors, .folders) li:first-child { border-top: 0; }
 :is(.editors, .folders) li > div { display: flex; flex-direction: column; flex: 1 1 14rem; }
 :is(.editors, .folders) li .muted { font-size: .8rem; }
+.site-ticks { min-width: 0; margin: 0 0 .75rem; padding: 0; border: 0; }
+.site-ticks legend { padding: 0; margin-bottom: .4rem; font-size: .82rem; font-weight: 600; }
+.site-ticks label { overflow-wrap: anywhere; }
+.editor-sites { flex: 1 1 100%; margin: 0; }
 .folders li > form { margin: 0; }
 .notice.warn { margin: 0 0 .85rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--ink); font-size: .85rem; }
 .app-logo { display: flex; gap: .9rem; align-items: center; margin: 1rem 0; padding: .75rem .9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -1161,6 +1167,8 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
   .sign-in-word p { margin-top: 1rem; font-size: min(1rem, 4.4vw); height: 2lh; }
   .sign-in-form { justify-items: stretch; padding: 2rem 1.25rem 3rem; }
   .sign-in-form > * { width: auto; }
+  /* Room kept for a scrollbar would show as a pale strip beside the dark panel. */
+  html:has(.sign-in) { scrollbar-gutter: auto; }
 }
 @media (prefers-reduced-motion: no-preference) {
   /* The letters lift off their shadow once, as the page arrives. */
@@ -1236,6 +1244,16 @@ export const STYLESHEET = STYLES;
 export function withRemedy(message: string): [headline: string, fix?: string] {
   const [headline = "", fix] = message.split(/\n\s*fix:\s*/, 2);
   return fix ? [headline, fix.charAt(0).toUpperCase() + fix.slice(1)] : [headline];
+}
+
+/** A notice for someone who is not an owner, who is never told where a folder is on the server. */
+function withoutPaths(flash: NonNullable<PageOptions["flash"]>): NonNullable<PageOptions["flash"]> {
+  const roots = shell().roots?.() ?? [];
+  return {
+    ...flash,
+    message: withoutServerPaths(flash.message, roots),
+    detail: flash.detail?.map((line) => withoutServerPaths(line, roots)),
+  };
 }
 
 function flashMessage(message: string) {
