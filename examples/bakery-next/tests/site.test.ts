@@ -118,7 +118,8 @@ describe("for search engines", () => {
 });
 
 describe("the export", () => {
-  const all = files(DIST);
+  // `next dev` keeps its own files under dist/dev while a preview of this site is running.
+  const all = files(DIST).filter((path) => !path.startsWith(join(DIST, "dev") + "/"));
   const html = all.filter((path) => path.endsWith(".html"));
   const css = all.filter((path) => path.endsWith(".css"));
 

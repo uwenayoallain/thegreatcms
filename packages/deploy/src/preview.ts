@@ -19,6 +19,7 @@ import {
 import { createServer as createNetServer } from "node:net";
 import type { Duplex } from "node:stream";
 import { previewSitesMain } from "./previews.js";
+import { warmModules, type Warmed } from "./warm.js";
 
 export interface PreviewOptions {
   /** The site's working copy, where the command runs. */
@@ -33,6 +34,8 @@ export interface PreviewOptions {
   idle: number;
   /** Seconds the dev server may take to answer its first request. */
   startTimeout: number;
+  /** Walks what the site's pages load before visitors are let in; tests pass their own. */
+  warm?: (origin: string) => Promise<Warmed>;
   log: (line: string) => void;
   /** More environment for the dev server, such as the public name it answers to. */
   env?: Record<string, string>;
@@ -175,6 +178,32 @@ export class PreviewRunner {
     };
     child.on("error", (error) => exited(error.message));
     child.on("exit", (code, name) => exited(String(code ?? name ?? "a signal")));
+    void this.warm(child);
+  }
+
+  /** Waits for the dev server to answer, walks what its pages load, and only then lets visitors in. */
+  private async warm(child: ChildProcess): Promise<void> {
+    const origin = `http://127.0.0.1:${this.options.upstreamPort}`;
+    const mine = () => this.child === child && this.state === "starting";
+    while (mine()) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- asked again until it answers
+        await fetch(origin, { redirect: "manual", signal: AbortSignal.timeout(5000) });
+        break;
+      } catch {
+        // oxlint-disable-next-line no-await-in-loop -- not up yet
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    if (!mine()) return;
+    const warmed = await (this.options.warm ?? warmModules)(origin).catch(() => null);
+    if (!mine()) return;
+    if (warmed) {
+      this.options.log(
+        `walked ${warmed.pages} pages and ${warmed.modules} modules in ${warmed.rounds} rounds${warmed.settled ? "" : ", still preparing"}`,
+      );
+    }
+    this.ready();
   }
 
   private exited(child: ChildProcess, how: string): void {
@@ -416,6 +445,8 @@ export function proxy(options: PreviewOptions, runner: PreviewRunner) {
     if (Number(req.headers["content-length"] ?? 0) > limit) return tooLarge(res);
     // Nothing of this site's is listening yet, so whatever answers on the port is not the site.
     if (!runner.spawned) return page(res, 503, waitingPage(runner));
+    // Up, but still preparing what its pages load: a visitor let in now would watch it reload.
+    if (runner.state === "starting") return page(res, 503, waitingPage(runner));
     const headers = withoutStudioCookies(endToEnd(req.headers));
     if (req.headers["transfer-encoding"]) headers["transfer-encoding"] = "chunked";
     let settled = false;

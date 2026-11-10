@@ -52,6 +52,30 @@ const until = (check: () => boolean | Promise<boolean>, ms = 8000) =>
   expect.poll(check, { timeout: ms, interval: 100 }).toBe(true);
 
 describe("the preview proxy", () => {
+  it("keeps visitors on the waiting page until what the site loads has been walked", async () => {
+    let finish: (() => void) | undefined;
+    const walked: string[] = [];
+    const { url, runner } = await up({
+      warm: (origin) => {
+        walked.push(origin);
+        return new Promise((resolve) => {
+          finish = () => resolve({ modules: 3, pages: 1, rounds: 2, settled: true });
+        });
+      },
+    });
+    await fetch(`${url}/`);
+    // The dev server is up and being walked, yet nobody is shown a page that would reload.
+    await until(() => walked.length === 1);
+    const during = await fetch(`${url}/`);
+    expect(during.status).toBe(503);
+    expect(await during.text()).toContain("Starting the preview");
+    expect(runner.state).toBe("starting");
+
+    finish?.();
+    await until(async () => (await fetch(`${url}/`)).status === 200);
+    expect(log.join("\n")).toContain("walked 1 pages and 3 modules in 2 rounds");
+  });
+
   it("starts the dev server on the first request and shows a waiting page until it answers", async () => {
     const { url, runner } = await up();
     expect(runner.state).toBe("stopped");
