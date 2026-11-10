@@ -46,13 +46,38 @@ describe.each(PAGES)("$name", ({ file }) => {
     expect(summary).toEqual([]);
   });
 
-  it("ships no JavaScript: its one script element is speculation rules, which the browser reads as data", () => {
+  it("ships no JavaScript: its script elements are speculation rules and structured data, which the browser reads as data", () => {
     const html = readFileSync(join(DIST, file), "utf8");
     const { document } = new JSDOM(html).window;
     const scripts = [...document.querySelectorAll("script")];
-    expect(scripts.map((script) => script.type)).toEqual(["speculationrules"]);
-    const rules = JSON.parse(scripts[0]!.textContent ?? "") as { prerender: unknown[] };
+    const types = scripts.map((script) => script.type);
+    expect(types.filter((type) => type !== "application/ld+json")).toEqual(["speculationrules"]);
+    for (const script of scripts) expect(script.src).toBe("");
+    const rules = JSON.parse(scripts.at(-1)!.textContent ?? "") as { prerender: unknown[] };
     expect(rules.prerender.length).toBeGreaterThan(0);
+  });
+
+  it("can be found and shared: a description, an address of its own, and a card with an image", () => {
+    const html = readFileSync(join(DIST, file), "utf8");
+    const { document } = new JSDOM(html).window;
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content");
+    expect(meta('meta[name="description"]')?.length).toBeGreaterThan(0);
+    expect(meta('meta[property="og:title"]')).toBe(document.title);
+    expect(meta('meta[property="og:image"]')).toBe("https://example.com/og.png");
+    expect(meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+    // A page with no address worth indexing says so instead of naming one.
+    if (meta('meta[name="robots"]') === "noindex") expect(canonical).toBeUndefined();
+    else expect(canonical).toBe(`https://example.com/${file.replace(/index\.html$/, "")}`);
+  });
+
+  it("links only to pages that were built", () => {
+    const html = readFileSync(join(DIST, file), "utf8");
+    const { document } = new JSDOM(html).window;
+    for (const link of document.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')) {
+      const path = link.getAttribute("href")!.split("#")[0]!;
+      expect(existsSync(join(DIST, path, "index.html")), `${file}: ${path}`).toBe(true);
+    }
   });
 
   it("links every page at the address it is built at, so no click waits on a redirect", () => {
@@ -98,6 +123,32 @@ describe("the contact form", () => {
     const trap = document.querySelector(".trap");
     expect(trap?.getAttribute("aria-hidden")).toBe("true");
     expect(trap?.querySelector("input")?.getAttribute("tabindex")).toBe("-1");
+  });
+});
+
+describe("for search engines", () => {
+  it("lists every page worth finding in the sitemap, and points robots.txt at it", () => {
+    const sitemap = readFileSync(join(DIST, "sitemap.xml"), "utf8");
+    const listed = [...sitemap.matchAll(/<loc>https:\/\/example\.com([^<]*)<\/loc>/g)].map(
+      (match) => match[1]!,
+    );
+    expect(listed.toSorted()).toEqual(["/", "/about/", "/blog/", "/blog/publish-from-anywhere/"]);
+    for (const path of listed) expect(existsSync(join(DIST, path, "index.html")), path).toBe(true);
+    expect(readFileSync(join(DIST, "robots.txt"), "utf8")).toContain(
+      "Sitemap: https://example.com/sitemap.xml",
+    );
+    expect(existsSync(join(DIST, "og.png"))).toBe(true);
+  });
+
+  it("describes a post as an article, with its date", () => {
+    const html = readFileSync(join(DIST, "blog/publish-from-anywhere/index.html"), "utf8");
+    const { document } = new JSDOM(html).window;
+    const data = JSON.parse(
+      document.querySelector('script[type="application/ld+json"]')!.textContent!,
+    ) as Record<string, string>;
+    expect(data["@type"]).toBe("BlogPosting");
+    expect(data.headline).toBe("Publish from anywhere");
+    expect(data.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
 

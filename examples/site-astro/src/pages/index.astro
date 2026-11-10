@@ -18,7 +18,11 @@ const steps = [
 ];
 ---
 
-<Base title={hero.heading} description={hero.subtitle}>
+<Base
+  title={hero.heading}
+  description={hero.subtitle}
+  schema={{ '@type': 'WebSite', name: 'Example', url: Astro.site?.href }}
+>
   <section class="hero">
     <h1>{hero.heading}</h1>
     {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
@@ -40,16 +44,20 @@ const steps = [
     </ol>
   </section>
 
-  <section aria-labelledby="why">
-    <h2 id="why">Why it works this way</h2>
-    <ul class="grid" role="list">
-      {
-        features.map((block) =>
-          block._type === 'feature' ? <Feature block={block} /> : <Quote block={block} />,
-        )
-      }
-    </ul>
-  </section>
+  {
+    features.length > 0 && (
+    <section aria-labelledby="why">
+      <h2 id="why">Why it works this way</h2>
+      <ul class="grid" role="list">
+        {
+          features.map((block) =>
+            block._type === 'feature' ? <Feature block={block} /> : <Quote block={block} />,
+          )
+        }
+      </ul>
+    </section>
+    )
+  }
 
   <section class="contact-section" aria-labelledby="contact">
     <div class="contact-intro">

@@ -4,9 +4,13 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
+  /** A page nobody should land on from a search: the not-found page, a thank-you. */
+  noindex?: boolean;
+  /** Structured data for the page, as schema.org JSON-LD. */
+  schema?: Record<string, unknown>;
 }
 
-const { title, description } = Astro.props;
+const { title, description, noindex, schema } = Astro.props;
 // Trailing slashes are the address each page is built at, so a click never waits on a redirect.
 const nav = [
   { href: '/', label: 'Home' },
@@ -18,6 +22,7 @@ const speculation = JSON.stringify({
   prerender: [{ where: { href_matches: '/*' }, eagerness: 'moderate' }],
 });
 const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const canonical = new URL(path === '/' ? '/' : `${path}/`, Astro.site).href;
 // A post is inside Blog: the link says so, without claiming to be the page itself.
 const current = (href: string) => {
   const target = href.replace(/\/+$/, '') || '/';
@@ -33,6 +38,15 @@ const current = (href: string) => {
     <title>{title}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     {description && <meta name="description" content={description} />}
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content={schema?.['@type'] === 'BlogPosting' ? 'article' : 'website'} />
+    <meta property="og:site_name" content="Example" />
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/og.png', Astro.site).href} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {schema && <script type="application/ld+json" is:inline set:html={JSON.stringify({ '@context': 'https://schema.org', ...schema }).replaceAll('<', '\\u003c')} />}
     <script type="speculationrules" is:inline set:html={speculation} />
   </head>
   <body>

@@ -12,7 +12,8 @@ const posts = cms
     <h1>Blog</h1>
     <p class="lede">Notes on building websites that last, and on keeping them easy to change.</p>
 
-    <ul class="entry-list" role="list">
+    {posts.length === 0 && <p>Nothing has been published yet.</p>}
+    <ul class="entry-list" role="list" hidden={posts.length === 0}>
       {
         posts.map((post) => (
           <li>

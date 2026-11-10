@@ -50,6 +50,8 @@ html {
 body {
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* One column that never grows past the window, whatever is inside it. */
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100svh;
   margin: 0;
   background: var(--paper);
@@ -57,6 +59,8 @@ body {
   font-family: var(--font);
   font-size: clamp(1rem, 0.97rem + 0.2vw, 1.0625rem);
   line-height: 1.6;
+  /* A word longer than the screen breaks rather than pushing the page sideways. */
+  overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -482,9 +486,26 @@ time {
   max-width: 46rem;
 }
 
+/* Code and tables scroll inside themselves; the page never does. */
+.prose pre {
+  overflow-x: auto;
+}
+
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
 .prose .back {
   display: inline-block;
-  margin-bottom: 1.5rem;
+  padding-block: 0.25rem;
+  margin-bottom: 1.25rem;
   color: var(--ink-soft);
   font-size: 0.9rem;
   text-decoration: none;
@@ -602,6 +623,7 @@ form.contact button {
 
 .colophon summary {
   width: fit-content;
+  padding-block: 0.2rem;
   cursor: pointer;
   font-weight: 600;
   color: var(--ink);
