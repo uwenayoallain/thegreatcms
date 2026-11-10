@@ -181,8 +181,12 @@ export function newSitePage(
             editing
               ? html`Change what this studio calls the site and where its dev server runs. The
                 folder stays the same: connect a new site to point at a different one.`
-              : html`A folder on this machine containing a <code>.cms/schema.yaml</code>. The studio
-                  reads it to build the editor: it never runs any code from your site.`
+              : options.github
+                ? html`Add a repository from GitHub, or a folder on this machine. The studio reads
+                    its <code>.cms/schema.yaml</code> to build the editor: it never runs any code
+                    from your site.`
+                : html`A folder on this machine containing a <code>.cms/schema.yaml</code>. The
+                    studio reads it to build the editor: it never runs any code from your site.`
           }
         </p>
       </div>
