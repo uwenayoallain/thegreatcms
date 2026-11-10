@@ -1754,7 +1754,8 @@ export function createApp(options: AppOptions) {
     store.updateSite(site.id, {
       name: values.name,
       devUrl: values.devUrl,
-      pushAfterPublish: values.pushAfterPublish === "on",
+      // The local studio's form has no such box, so what the site had is kept.
+      pushAfterPublish: options.local ? site.pushAfterPublish : values.pushAfterPublish === "on",
       deployRoot: values.deployRoot,
     });
     sitesChanged();

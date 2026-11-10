@@ -16,6 +16,12 @@ export interface DeclaredSite {
 }
 
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const UUID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** Whether an id can stand in a path and a form address: a declared one, or one the studio made. */
+export function isSiteId(id: unknown): id is string {
+  return typeof id === "string" && (ID.test(id) || UUID.test(id));
+}
 
 /** What the studio is started with that nothing it starts, git included, has any use for. */
 const SECRETS = ["STUDIO_PASSWORD", "STUDIO_SECRET", "RESEND_API_KEY", "STUDIO_WEBHOOK_URL"];
@@ -75,8 +81,14 @@ export function parseSites(source: string): DeclaredSite[] {
 /** Adds sites that are missing and brings the rest in line with the environment. */
 export function applySites(store: Store, sites: DeclaredSite[]): string[] {
   return sites.map((site) => {
-    const existing = store.getSite(site.id);
+    const existing = store.getSite(String(site.id));
     if (!existing) {
+      // Only a new id is checked: one already stored keeps working, whatever it looks like.
+      if (!isSiteId(site.id)) {
+        throw new Error(
+          `A site's id must be lowercase letters, digits and dashes, at most 63, or a UUID: got ${JSON.stringify(site.id)?.slice(0, 80)}.\n  fix: give the site an id such as "my-site"; it becomes part of its addresses.`,
+        );
+      }
       store.addSite(site);
       return `${site.id}: added`;
     }

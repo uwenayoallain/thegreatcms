@@ -1,6 +1,7 @@
 /** Whether a site's dev server is running, as the studio's screens report it. */
 
 import { JSDOM } from "jsdom";
+import { createServer as createHttpServer } from "node:http";
 import { createServer, type Server } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { Liveness } from "../src/liveness.js";
@@ -92,5 +93,70 @@ describe("the screens", () => {
     expect(await (await get(fixture, "/sites/site-1/regions/home.hero")).text()).not.toContain(
       "live-down",
     );
+  });
+});
+
+describe("a site the preview service runs, asked through the proxy in front of it", () => {
+  /** A proxy that is always up, with a preview service behind it that may not be. */
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- read beside the tests that use it
+  const proxy = (answer: (host: string, path: string) => number) =>
+    new Promise<{ url: string; asked: string[]; close: () => void }>((resolve) => {
+      const asked: string[] = [];
+      const listening = createHttpServer((request, response) => {
+        asked.push(`${request.headers.host} ${request.url}`);
+        response.writeHead(answer(request.headers.host ?? "", request.url ?? "")).end();
+      });
+      listening.listen(0, "127.0.0.1", () =>
+        resolve({
+          url: `http://127.0.0.1:${(listening.address() as { port: number }).port}`,
+          asked,
+          close: () => listening.close(),
+        }),
+      );
+    });
+  const shop = site("https://shop-preview.example.com", "shop");
+
+  it("is up when the service answers for that site, without starting its dev server", async () => {
+    const front = await proxy(() => 200);
+    try {
+      expect(await new Liveness(new Map(), () => front.url).all([shop])).toEqual(
+        new Map([["shop", true]]),
+      );
+      expect(front.asked).toEqual(["shop-preview.example.com /__greatcms/preview"]);
+    } finally {
+      front.close();
+    }
+  });
+
+  it("is down when the proxy is up and the service behind it is not", async () => {
+    const front = await proxy(() => 502);
+    try {
+      expect(await new Liveness(new Map(), () => front.url).running(shop)).toBe(false);
+    } finally {
+      front.close();
+    }
+  });
+
+  it("is down for a site the service does not know, and up for one it does", async () => {
+    const front = await proxy((host) => (host === "shop-preview.example.com" ? 200 : 404));
+    try {
+      const liveness = new Liveness(new Map(), () => front.url);
+      const other = site("https://other-preview.example.com", "other");
+      expect(await liveness.all([shop, other])).toEqual(
+        new Map([
+          ["shop", true],
+          ["other", false],
+        ]),
+      );
+    } finally {
+      front.close();
+    }
+  });
+
+  it("is down when nothing is listening at all", async () => {
+    const found = await ports();
+    server = found.server;
+    const liveness = new Liveness(new Map(), () => `http://127.0.0.1:${found.closed}`);
+    expect(await liveness.running(shop)).toBe(false);
   });
 });

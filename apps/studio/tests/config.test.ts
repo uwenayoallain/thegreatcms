@@ -74,3 +74,65 @@ describe("STUDIO_SITES", () => {
     );
   });
 });
+
+describe("a site's id, from whoever starts the studio in-process", () => {
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- read beside the tests that use it
+  const declared = (id: unknown) => [
+    {
+      id: id as string,
+      path: "/srv/site",
+      name: "Site",
+      devUrl: "",
+      probeUrl: "",
+      pushAfterPublish: false,
+      deployRoot: "",
+    },
+  ];
+
+  it("is held to the same rule as STUDIO_SITES, or a UUID", () => {
+    for (const id of [
+      "my-site",
+      "a",
+      "0-9",
+      "9B2F4C1E-7A3D-4E5F-8A6B-1C2D3E4F5A6B",
+      "a".repeat(63),
+    ]) {
+      expect(applySites(new Store(":memory:"), declared(id)), id).toEqual([`${id}: added`]);
+    }
+    for (const id of [
+      "",
+      "My Site",
+      "../etc",
+      "a/b",
+      "a.b",
+      "-leading",
+      "a".repeat(64),
+      "site?x=1",
+      "<script>",
+      "a\nb",
+      undefined,
+      42,
+      { toString: () => "ok" },
+    ]) {
+      const store = new Store(":memory:");
+      expect(() => applySites(store, declared(id)), String(id)).toThrow(
+        /id must be lowercase letters, digits and dashes.*\n {2}fix: /s,
+      );
+      expect(store.listSites()).toEqual([]);
+    }
+  });
+
+  it("leaves an id already in the database alone, whatever it looks like", () => {
+    const store = new Store(":memory:");
+    store.addSite({
+      id: "Old Site.1",
+      name: "Old",
+      path: "/srv/site",
+      devUrl: "",
+      createdAt: "2026-01-01",
+    });
+
+    expect(applySites(store, declared("Old Site.1"))).toEqual(["Old Site.1: updated"]);
+    expect(store.getSite("Old Site.1")).toMatchObject({ name: "Site" });
+  });
+});
