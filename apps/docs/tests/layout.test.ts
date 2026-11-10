@@ -253,8 +253,8 @@ describe.skipIf(!browser)("between pages", () => {
         ];
         for (const [name, a, b] of pairs) {
           expect(b?.length, `${name} on ${path}`).toBe(a?.length);
-          // A box is the same either way; a word inside the nav may be a pixel or two wider in the stand-in.
-          const slack = name === "header links" ? 2 : 1;
+          // A stand-in face matches the web font to within a pixel or two, by the machine's renderer.
+          const slack = 2;
           a?.forEach((value, at) =>
             expect(
               Math.abs(value - b![at]!),

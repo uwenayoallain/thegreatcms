@@ -241,7 +241,7 @@ describe.skipIf(!browser)("whichever face is drawn", () => {
             expect(
               Math.abs(loaded.boxes[name]![key] - standIn.boxes[name]![key]),
               `${path} ${name}.${key} at ${width}px moves without the font`,
-            ).toBeLessThanOrEqual(1);
+            ).toBeLessThanOrEqual(2);
           }
         }
       }

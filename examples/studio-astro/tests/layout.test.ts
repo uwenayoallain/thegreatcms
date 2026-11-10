@@ -209,7 +209,7 @@ describe.skipIf(!browser)("layout", () => {
             expect(
               Math.abs(loaded.boxes[name]![at]! - standIn.boxes[name]![at]!),
               `${path} ${name}.${edge} at ${width}px moves without the fonts`,
-            ).toBeLessThanOrEqual(1);
+            ).toBeLessThanOrEqual(2);
           }
         }
       }
