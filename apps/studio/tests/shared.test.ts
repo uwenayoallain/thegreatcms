@@ -245,14 +245,14 @@ describe("a submission's notification", () => {
   });
 });
 
-describe("the CSV export", () => {
-  const row = (data: Record<string, string>, site = "Example") => ({
-    createdAt: "2026-11-10 00:01:35",
-    form: "contact",
-    site,
-    data,
-  });
+const row = (data: Record<string, string>, from = "Example") => ({
+  createdAt: "2026-11-10 00:01:35",
+  form: "contact",
+  site: from,
+  data,
+});
 
+describe("the CSV export", () => {
   it("names its columns, says which site and when without guessing a time zone", () => {
     const csv = toCsv([row({ message: "Hi" }), row({ message: "Yo" }, "Other")]);
     expect(csv.split("\r\n")).toEqual([

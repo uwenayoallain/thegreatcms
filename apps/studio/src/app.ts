@@ -930,7 +930,9 @@ export function createApp(options: AppOptions) {
     const siteId = c.req.query("site") || undefined;
     const rows = store.listSubmissions({ siteId, includeSpam: false, limit: 5000 });
     const names = new Map(store.listSites().map((site) => [site.id, site.name]));
-    const named = rows.map((row) => ({ ...row, site: names.get(row.siteId) ?? row.siteId }));
+    const named = rows.map((row) =>
+      Object.assign({ site: names.get(row.siteId) ?? row.siteId }, row),
+    );
     return c.body(toCsv(named), 200, {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": 'attachment; filename="submissions.csv"',
