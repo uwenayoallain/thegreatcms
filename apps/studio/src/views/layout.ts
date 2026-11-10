@@ -1167,6 +1167,8 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
   .sign-in-word p { margin-top: 1rem; font-size: min(1rem, 4.4vw); height: 2lh; }
   .sign-in-form { justify-items: stretch; padding: 2rem 1.25rem 3rem; }
   .sign-in-form > * { width: auto; }
+  /* Room kept for a scrollbar would show as a pale strip beside the dark panel. */
+  html:has(.sign-in) { scrollbar-gutter: auto; }
 }
 @media (prefers-reduced-motion: no-preference) {
   /* The letters lift off their shadow once, as the page arrives. */

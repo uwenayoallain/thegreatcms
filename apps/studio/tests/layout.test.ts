@@ -570,6 +570,33 @@ describe.skipIf(!browser)("layout stability", () => {
     },
   );
 
+  it.each([320, 375, 600])(
+    "at %ipx, runs the sign-in screen's dark panel to both edges of the window",
+    async (width) => {
+      const context = await newContext(width, { signedOut: true });
+      try {
+        const page = await context.newPage();
+        await page.goto(`${origin}/sign-in`);
+        const found = await page.evaluate(() => {
+          const art = document.querySelector(".sign-in-art")!.getBoundingClientRect();
+          const root = document.documentElement;
+          return {
+            left: art.left,
+            right: art.right,
+            window: window.innerWidth,
+            // A page that scrolls has a scrollbar there, which is the edge.
+            edge: root.scrollHeight > root.clientHeight ? root.clientWidth : window.innerWidth,
+          };
+        });
+        expect(found.left).toBe(0);
+        expect(found.right).toBe(found.edge);
+        expect(found.window).toBe(width);
+      } finally {
+        await context.close();
+      }
+    },
+  );
+
   it("draws every screen at the widths the panes were dragged to, before any script runs", async () => {
     const cookies = { greatcms_sidebar: "320", greatcms_live: "560" };
     const context = await newContext(1600, { js: false, cookies });
