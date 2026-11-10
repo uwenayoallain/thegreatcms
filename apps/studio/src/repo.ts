@@ -2,7 +2,19 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
@@ -10,7 +22,17 @@ import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
 const run = promisify(execFile);
 
 // The studio never executes anything from a managed repository, git hooks included.
-const SAFE_GIT = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
+const SAFE_GIT = [
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "core.fsmonitor=false",
+  // A remote spelled `ext::command` is a command, whatever the folder's own config allows.
+  "-c",
+  "protocol.ext.allow=never",
+];
+/** Long enough for a commit of full-size images on a slow disk; a git that hangs is stopped. */
+const GIT_TIMEOUT_MS = 60_000;
 
 /** Config for one git command that reaches a remote, such as a GitHub App's short-lived token. */
 export type RemoteAuth = (remoteUrl: string) => Promise<Array<[string, string]>>;
@@ -42,6 +64,14 @@ export function withGitConfig(
 /** The publish in flight per site folder, so two never interleave writes, staging, or commits. */
 const publishing = new Map<string, Promise<unknown>>();
 
+/** Resolves once every publish, push and branch change now in flight has finished. */
+export async function publishesSettled(): Promise<void> {
+  while (publishing.size > 0) {
+    // oxlint-disable-next-line no-await-in-loop -- one may queue behind another while this waits
+    await Promise.allSettled(publishing.values());
+  }
+}
+
 /**
  * What git said about a site folder at one commit: history and changes cannot differ until the
  * branch moves, so every page after the first is answered without starting a process.
@@ -53,6 +83,20 @@ const answers = new Map<
 const MAX_ANSWERS = 500;
 /** Folders where reading `.git` gave the same commit as git did, so it can stand in for it. */
 const headFromFiles = new Map<string, boolean>();
+/** The branch and remote per folder, for as long as the files git keeps them in are unchanged. */
+const branches = new Map<string, { key: string; at: number; value: Promise<BranchState> }>();
+/** Past this a change outside the folder, such as the machine's own git config, is picked up. */
+const BRANCH_TTL_MS = 10_000;
+
+/**
+ * Files read while listing a folder, by what the disk says about each: a list of three hundred
+ * entries costs one small question per file instead of opening and reading every one.
+ */
+const listed = new Map<string, { stamp: string; content: string }>();
+let listedBytes = 0;
+const MAX_LISTED_BYTES = 48 * 1024 * 1024;
+/** A file changed this recently could change again inside the clock's resolution, so it is not kept. */
+const SETTLED_MS = 2500;
 
 export interface FileChange {
   /** Repo-relative path, e.g. `content/cms/home.hero.json`. */
@@ -200,6 +244,58 @@ export class LocalRepository implements Repository {
     }
   }
 
+  /**
+   * Every file directly in a folder whose name ends with `suffix`, with its text. A link is
+   * read the careful way, and only if it stays inside the site.
+   */
+  async readDirectory(
+    path: string,
+    suffix = "",
+  ): Promise<Array<{ path: string; content: string }>> {
+    const paths = (await this.listDirectory(path)).filter((file) => file.endsWith(suffix));
+    const files = await Promise.all(
+      paths.map(async (file) => {
+        const content = await this.readListed(file);
+        return content === null ? null : { path: file, content };
+      }),
+    );
+    return files.filter((file) => file !== null);
+  }
+
+  /** One file of a folder already known to lie inside the site. */
+  private async readListed(path: string): Promise<string | null> {
+    const target = this.absolute(path);
+    try {
+      const known = await lstat(target);
+      if (!known.isFile()) return (await this.getFile(path))?.content ?? null;
+      const cached = listed.get(target);
+      if (cached?.stamp === stampOf(known)) return cached.content;
+      // Opened without following a link, so a file swapped for one after the look is not read.
+      const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const info = await handle.stat();
+        if (!info.isFile()) return null;
+        const content = await handle.readFile("utf8");
+        const now = Date.now();
+        if (cached) listedBytes -= cached.content.length;
+        listed.delete(target);
+        if (now - info.mtimeMs > SETTLED_MS && now - info.ctimeMs > SETTLED_MS) {
+          if (listedBytes + content.length > MAX_LISTED_BYTES) {
+            listed.clear();
+            listedBytes = 0;
+          }
+          listed.set(target, { stamp: stampOf(info), content });
+          listedBytes += content.length;
+        }
+        return content;
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      return null;
+    }
+  }
+
   async getHead(): Promise<string> {
     // Two small reads instead of a process, once git has agreed with them for this folder.
     const trusted = headFromFiles.get(this.root);
@@ -296,7 +392,11 @@ export class LocalRepository implements Repository {
 
   private async stageAndCommit(request: CommitRequest): Promise<CommitResult> {
     const url = `file://${this.root}`;
-    if ((await this.tryGit(["rev-parse", "--is-inside-work-tree"]))?.trim() !== "true") {
+    // A commit to stand on already says this is a repository; only without one is git asked.
+    if (
+      (await this.getHead()) === "working-copy" &&
+      (await this.tryGit(["rev-parse", "--is-inside-work-tree"]))?.trim() !== "true"
+    ) {
       // Not a Git repository: the files are written, and that is the whole job.
       return { commitSha: "working-copy", url };
     }
@@ -308,7 +408,18 @@ export class LocalRepository implements Repository {
       await this.git(["rm", "-q", "--cached", "--ignore-unmatch", "--", ...removed]);
 
     const paths = request.files.map((file) => file.path);
-    const staged = (await this.git(["diff", "--cached", "--name-only", "-z", "--", ...paths]))
+    const staged = (
+      await this.git([
+        "diff",
+        "--cached",
+        "--no-ext-diff",
+        "--name-only",
+        "--relative",
+        "-z",
+        "--",
+        ...paths,
+      ])
+    )
       .split("\0")
       .filter(Boolean);
     // "Nothing to commit" is a success: what is on disk already matches.
@@ -347,6 +458,7 @@ export class LocalRepository implements Repository {
       (await this.tryGit([
         "diff",
         "--quiet",
+        "--no-ext-diff",
         "--end-of-options",
         expected,
         head,
@@ -356,27 +468,40 @@ export class LocalRepository implements Repository {
     ) {
       throw new ConflictError(expected, head);
     }
-    if ((await this.tryGit(["diff", "--quiet", "HEAD", "--", ...paths])) === null) {
+    if (
+      (await this.tryGit(["diff", "--quiet", "--no-ext-diff", "HEAD", "--", ...paths])) === null
+    ) {
       throw new ConflictError(expected, head, true);
     }
   }
 
   async branchState(): Promise<BranchState> {
+    const key = await branchKey(this.root);
+    if (key === null) return this.readBranchState();
+    const cached = branches.get(this.root);
+    if (cached && cached.key === key && Date.now() - cached.at < BRANCH_TTL_MS) return cached.value;
+    const value = this.readBranchState();
+    branches.set(this.root, { key, at: Date.now(), value });
+    value.catch(() => branches.delete(this.root));
+    return value;
+  }
+
+  private async readBranchState(): Promise<BranchState> {
     const branch =
       (await this.tryGit(["symbolic-ref", "--quiet", "--short", "HEAD"]))?.trim() || null;
-    const configured =
-      branch && (await this.tryGit(["config", "--get", `branch.${branch}.remote`]))?.trim();
-    const remote =
-      configured ||
-      ((await this.tryGit(["remote", "get-url", "origin"])) !== null ? "origin" : null);
-    const remoteUrl = remote
-      ? (await this.tryGit(["remote", "get-url", "--push", remote]))?.trim() || null
-      : null;
-    const head = remote
-      ? (
-          await this.tryGit(["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`])
-        )?.trim()
-      : undefined;
+    const [configured, origin] = await Promise.all([
+      branch ? this.tryGit(["config", "--get", `branch.${branch}.remote`]) : null,
+      this.tryGit(["remote", "get-url", "origin"]),
+    ]);
+    const remote = configured?.trim() || (origin !== null ? "origin" : null);
+    const [pushUrl, remoteHead] = remote
+      ? await Promise.all([
+          this.tryGit(["remote", "get-url", "--push", remote]),
+          this.tryGit(["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`]),
+        ])
+      : [null, null];
+    const remoteUrl = pushUrl?.trim() || null;
+    const head = remoteHead?.trim();
     return {
       branch,
       remote,
@@ -399,6 +524,7 @@ export class LocalRepository implements Repository {
     } finally {
       answers.delete(this.root);
       headFromFiles.delete(this.root);
+      branches.delete(this.root);
       if (publishing.get(this.root) === current) publishing.delete(this.root);
     }
   }
@@ -415,8 +541,8 @@ export class LocalRepository implements Repository {
       .filter(Boolean);
     if (changed.length > 0) {
       throw new LocalRepositoryError(
-        `The folder has ${changed.length} ${changed.length === 1 ? "change" : "changes"} that are not committed, so the branch was not changed.`,
-        "commit or set them aside in the site's folder first, then try again.",
+        `The folder has ${changed.length} ${changed.length === 1 ? "change that is" : "changes that are"} not committed, so the branch was not changed.`,
+        "commit or stash what changed in the site's folder, then try again.",
       );
     }
     if ((await this.tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${name}`])) !== null) {
@@ -488,6 +614,7 @@ export class LocalRepository implements Repository {
       return await current;
     } finally {
       answers.delete(this.root);
+      branches.delete(this.root);
       if (publishing.get(this.root) === current) publishing.delete(this.root);
     }
   }
@@ -545,7 +672,9 @@ export class LocalRepository implements Repository {
           reason: `${state.upstream} refused this studio's sign-in.\n  fix: on Git access, connect GitHub and give it this repository, or save a token for its host.`,
         };
       }
+      // A remote address may carry a password; what git echoes back is shown on the page.
       const detail = output
+        .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1")
         .split("\n")
         .map((line) => line.trim())
         .findLast(Boolean);
@@ -648,7 +777,16 @@ export class LocalRepository implements Repository {
     if (head === "working-copy" || head === base) return false;
     if (!isCommitId(base)) return true;
     return (
-      (await this.tryGit(["diff", "--quiet", "--end-of-options", base, head, "--", path])) === null
+      (await this.tryGit([
+        "diff",
+        "--quiet",
+        "--no-ext-diff",
+        "--end-of-options",
+        base,
+        head,
+        "--",
+        path,
+      ])) === null
     );
   }
 
@@ -697,6 +835,7 @@ export class LocalRepository implements Repository {
       const { stdout } = await run("git", [...SAFE_GIT, ...args], {
         cwd: this.root,
         maxBuffer: 8 * 1024 * 1024,
+        timeout: GIT_TIMEOUT_MS,
         ...(env ? { env: { ...process.env, ...env } } : {}),
       });
       return stdout;
@@ -750,7 +889,7 @@ export class LocalRepository implements Repository {
     }
     await mkdir(dirname(target), { recursive: true });
     const linked = await lstat(target).then(
-      (stat) => stat.isSymbolicLink(),
+      (info) => info.isSymbolicLink(),
       () => false,
     );
     if (!(await this.reallyInside(dirname(target))) || linked) {
@@ -768,6 +907,12 @@ export class LocalRepository implements Repository {
  * folder. Null for anything unusual (a worktree's `.git` file, a missing ref), where git answers.
  */
 async function readHeadFiles(root: string): Promise<string | null> {
+  const found = await gitFolder(root);
+  return found ? resolveRef(found.git, found.head) : null;
+}
+
+/** The `.git` folder a site folder belongs to and what its HEAD says, or null for anything unusual. */
+async function gitFolder(root: string): Promise<{ git: string; head: string } | null> {
   for (let folder = root; ; folder = dirname(folder)) {
     const git = join(folder, ".git");
     // oxlint-disable-next-line no-await-in-loop -- each folder up is only read if this one had none
@@ -776,8 +921,38 @@ async function readHeadFiles(root: string): Promise<string | null> {
       (error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? undefined : null),
     );
     if (head === null) return null;
-    if (head !== undefined) return resolveRef(git, head);
+    if (head !== undefined) return { git, head };
     if (dirname(folder) === folder) return null;
+  }
+}
+
+const stampOf = (info: { ino: number; size: number; mtimeMs: number; ctimeMs: number }) =>
+  `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+
+/**
+ * Everything in `.git` the branch and its remote are read from: which branch HEAD names, the
+ * folder's config, and each remote's own HEAD. Null where git keeps them some other way.
+ */
+async function branchKey(root: string): Promise<string | null> {
+  const found = await gitFolder(root);
+  if (!found) return null;
+  try {
+    const remotes = join(found.git, "refs", "remotes");
+    const [config, names] = await Promise.all([
+      stat(join(found.git, "config")),
+      readdir(remotes).catch(() => [] as string[]),
+    ]);
+    const heads = await Promise.all(
+      names.map((name) =>
+        readFile(join(remotes, name, "HEAD"), "utf8").then(
+          (text) => `${name}=${text.trim()}`,
+          () => `${name}=`,
+        ),
+      ),
+    );
+    return [found.head, stampOf(config), ...heads].join("\n");
+  } catch {
+    return null;
   }
 }
 

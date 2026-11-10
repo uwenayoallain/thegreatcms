@@ -1,0 +1,6 @@
+{
+  "slug": "no-frontmatter",
+  "data": {
+    "text": "# Just a body\n\nNo fences at all, so the whole file is the body.\n"
+  }
+}

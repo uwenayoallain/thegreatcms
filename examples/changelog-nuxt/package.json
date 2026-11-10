@@ -2,11 +2,12 @@
   "name": "@greatcms/example-changelog-nuxt",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt generate",
-    "typecheck": "greatcms check",
+    "typecheck": "greatcms check && tsc -p tsconfig.types.json",
     "test": "vitest run"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@greatcms/cli": "workspace:*",
     "axe-core": "^4.13.0",
     "jsdom": "^30.0.1",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }
 }

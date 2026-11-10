@@ -246,6 +246,8 @@ export class Store {
     this.db = new DatabaseSync(file);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
+    // Another process holding the file, such as a backup, is waited for rather than failing a publish.
+    this.db.exec("PRAGMA busy_timeout = 5000");
     this.migrate();
   }
 
@@ -620,6 +622,17 @@ export class Store {
     );
   }
 
+  /**
+   * Puts back publishes a stopped studio had taken but not finished, so they are tried again.
+   * One that did land is then refused as already changed, never published twice.
+   */
+  recoverScheduled(): number {
+    return Number(
+      this.db.prepare("UPDATE scheduled SET status = 'waiting' WHERE status = 'running'").run()
+        .changes,
+    );
+  }
+
   settleScheduled(id: number, status: Scheduled["status"], detail?: string): void {
     this.db
       .prepare(
@@ -650,6 +663,7 @@ export class Store {
   }
 
   close(): void {
+    if (!this.db.isOpen) return;
     this.db.close();
   }
 }

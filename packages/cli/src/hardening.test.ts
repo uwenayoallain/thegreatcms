@@ -7,7 +7,8 @@
  * 5. Files are written only inside the project directory
  */
 
-import { mkdtemp, writeFile, rm, symlink } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, parseSchema } from "@greatcms/spec";
@@ -24,6 +25,8 @@ import {
 import { FRAMEWORKS } from "./detect.js";
 import { mergeAgentsNote, planInit, type InitAnswers } from "./init.js";
 import { scanProject, setupProject } from "./setup.js";
+import { checkSite } from "./check.js";
+import { nodeCheckFiles, nodeFiles } from "./handlers.js";
 import { CliError } from "./ports.js";
 import type { PromptPort } from "./prompt.js";
 import {
@@ -389,5 +392,63 @@ export default defineConfig({});
       // Non-interactive setup refuses to run, ensuring no unintended files are created
       await expect(setupProject({ root, prompt, stdout: () => {} })).rejects.toThrow(CliError);
     });
+  });
+});
+
+describe("what the CLI reads and writes on disk", () => {
+  let root: string;
+  let outside: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "gc-cli-disk-"));
+    outside = await mkdtemp(join(tmpdir(), "gc-cli-elsewhere-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it("writes inside the project, creating folders as it goes", async () => {
+    await nodeFiles(root).write("content/cms/home.hero.json", "{}\n");
+    expect(await readFile(join(root, "content/cms/home.hero.json"), "utf8")).toBe("{}\n");
+  });
+
+  it.each(["../escaped.txt", "content/../../escaped.txt", "a/../../../etc/escaped.txt"])(
+    "refuses to write or remove %s",
+    async (path) => {
+      await expect(nodeFiles(root).write(path, "x")).rejects.toThrow(/Refusing to write/);
+      await expect(nodeFiles(root).remove(path)).rejects.toThrow(CliError);
+    },
+  );
+
+  it("refuses to write through a folder that links out of the project", async () => {
+    await symlink(outside, join(root, "content"));
+    await expect(nodeFiles(root).write("content/cms/home.hero.json", "{}")).rejects.toThrow(
+      /Refusing to write content\/cms\/home\.hero\.json/,
+    );
+    await expect(nodeFiles(root).write("content/new.json", "{}")).rejects.toThrow(CliError);
+    expect(existsSync(join(outside, "cms"))).toBe(false);
+    expect(existsSync(join(outside, "new.json"))).toBe(false);
+  });
+
+  it("refuses to overwrite a file that is itself a link out of the project", async () => {
+    await writeFile(join(outside, "target.json"), "untouched");
+    await symlink(join(outside, "target.json"), join(root, "linked.json"));
+    await expect(nodeFiles(root).write("linked.json", "{}")).rejects.toThrow(CliError);
+    expect(await readFile(join(outside, "target.json"), "utf8")).toBe("untouched");
+  });
+
+  it("check does not read a content file that links out of the repository", async () => {
+    await writeFile(join(outside, "secret.json"), "TOP-SECRET-NOT-JSON");
+    await mkdir(join(root, "content/cms"), { recursive: true });
+    await symlink(join(outside, "secret.json"), join(root, "content/cms/home.hero.json"));
+    const schema = parseSchema(
+      "version: 1\nregions:\n  home.hero:\n    fields:\n      heading: { type: text }\n",
+    );
+    const report = await checkSite({ schema, config: DEFAULT_CONFIG, files: nodeCheckFiles(root) });
+    expect(JSON.stringify(report)).not.toContain("SECRET");
+    // The reader ignores such a link too, so the region is on its defaults.
+    expect(report.defaults).toEqual(["home.hero"]);
   });
 });

@@ -112,7 +112,62 @@ regions:
       post: { type: reference, collection: blog }
       guides: { type: reference, collection: guides, multiple: true }
 
+  # Stored over defaults, value by value: an object merges into its default, an array
+  # or a null replaces it, a falsy value is still a value, and a key the schema does
+  # not know is left where it is.
+  home.merge:
+    fields:
+      cta: { type: link, default: { href: /start, label: Start here } }
+      seo:
+        type: group
+        fields:
+          title: { type: text, default: Untitled }
+          description: { type: text, default: A site managed by GreatCMS }
+      tags:
+        { type: select, multiple: true, options: [news, notes, releases], default: [news, notes] }
+      note: { type: text, default: Shown until someone clears it }
+      count: { type: number, default: 3 }
+      shown: { type: boolean, default: true }
+      title: { type: text, default: Default title }
+    default:
+      title: Region title
+
+  # A block list holding a type the schema no longer has, a variant it never had,
+  # and a null where a default would otherwise go.
+  home.mixed:
+    type: blocks
+    allow: [cta, card]
+
+  # The file exists and says nothing about blocks: the region is its default.
+  home.unset:
+    type: blocks
+    allow: [card]
+    default:
+      - { _type: card, title: Default card }
+
+  # Every character a region id may hold. Never edited.
+  pricing.faq-2.items_list:
+    fields:
+      heading: { type: text, default: Questions }
+
 collections:
+  # A JSON collection: each entry is one object, with no body and no defaults.
+  people:
+    path: content/people
+    format: json
+    fields:
+      name: { type: text, required: true }
+      role: { type: text, default: Editor }
+      links: { type: list, of: { type: link } }
+
+  # Frontmatter and bodies as they turn up in real repositories.
+  notes:
+    path: content/notes
+    body: text
+    fields:
+      title: { type: text }
+      text: { type: richtext }
+
   # MDX: stored exactly like Markdown, read exactly like Markdown. The
   # difference is the extension, and that an editor must not reformat the body.
   guides:

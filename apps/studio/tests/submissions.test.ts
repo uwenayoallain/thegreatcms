@@ -235,7 +235,8 @@ describe("the inbox", () => {
     const response = await app.request("/inbox.csv", { headers: signedIn });
     expect(response.headers.get("content-type")).toContain("text/csv");
     const csv = await response.text();
-    expect(csv.split("\n")[0]).toBe('"received","form","message","name"');
+    expect(csv.split("\r\n")[0]).toBe('"Received (UTC)","Site","Form","message","name"');
+    expect(csv.split("\r\n")[1]).toMatch(/^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",/);
     expect(csv).toContain('"Grace"');
   });
 

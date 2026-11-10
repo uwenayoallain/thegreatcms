@@ -1,0 +1,33 @@
+{
+  "blocks": [
+    {
+      "_type": "cta",
+      "_variant": "banner",
+      "label": "Start",
+      "link": {
+        "href": "/start"
+      }
+    },
+    {
+      "_type": "retired",
+      "anything": [1, 2],
+      "nested": {
+        "left": "alone"
+      }
+    },
+    {
+      "_type": "card",
+      "title": "Null beats a default",
+      "tone": null
+    },
+    "not a block at all",
+    {
+      "title": "No type, so no defaults"
+    }
+  ],
+  "_meta": {
+    "updatedAt": "2026-08-12T18:00:00.000Z",
+    "updatedBy": "ada",
+    "version": 1
+  }
+}

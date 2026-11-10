@@ -71,7 +71,10 @@ export function page(
   const unread = options.unread ?? shell().unread?.() ?? 0;
   const sidebar = chrome ? shell().sidebar : undefined;
   // Top-level screens name themselves, so the bar is there on every screen and nothing below it moves.
-  const trail = crumbs.length > 0 ? crumbs : [{ href: "", label: title }];
+  const local = shell().local === true;
+  // The local studio has one site: a trail that begins at a list of them begins at the site instead.
+  const shown = local ? crumbs.filter((crumb) => crumb.href !== "/") : crumbs;
+  const trail = shown.length > 0 ? shown : [{ href: "", label: title }];
 
   return compact(
     `<!doctype html>${html`
@@ -243,7 +246,9 @@ function navigation(
       <nav aria-label="Sections">
         <ul>
           <li>
-            <a href="/" aria-current="${current("sites")}">${icon("sites")} Sites</a>
+            <a href="/" aria-current="${current("sites")}"
+              >${icon("sites")} ${shell().local ? "Site" : "Sites"}</a
+            >
           </li>
           <li>
             <a href="/inbox" aria-current="${current("inbox")}">
@@ -323,13 +328,17 @@ function navigation(
                       >${icon("mail")} Submissions</a
                     >
                   </li>
-                  <li>
-                    <a
-                      href="/sites/${site.id}/settings"
-                      aria-current="${site.current === "settings" ? "page" : undefined}"
-                      >${icon("settings")} Settings</a
-                    >
-                  </li>
+                  ${
+                    viewer()?.owner === false
+                      ? ""
+                      : html`<li>
+                          <a
+                            href="/sites/${site.id}/settings"
+                            aria-current="${site.current === "settings" ? "page" : undefined}"
+                            >${icon("settings")} Settings</a
+                          >
+                        </li>`
+                  }
                   ${
                     site.devUrl
                       ? html`<li>
@@ -346,7 +355,7 @@ function navigation(
       }
       <form method="POST" action="/sign-out" class="sign-out">
         ${
-          viewer()?.owner
+          viewer()?.owner && !shell().local
             ? html`<a href="/editors" aria-current="${current("editors")}"
                 >${icon("users")} <span class="label">Editors</span></a
               >`
@@ -1150,6 +1159,10 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
   @keyframes lift { from { transform: translate(3px, 3px); } }
 }
 body.plain .flash { margin-bottom: 1rem; }
+.sign-in-form .outsider { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.share-link input { font-family: var(--mono); font-size: .8rem; }
+.share-terms { max-width: 44rem; margin: 0 0 1.5rem; padding: 0; list-style: none; display: grid; gap: .6rem; color: var(--ink-2); font-size: .9rem; }
+.share-terms strong { color: var(--ink); }
 
 /* Visual editor. */
 /* The editor opens at the height of the textarea it replaces. */
@@ -1210,9 +1223,14 @@ textarea[data-richtext] { height: 15rem; }
 /** One stylesheet for every screen, served as a file rather than inlined into each page. */
 export const STYLESHEET = STYLES;
 
-/** Errors carry their remedy after `fix:`; on screen it reads better as a line of its own. */
+/** An error and the remedy it carries after `fix:`, which starts a sentence of its own on screen. */
+export function withRemedy(message: string): [headline: string, fix?: string] {
+  const [headline = "", fix] = message.split(/\n\s*fix:\s*/, 2);
+  return fix ? [headline, fix.charAt(0).toUpperCase() + fix.slice(1)] : [headline];
+}
+
 function flashMessage(message: string) {
-  const [headline, fix] = message.split(/\n\s*fix:\s*/, 2);
+  const [headline, fix] = withRemedy(message);
   return html`<p>${headline}</p>
     ${fix ? html`<p class="fix">${fix}</p>` : ""}`;
 }

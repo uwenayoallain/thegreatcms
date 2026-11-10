@@ -1,0 +1,11 @@
+{
+  "count": 0,
+  "cta": { "href": "/pricing", "label": "Start here" },
+  "legacy": { "kept": true },
+  "note": null,
+  "seo": { "title": "Stored title", "description": "A site managed by GreatCMS" },
+  "shown": false,
+  "tags": [],
+  "title": "Region title",
+  "__proto__": { "also": "kept" }
+}

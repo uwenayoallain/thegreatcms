@@ -2,7 +2,7 @@
 
 import { parse as parseYaml } from "yaml";
 import { IssueBag } from "./errors.js";
-import { SPEC_VERSION } from "./schema.js";
+import { SPEC_VERSION, yamlProblem } from "./schema.js";
 import {
   type Parser,
   type Problem,
@@ -114,11 +114,7 @@ export function parseConfig(source: string, file = ".cms/config.yaml"): CmsConfi
   try {
     raw = parseYaml(source) ?? {};
   } catch (err) {
-    bag.add({
-      code: "invalid_yaml",
-      message: `File is not valid YAML: ${(err as Error).message}`,
-      fix: "Check indentation: YAML requires spaces, never tabs.",
-    });
+    bag.add(yamlProblem(err));
     bag.throwIfAny("Could not read config");
     /* c8 ignore next */
     throw err;

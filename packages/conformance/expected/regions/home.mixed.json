@@ -1,0 +1,29 @@
+{
+  "blocks": [
+    {
+      "_type": "cta",
+      "_variant": "panel",
+      "label": "Start",
+      "link": {
+        "href": "/start"
+      },
+      "style": "primary"
+    },
+    {
+      "_type": "retired",
+      "anything": [1, 2],
+      "nested": {
+        "left": "alone"
+      }
+    },
+    {
+      "_type": "card",
+      "title": "Null beats a default",
+      "tone": null
+    },
+    "not a block at all",
+    {
+      "title": "No type, so no defaults"
+    }
+  ]
+}

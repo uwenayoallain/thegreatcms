@@ -1,0 +1,6 @@
+{
+  "slug": "fence-lookalikes",
+  "data": {
+    "text": "--- \ntitle: A fence is exactly three dashes\n---\n\nThe first line ends in a space, so nothing here is frontmatter.\n"
+  }
+}

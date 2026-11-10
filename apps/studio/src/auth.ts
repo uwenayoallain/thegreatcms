@@ -174,6 +174,9 @@ export function randomSecret(): string {
  * allowed through, because that is curl, not a browser being steered.
  */
 export function isSameOrigin(request: Request): boolean {
+  // The browser's own account of where the request came from, which a page cannot set or strip.
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return false;
   const host = new URL(request.url).host;
   const origin = request.headers.get("origin");
   if (origin) return hostOf(origin) === host;

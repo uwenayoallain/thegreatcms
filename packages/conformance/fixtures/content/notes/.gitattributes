@@ -1,0 +1,2 @@
+# These bytes are the fixture: line endings and the byte-order mark must survive a checkout.
+*.md -text

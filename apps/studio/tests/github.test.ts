@@ -194,6 +194,7 @@ describe("signing git in", () => {
           "http.https://github.com/.extraheader",
           `AUTHORIZATION: basic ${Buffer.from("x-access-token:ghs_token1").toString("base64")}`,
         ],
+        ["http.https://github.com/.followRedirects", "false"],
         ["url.https://github.com/.insteadOf", "git@github.com:"],
         ["url.https://github.com/.insteadOf", "ssh://git@github.com/"],
       ]);
@@ -287,6 +288,7 @@ describe("the pages", () => {
       secret: SECRET,
       sitesRoot: root,
       github,
+      resolveHost: async () => ["140.82.112.3"],
       cloneGit: async (args, config) => {
         cloned.push({ args, config });
       },

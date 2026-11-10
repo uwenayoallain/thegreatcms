@@ -1,0 +1,8 @@
+{
+  "slug": "crlf",
+  "data": {
+    "title": "Written on Windows",
+    "tags": ["a", "b"],
+    "text": "\r\nFirst line.\r\nSecond line.\r\n"
+  }
+}

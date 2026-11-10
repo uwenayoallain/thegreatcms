@@ -38,7 +38,7 @@ import {
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { html } from "hono/html";
 import { bodyLimit } from "hono/body-limit";
-import { compress } from "hono/compress";
+import { pack } from "./pack.js";
 import { setFlagsFromString } from "node:v8";
 import {
   checkPassword,
@@ -64,6 +64,7 @@ import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
 import { ALLOWED_TYPES, MAX_BYTES, UploadError, type UploadResult } from "./media.js";
 import {
+  replyAddress,
   assessSpam,
   contentFields,
   type Notifier,
@@ -76,14 +77,16 @@ import { type Author, type BranchState, ConflictError } from "./repo.js";
 import { type Viewer, withViewer } from "./views/viewer.js";
 import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { panesOf, withChrome } from "./views/chrome.js";
-import { errorsByPath } from "./views/fields.js";
+import { errorsByPath, issueLines } from "./views/fields.js";
 import { page, type PageOptions } from "./views/layout.js";
 import { asset, compressed, icon, ICONS } from "./assets.js";
 import {
   editorsPage,
   gitAccessPage,
   githubCreatePage,
+  shareCard,
   sharePage,
+  shareProblemPage,
   signInPage,
 } from "./views/account-pages.js";
 import { collectionPage, editEntryPage } from "./views/collection-pages.js";
@@ -92,13 +95,17 @@ import { editRegionPage } from "./views/region-page.js";
 import { sitePage } from "./views/site-page.js";
 import { newSitePage, setupPage, sitesPage } from "./views/sites-pages.js";
 import {
+  type CloneGit,
+  type CloneLimits,
   Clones,
+  cloneUrlProblem,
   folderFromUrl,
   folderPath,
   hasSchema,
   isBranchName,
-  isCloneUrl,
   isFolderName,
+  reachesPrivateNetwork,
+  type ResolveHost,
   isInside,
   listFolders,
   nameFromFolder,
@@ -169,11 +176,22 @@ export interface AppOptions {
   /** The GitHub App this studio connects GitHub through. */
   github?: GitHub;
   /** Replaces git for clones, in tests. */
-  cloneGit?: (args: string[], config: Array<[string, string]>) => Promise<void>;
+  cloneGit?: CloneGit;
+  /** How many copies run at once and how large one may grow. */
+  cloneLimits?: Partial<CloneLimits>;
+  /**
+   * `STUDIO_CLONE_PRIVATE=1`: lets Copy from Git reach this machine and its private network,
+   * for a Git server that lives there. Off by default, so the form cannot be pointed inward.
+   */
+  clonePrivate?: boolean;
+  /** Replaces DNS for the check above, in tests. */
+  resolveHost?: ResolveHost;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
   notificationLimiter?: RateLimiter;
+  /** `greatcms studio`: one project, the folder it was started in, and nothing about other sites or people. */
+  local?: boolean;
 }
 
 /** Bodies a public visitor can post, past which this is not a contact form. */
@@ -199,6 +217,8 @@ type Variables = {
   session: string;
   /** Another origin this one page may post a form to, such as GitHub. */
   formTarget?: string;
+  /** Why a "publish later" was not scheduled; the editor shows it with the form as submitted. */
+  refused?: string;
 };
 
 export function createApp(options: AppOptions) {
@@ -212,7 +232,9 @@ export function createApp(options: AppOptions) {
     const probe = managed(site);
     if (probe) warmPreview(probe, site.devUrl);
   });
-  const clones = options.sitesRoot ? new Clones(options.sitesRoot, options.cloneGit) : undefined;
+  const clones = options.sitesRoot
+    ? new Clones(options.sitesRoot, options.cloneGit, options.cloneLimits)
+    : undefined;
   // Pushes to a repository the GitHub App reaches sign in with a token minted for that push.
   useRemoteAuth(
     options.github
@@ -284,7 +306,18 @@ export function createApp(options: AppOptions) {
     : "form-action 'self'";
 
   app.use("*", async (c, next) => {
+    const started = performance.now();
     await next();
+
+    // On everything, a CSV or an image included: never guessed at, never sent on, never over plain HTTP again.
+    c.res.headers.set("x-content-type-options", "nosniff");
+    c.res.headers.set("referrer-policy", "same-origin");
+    c.res.headers.set("permissions-policy", PERMISSIONS_POLICY);
+    if (isSecure(c)) c.res.headers.set("strict-transport-security", "max-age=31536000");
+    // How long the studio took, for whoever is signed in and looking at the network panel.
+    if (c.get("viewer")) {
+      c.res.headers.set("server-timing", `app;dur=${(performance.now() - started).toFixed(1)}`);
+    }
 
     // Only documents: the asset route sets its own, and 304s must stay small.
     const type = c.res.headers.get("content-type") ?? "";
@@ -307,23 +340,13 @@ export function createApp(options: AppOptions) {
         "object-src 'none'",
       ].join("; "),
     );
-    c.res.headers.set("x-content-type-options", "nosniff");
     // A tab the studio opens, such as the site itself, gets no handle back on the signed-in window.
     c.res.headers.set("cross-origin-opener-policy", "same-origin");
-    // `same-origin`, not `no-referrer`. With no-referrer Chrome sends
-    // `Origin: null` on a same-origin form post, which the CSRF check above
-    // refuses: every form in this app would break for anyone without
-    // JavaScript. This keeps the referrer inside the studio and sends none to
-    // anywhere else, which is the part that was actually worth having.
-    c.res.headers.set("referrer-policy", "same-origin");
     // A studio is never a search result, and never a shared browser's history.
     c.res.headers.set("cache-control", "no-store");
-    // Once a browser has reached the studio over TLS, it never sends a password over plain HTTP.
-    if (isSecure(c)) c.res.headers.set("strict-transport-security", "max-age=31536000");
   });
-  // After the headers above: registered before them, compress drops them on the Node server.
-  // Pages are small; the editor bundle is not, and a remote studio is often on a slow link.
-  app.use("*", compress());
+  // After the headers above: registered before them, compressing drops them on the Node server.
+  app.use("*", pack);
 
   // No body is read whole into memory unbounded: the editors take uploads, every other form is small.
   const small = bodyLimit({
@@ -410,6 +433,14 @@ export function createApp(options: AppOptions) {
         kind: "submission",
         subject: `${site.name}: new ${form} submission`,
         lines: Object.entries(data).map(([key, value]) => `${key}: ${value}`),
+        site: site.name,
+        form,
+        fields: data,
+        replyTo: replyAddress(data),
+        // Only an address the operator set: the request's own host is the visitor's to choose.
+        inbox: options.publicUrl
+          ? `${options.publicUrl}/inbox?site=${encodeURIComponent(site.id)}`
+          : undefined,
       });
     }
 
@@ -508,7 +539,11 @@ export function createApp(options: AppOptions) {
     c.set("actor", who.name);
     c.set("viewer", who);
     c.set("session", session.actor);
-    const shell = { ...panesOf(c.req.header("cookie")), unread: () => store.countUnread() };
+    const shell = {
+      ...panesOf(c.req.header("cookie")),
+      unread: () => store.countUnread(),
+      local: options.local,
+    };
     return withViewer(who, () => withChrome(shell, next));
   });
 
@@ -531,6 +566,28 @@ export function createApp(options: AppOptions) {
     }
     return c.redirect(isSafeRedirect(back) ? back : "/", 303);
   });
+
+  if (options.local) {
+    // One project: there is nothing to connect, copy, hand to other people, or disconnect.
+    for (const route of [
+      "/sites/new",
+      "/sites/setup",
+      "/sites/clone",
+      "/sites/clone/*",
+      "/git-access",
+      "/git-access/*",
+      "/editors",
+      "/editors/*",
+      "/sites/:id/delete",
+    ]) {
+      app.all(route, (c) => c.notFound());
+    }
+    app.post("/sites", (c) => c.notFound());
+    app.get("/", (c) => {
+      const [site] = store.listSites();
+      return site ? c.redirect(`/sites/${site.id}`, 303) : c.notFound();
+    });
+  }
 
   // Sites and people are the owner's to change; editors change content. Attached to the
   // routes through the router, so no spelling of a path reaches one without passing here.
@@ -616,6 +673,10 @@ export function createApp(options: AppOptions) {
     const uri = c.req.header("x-forwarded-uri") ?? "/";
     const token =
       new URL(uri, "http://preview.invalid").searchParams.get("greatcms-share") ?? undefined;
+    // A link that has run out says so, rather than asking a stranger for the studio's password.
+    if (token && options.publicUrl && !shareFits(token, host)) {
+      return c.redirect(`${options.publicUrl}/share`, 302);
+    }
     if (token && options.publicUrl && shareFits(token, host)) {
       const clean = new URL(uri, "http://preview.invalid");
       clean.searchParams.delete("greatcms-share");
@@ -644,10 +705,12 @@ export function createApp(options: AppOptions) {
     const next = allowedNext(c.req.query("next"));
     const siteId = readShareToken(token, signingKey);
     if (!token || !siteId || !next || next.startsWith("/")) {
-      return c.html(
-        errorPage("Preview link", "This preview link has expired or is not valid."),
-        403,
-      );
+      return c.html(shareProblemPage(), 403);
+    }
+    // A chat app unfurling the link gets a card about the preview, not a session or the site's contents.
+    if (!c.req.query("open") && LINK_PREVIEWER.test(c.req.header("user-agent") ?? "")) {
+      const open = new URLSearchParams({ token, next, open: "1" });
+      return c.html(shareCard(store.getSite(siteId)?.name ?? "a site", `/share?${open}`));
     }
     c.header("Set-Cookie", shareCookie(token, isSecure(c), options.cookieDomain));
     return c.redirect(next, 302);
@@ -663,8 +726,10 @@ export function createApp(options: AppOptions) {
     let url = new URL(path.startsWith("/") ? path : "/", preview);
     // `//elsewhere` is a path to another host: the token would travel with it.
     if (url.origin !== preview.origin) url = new URL("/", preview);
-    url.searchParams.set("greatcms-share", createShareToken(signingKey, site.id));
-    return c.html(sharePage({ site, url: url.href }));
+    const token = createShareToken(signingKey, site.id);
+    url.searchParams.set("greatcms-share", token);
+    const until = new Date(Number(token.split(".").at(-2))).toISOString();
+    return c.html(sharePage({ site, url: url.href, until }));
   });
 
   app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|greatcms-logo\\.png}", (c) => {
@@ -713,9 +778,9 @@ export function createApp(options: AppOptions) {
     const next = allowedNext(c.req.query("next")) ?? undefined;
     // Signed in here already, sent from the preview: renew its cookie rather than ask again.
     const session = readSession(c.req.header("cookie"), signingKey);
-    if (next && viewerOf(session)) {
-      signIn(c, session!.actor);
-      return c.redirect(next, 303);
+    if (viewerOf(session)) {
+      if (next) signIn(c, session!.actor);
+      return c.redirect(next ?? "/", 303);
     }
     return c.html(signInPage({ next, editors: hasEditors() }));
   });
@@ -809,7 +874,7 @@ export function createApp(options: AppOptions) {
     if (email) {
       const editor = store.findEditor(email);
       // Hash even for an unknown address, so the answer takes as long either way.
-      const ok = verifyPassword(supplied, editor?.passwordHash ?? DUMMY_HASH);
+      const ok = verifyPassword(supplied, editor?.passwordHash ?? dummyHash());
       if (editor && ok) actor = `editor:${editor.id}`;
     } else if (checkPassword(supplied, password)) {
       actor = "studio";
@@ -852,10 +917,23 @@ export function createApp(options: AppOptions) {
     );
   });
 
+  /** The inbox as it was filtered when a submission in it was acted on. */
+  const inboxView = (form: FormData) => {
+    const query = new URLSearchParams();
+    const siteId = String(form.get("site") ?? "");
+    if (store.getSite(siteId)) query.set("site", siteId);
+    if (form.get("spam") === "1") query.set("spam", "1");
+    return query.size > 0 ? `/inbox?${query}` : "/inbox";
+  };
+
   app.get("/inbox.csv", (c) => {
     const siteId = c.req.query("site") || undefined;
     const rows = store.listSubmissions({ siteId, includeSpam: false, limit: 5000 });
-    return c.body(toCsv(rows), 200, {
+    const names = new Map(store.listSites().map((site) => [site.id, site.name]));
+    const named = rows.map((row) =>
+      Object.assign({ site: names.get(row.siteId) ?? row.siteId }, row),
+    );
+    return c.body(toCsv(named), 200, {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": 'attachment; filename="submissions.csv"',
     });
@@ -866,14 +944,16 @@ export function createApp(options: AppOptions) {
     if (id === null) return c.notFound();
     const form = await c.req.formData();
     store.markRead(id, String(form.get("read") ?? "1") === "1");
-    return c.redirect("/inbox", 303);
+    return c.redirect(inboxView(form), 303);
   });
 
-  app.post("/inbox/:id/delete", (c) => {
+  app.post("/inbox/:id/delete", async (c) => {
     const id = submissionId(c.req.param("id"));
     if (id === null) return c.notFound();
     store.deleteSubmission(id);
-    return c.redirect("/inbox", 303);
+    // A bare POST still deletes; it just has no filter to go back to.
+    const form = await c.req.formData().catch(() => new FormData());
+    return c.redirect(inboxView(form), 303);
   });
 
   /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
@@ -937,6 +1017,9 @@ export function createApp(options: AppOptions) {
     c: Context<{ Variables: Variables }>,
     values: { name: string; path: string; devUrl: string },
   ) => {
+    // One folder, one site: a second connection would show the same content under two names.
+    const existing = store.listSites().find((known) => known.path === values.path);
+    if (existing) return c.redirect(`/sites/${existing.id}`, 303);
     const site: Site = {
       id: crypto.randomUUID(),
       name: values.name || nameFromFolder(basename(values.path)),
@@ -1015,8 +1098,9 @@ export function createApp(options: AppOptions) {
   });
 
   app.get("/sites/setup", async (c) => {
-    const path = c.req.query("path") ?? "";
-    if (!path.startsWith("/") || !(await isDirectory(path))) return c.redirect("/sites/new", 303);
+    const typed = folderPath(c.req.query("path") ?? "");
+    if ("error" in typed || !(await isDirectory(typed.path))) return c.redirect("/sites/new", 303);
+    const path = typed.path;
     if (hasSchema(path)) return c.redirect("/sites/new", 303);
     return c.html(
       setupPage({ path, values: { name: nameFromFolder(basename(path)) }, templates: TEMPLATES }),
@@ -1032,9 +1116,10 @@ export function createApp(options: AppOptions) {
       devUrl: String(form.get("devUrl") ?? "").trim(),
       template: String(form.get("template") ?? ""),
     };
-    if (!values.path.startsWith("/") || !(await isDirectory(values.path))) {
-      return c.redirect("/sites/new", 303);
-    }
+    const typed = folderPath(values.path);
+    if ("error" in typed || !(await isDirectory(typed.path))) return c.redirect("/sites/new", 303);
+    // One spelling of the folder, so the site is recognised as the folder it is listed under.
+    values.path = typed.path;
     const again = (error: string) =>
       c.html(setupPage({ path: values.path, values, templates: TEMPLATES, error }), 422);
     if (values.devUrl && !isHttpUrl(values.devUrl)) return again(DEV_URL_ERROR);
@@ -1083,9 +1168,8 @@ export function createApp(options: AppOptions) {
     };
     const again = async (cloneError: string) =>
       c.html(await connectPage({ error: "Nothing was copied.", cloneError, cloneValues }), 422);
-    if (!isCloneUrl(cloneValues.url)) {
-      return again("Use an https:// or SSH address, such as git@github.com:you/site.git.");
-    }
+    const urlProblem = cloneUrlProblem(cloneValues.url);
+    if (urlProblem) return again(urlProblem);
     if (cloneValues.branch && !isBranchName(cloneValues.branch)) {
       return again("That branch name is not one Git accepts.");
     }
@@ -1097,12 +1181,25 @@ export function createApp(options: AppOptions) {
     if (!isInside(options.sitesRoot, target) || existsSync(target)) {
       return again(`${target} already exists: choose another folder name.`);
     }
+    const busy = clones.busy(folder);
+    if (busy) return again(busy);
+    if (
+      !options.clonePrivate &&
+      (await reachesPrivateNetwork(cloneValues.url, options.resolveHost))
+    ) {
+      return again(
+        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
+      );
+    }
     let config: Array<[string, string]> = [];
     try {
       config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
     } catch (error) {
       return again(describeError(error));
     }
+    // Asked again: another copy may have started while the address was being looked up.
+    const taken = clones.busy(folder);
+    if (taken) return again(taken);
     void clones.start(cloneValues.url, folder, cloneValues.branch, config);
     return c.redirect("/sites/new", 303);
   });
@@ -1340,24 +1437,22 @@ export function createApp(options: AppOptions) {
       const site = store.getSite(c.req.param("id") ?? "");
       const target = contentOf(c);
       if (!site || !target || target.collection?.slug === "new") return c.notFound();
-      const back = `/sites/${site.id}/${target.back}`;
       const dueAt = zonedToEpoch(String(form.get("publishAt") ?? ""), timeZone);
-      const refuse = (message: string) =>
-        c.html(
-          page(
-            { title: "Not scheduled", flash: { kind: "error", message } },
-            html`<p><a class="button secondary" href="${back}">Back to the editor</a></p>`,
-          ),
-          422,
-        );
+      // The editor answers, so what was typed is still in the form.
+      const refuse = (message: string) => {
+        c.set("refused", message);
+        return next();
+      };
       if (dueAt === null || dueAt < Date.now() + 60_000) {
-        return refuse("Pick a time at least a minute from now.");
+        return refuse("Nothing was scheduled: pick a time at least a minute from now.");
       }
       const entries: Array<[string, string]> = [];
       for (const [key, value] of form.entries()) {
         if (typeof value !== "string") {
           if (value.size > 0) {
-            return refuse("New images cannot wait: publish them now, or schedule without them.");
+            return refuse(
+              "Nothing was scheduled: new images cannot wait. Publish them now, or schedule without them.",
+            );
           }
           continue;
         }
@@ -1746,6 +1841,20 @@ export function createApp(options: AppOptions) {
       decodeForm(entries, collection.fields, blockFieldsOf(context), mdxBody(collection)),
     );
 
+    const refused = c.get("refused");
+    if (refused) {
+      return c.html(
+        renderEntry({
+          slug: requested,
+          document,
+          errors: new Map(),
+          headSha,
+          flash: { kind: "error", message: refused },
+        }),
+        422,
+      );
+    }
+
     if (action.startsWith("nested:")) {
       const updated = applyNestedBlockAction(context.schema, collection, document, action, form);
       // The preview shows the draft, so a reordered or added section has to land there too.
@@ -1786,7 +1895,7 @@ export function createApp(options: AppOptions) {
           flash: {
             kind: "error",
             message: "Nothing was published: this entry is not valid yet.",
-            detail: validation.issues.map((issue) => issue.toString()),
+            detail: issueLines(validation.issues),
           },
         }),
         422,
@@ -2120,6 +2229,19 @@ export function createApp(options: AppOptions) {
         }
       : decodeForm(entries, region.fields, blockFieldsOf(context));
 
+    const refused = c.get("refused");
+    if (refused) {
+      return c.html(
+        renderRegion({
+          document,
+          errors: new Map(),
+          headSha,
+          flash: { kind: "error", message: refused },
+        }),
+        422,
+      );
+    }
+
     if (action.startsWith("nested:")) {
       const updated = applyNestedBlockAction(context.schema, region, document, action, form);
       if (updated.changed) {
@@ -2181,7 +2303,7 @@ export function createApp(options: AppOptions) {
           flash: {
             kind: "error",
             message: "Nothing was published: this content is not valid yet.",
-            detail: validation.issues.map((issue) => issue.toString()),
+            detail: issueLines(validation.issues),
           },
         }),
         422,
@@ -2250,10 +2372,16 @@ export function createApp(options: AppOptions) {
         stamp: stampFor(job.actor),
       }).split(";")[0] as string;
       // oxlint-disable-next-line no-await-in-loop -- one publish at a time, in the order they fell due
-      const response = await app.request(`/sites/${job.siteId}/${job.target}`, {
-        method: "POST",
-        headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-        body,
+      const response = await Promise.resolve(
+        app.request(`/sites/${job.siteId}/${job.target}`, {
+          method: "POST",
+          headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+          body,
+        }),
+      ).catch((error: unknown) => {
+        // Settled whatever happens: a publish left "running" would never be tried or shown again.
+        process.stderr.write(`scheduled publish ${job.id} failed: ${describeError(error)}\n`);
+        return new Response(null, { status: 500 });
       });
       const outcome =
         response.status === 200
@@ -2269,7 +2397,10 @@ export function createApp(options: AppOptions) {
     }
   };
 
-  return Object.assign(app, { runDueSchedules });
+  /** Ends background work that would outlive the process: copies from Git still running. */
+  const stop = () => clones?.stop();
+
+  return Object.assign(app, { runDueSchedules, stop });
 }
 
 /** The field an MDX entry keeps as source: its JSX is not HTML, and sanitizing would delete it. */
@@ -2342,7 +2473,12 @@ function contentOf(c: { req: { param(name: string): string | undefined } }) {
 }
 
 /** Compared against when an unknown email signs in, so the reply takes the same time. */
-const DUMMY_HASH = hashPassword(randomSecret());
+let dummy: string | undefined;
+const dummyHash = () => (dummy ??= hashPassword(randomSecret()));
+
+/** The studio asks a browser for none of these, and nothing it frames inherits them. */
+const PERMISSIONS_POLICY =
+  "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()";
 
 /**
  * Where a branch's publishes can be read and merged on GitHub: its comparison with the main
@@ -2370,6 +2506,10 @@ function baseOf(entries: Array<[string, string]>): string | undefined {
   const sha = entries.find(([key]) => key === "headSha")?.[1];
   return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
 }
+
+/** Programs that fetch a pasted link to draw a card for it. */
+const LINK_PREVIEWER =
+  /bot\b|crawler|spider|facebookexternalhit|WhatsApp\/|SkypeUriPreview|Iframely|Embedly/i;
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;

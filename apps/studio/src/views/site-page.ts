@@ -16,6 +16,7 @@ import { siteAvatar } from "./pixel.js";
 import { hostOf, shortPath } from "./sites-pages.js";
 import { describeRegion } from "./region-page.js";
 import { plural } from "./collection-pages.js";
+import { viewer } from "./viewer.js";
 
 /** Publishes waiting for their time, and how the last week's went. */
 function scheduledPanel(site: Site, jobs: Scheduled[], timeZone: string) {
@@ -197,6 +198,7 @@ export function sitePage(options: {
   counts?: Record<string, number>;
 }): string {
   const { site, schema, flash, formsEndpoint, sync, live, scheduled, running, branch } = options;
+  const owner = viewer()?.owner !== false;
   const drafts = options.drafts ?? [];
   const drafted = new Set(drafts.map((draft) => draft.target));
   const edited = options.activity?.edited ?? new Map<string, { author: string; date: string }>();
@@ -217,9 +219,13 @@ export function sitePage(options: {
       <div class="page-head">
         <div class="section-head">
           <h1 class="site-title">${siteAvatar(site.id, "avatar large")} ${site.name}</h1>
-          <a class="button secondary" href="/sites/${site.id}/settings"
-            >${icon("settings")} Site settings</a
-          >
+          ${
+            owner
+              ? html`<a class="button secondary" href="/sites/${site.id}/settings"
+                  >${icon("settings")} Site settings</a
+                >`
+              : ""
+          }
         </div>
         <p class="lede">
           Choose a part of the site to edit. Its content stays in your working copy.
@@ -248,7 +254,9 @@ export function sitePage(options: {
                         ><span class="status-text">Running</span>${icon("external")}</a
                       >
                       <span class="hint"><code>${hostOf(site.devUrl)}</code></span>`
-                : html`<a href="/sites/${site.id}/settings">Add your dev server</a>`
+                : owner
+                  ? html`<a href="/sites/${site.id}/settings">Add your dev server</a>`
+                  : "Not set up"
             }
           </dd>
         </div>
@@ -288,7 +296,7 @@ export function sitePage(options: {
                     >${sync.ahead} ${sync.ahead === 1 ? "publish" : "publishes"} not pushed
                     yet.</strong
                   >
-                  They are committed in the working copy and not yet on
+                  Committed in the working copy and not yet on
                   <code>${sync.upstream}</code>.
                 </p>
                 <button type="submit">Push now</button>

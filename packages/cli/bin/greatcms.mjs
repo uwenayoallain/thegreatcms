@@ -19,7 +19,7 @@ for (const stream of [process.stdout, process.stderr]) {
   "--enable-experimental-regexp-engine-on-excessive-backtracks",
 );
 
-const { createUi, run, wantsColour } = await import("../dist/index.js");
+const { createUi, run, wantsColour } = await import("../dist/run.js");
 
 process.exitCode = await run({
   argv: process.argv.slice(2),

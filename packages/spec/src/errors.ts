@@ -68,3 +68,20 @@ export class IssueBag {
     if (this.issues.length > 0) throw new SpecError(summary, this.issues);
   }
 }
+
+/** Runs `work`; nesting deep enough to exhaust the stack becomes an error that says so. */
+export function boundedDepth<T>(file: string | undefined, work: () => T): T {
+  try {
+    return work();
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    throw new SpecError("Content is nested too deeply to read", [
+      new SpecIssue({
+        code: "too_deep",
+        file,
+        message: "The document nests thousands of levels deep.",
+        fix: "Flatten it: no real page nests blocks or groups this far.",
+      }),
+    ]);
+  }
+}

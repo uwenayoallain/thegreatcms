@@ -30,7 +30,8 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function keyPath(at: string, key: string): string {
-  return at ? `${at}.${key}` : key;
+  const name = key.length > 80 ? clip(key) : key;
+  return at ? `${at}.${name}` : name;
 }
 
 /** Assigns without ever reaching a prototype setter, so a key named `__proto__` is just a key. */
@@ -43,11 +44,27 @@ export function put(target: Record<string, unknown>, key: string, value: unknown
   });
 }
 
+/** A value as an error shows it: whole when short, cut when it would bury the message. */
+export function clip(text: string, max = 80): string {
+  return text.length > max ? `${text.slice(0, max)}… (${text.length} characters)` : text;
+}
+
+/** Assignment that treats `__proto__` as the ordinary key it is in a file. */
+export function set(target: Record<string, unknown>, key: string, value: unknown): void {
+  if (key === "__proto__") put(target, key, value);
+  else target[key] = value;
+}
+
+/** A key the object itself holds: never `constructor` or `toString` from its prototype. */
+export function own(source: object, key: string): unknown {
+  return Object.hasOwn(source, key) ? (source as Record<string, unknown>)[key] : undefined;
+}
+
 export function describe(value: unknown): string {
   if (value === null || value === undefined) return "nothing";
   if (Array.isArray(value)) return "a list";
   if (typeof value === "object") return "a mapping";
-  if (typeof value === "string") return `the text ${JSON.stringify(value)}`;
+  if (typeof value === "string") return `the text ${JSON.stringify(clip(value))}`;
   return `${typeof value === "number" ? "the number" : "the value"} ${String(value)}`;
 }
 
@@ -79,7 +96,7 @@ export function string(
       return fail(
         problems,
         at,
-        `${JSON.stringify(value)} is not ${opts.expected ?? "in the expected form"}.`,
+        `${JSON.stringify(clip(value))} is not ${opts.expected ?? "in the expected form"}.`,
         opts.fix,
       );
     }
