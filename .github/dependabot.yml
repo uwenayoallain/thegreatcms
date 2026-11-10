@@ -11,6 +11,10 @@ updates:
       - /packages/deploy
     schedule:
       interval: weekly
+    # Node moves a major by hand: 26 ships without corepack, which both images use to get pnpm.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker-compose
     directories:
       - /apps/studio/tunnel

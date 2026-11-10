@@ -472,7 +472,8 @@ describe("stopping", () => {
 
     service.kill("SIGTERM");
     expect(await exit).toBe(0);
-    expect(alive(pid)).toBe(false);
+    // The signal is sent before the service leaves; the dev server takes a moment to act on it.
+    await until(async () => !alive(pid));
     expect(existsSync(path)).toBe(true);
   }, 30000);
 });
