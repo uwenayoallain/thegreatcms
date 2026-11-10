@@ -43,6 +43,8 @@ services:
       # Signing in also opens the previews, which live on sibling names under this domain.
       STUDIO_COOKIE_DOMAIN: ${PREVIEW_DOMAIN:-}
       STUDIO_SITES: ${STUDIO_SITES:-}
+      # 1 lets Copy from Git reach private and loopback addresses, for a Git server on your own network.
+      STUDIO_CLONE_PRIVATE: ${STUDIO_CLONE_PRIVATE:-}
       # GitHub accounts, by login, that are owners here besides the one that owns the app.
       STUDIO_GITHUB_OWNERS: ${STUDIO_GITHUB_OWNERS:-}
       # What whoever signs in with the password is called, where other people see them.
