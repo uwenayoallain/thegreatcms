@@ -1,4 +1,4 @@
-/** The exported bakery: accessible, free of the studio, and showing what the content files say. */
+/** The exported bakery: accessible, free of the studio and of scripts, and showing what the content files say. */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -79,10 +79,21 @@ describe.each(PAGES)("$name, for search and sharing", ({ file }) => {
     else expect(canonical).toBe(`https://hearth.example/${file.replace(/index\.html$/, "")}`);
   });
 
-  it("links only to pages that were built", () => {
+  it("links only to pages, and places on them, that were built", () => {
     for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
-      const path = link.getAttribute("href")!.split("#")[0]!;
-      expect(existsSync(join(DIST, path, "index.html")), `${file}: ${path}`).toBe(true);
+      const [path, fragment] = link.getAttribute("href")!.split("#") as [string, string?];
+      const target = path.endsWith(".html") ? path : join(path, "index.html");
+      expect(existsSync(join(DIST, target)), `${file}: ${path}`).toBe(true);
+      if (fragment)
+        expect(dom(target).getElementById(fragment), `${file}: ${path}#${fragment}`).not.toBeNull();
+    }
+  });
+
+  it("asks only for files that were built", () => {
+    for (const element of dom(file).querySelectorAll("link[href^='/'], [src^='/']")) {
+      const url = (element.getAttribute("href") ?? element.getAttribute("src"))!.split(/[?#]/)[0]!;
+      const target = url.endsWith("/") ? join(url, "index.html") : url;
+      expect(existsSync(join(DIST, target)), `${file}: ${url}`).toBe(true);
     }
   });
 });
@@ -106,27 +117,78 @@ describe("for search engines", () => {
   });
 });
 
-describe("the bundle", () => {
-  const assets = files(join(DIST, "_next"));
+describe("the export", () => {
+  const all = files(DIST);
+  const html = all.filter((path) => path.endsWith(".html"));
+  const css = all.filter((path) => path.endsWith(".css"));
 
-  it("has no client component of its own: the only scripts are the ones Next.js brings", () => {
+  it("has no client component of its own, which is what lets the build drop the runtime", () => {
     const sources = files(join(ROOT, "app")).filter((path) => /\.tsx?$/.test(path));
     for (const path of sources)
       expect(readFileSync(path, "utf8"), path).not.toMatch(/^"use client"/m);
   });
 
-  it("has one minified stylesheet", () => {
-    const css = assets.filter((path) => path.endsWith(".css"));
-    expect(css).toHaveLength(1);
-    expect(readFileSync(css[0] as string, "utf8")).not.toMatch(/\n\s/);
+  it("has no executable script on any page: none inline, none loaded, none preloaded, no handler", () => {
+    expect(html.length).toBeGreaterThanOrEqual(PAGES.length);
+    for (const path of html) {
+      const document = new JSDOM(readFileSync(path, "utf8")).window.document;
+      const scripts = [...document.querySelectorAll("script")].map((script) => script.type);
+      expect(
+        scripts.filter((type) => type !== "application/ld+json"),
+        path,
+      ).toEqual([]);
+      expect(
+        document.querySelectorAll('link[rel="modulepreload"], link[as="script"]'),
+        path,
+      ).toHaveLength(0);
+      for (const element of document.querySelectorAll("*"))
+        for (const { name, value } of element.attributes) {
+          expect(name, `${path}: <${element.localName} ${name}>`).not.toMatch(/^on/);
+          expect(value, `${path}: <${element.localName} ${name}>`).not.toMatch(/^\s*javascript:/i);
+        }
+    }
   });
 
-  it("keeps the JavaScript Next.js brings under a budget", () => {
-    const bytes = assets
-      .filter((path) => path.endsWith(".js"))
-      .reduce((total, path) => total + statSync(path).size, 0);
-    // React and the router, before compression. The pages themselves are HTML.
-    expect(bytes).toBeLessThan(700_000);
+  it("ships no JavaScript file, and none of the data only a client router would fetch", () => {
+    const names = all.map((path) => path.slice(DIST.length));
+    expect(names.filter((name) => /\.m?js$/.test(name))).toEqual([]);
+    expect(names.filter((name) => name.endsWith(".txt"))).toEqual(["/robots.txt"]);
+  });
+
+  it("has one minified stylesheet, and every file it names was built", () => {
+    expect(css).toHaveLength(1);
+    const sheet = readFileSync(css[0] as string, "utf8");
+    expect(sheet).not.toMatch(/\n\s/);
+    for (const [, url] of sheet.matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
+      if (url!.startsWith("data:")) continue;
+      const target = url!.startsWith("/") ? join(DIST, url!) : join(css[0] as string, "..", url!);
+      expect(existsSync(target), url).toBe(true);
+    }
+  });
+
+  it("keeps its motion in the stylesheet: page transitions and scroll-driven effects need no script", () => {
+    const sheet = readFileSync(css[0] as string, "utf8");
+    expect(sheet).toMatch(/@view-transition\s*\{\s*navigation:\s*auto/);
+    expect(sheet).toContain("view-transition-name:masthead");
+    expect(sheet).toMatch(/animation-timeline:\s*view\(\)/);
+    expect(sheet).toMatch(/animation-timeline:\s*scroll\(root\)/);
+    expect(sheet).toMatch(/animation-range:\s*entry 10% entry 80%/);
+    // What those rules move is on the pages.
+    expect(dom("index.html").querySelector(".stamp text")).not.toBeNull();
+    expect(dom("index.html").querySelector(".card")).not.toBeNull();
+    expect(dom("menu/index.html").querySelector(".item")).not.toBeNull();
+  });
+
+  it.each(PAGES)("keeps $name, with everything it loads, under 50 KB", ({ file }) => {
+    const document = dom(file);
+    const loaded = new Set([join(DIST, file)]);
+    for (const link of document.querySelectorAll("link[rel=stylesheet], link[rel=preload]"))
+      loaded.add(join(DIST, link.getAttribute("href")!.split("?")[0]!));
+    for (const element of document.querySelectorAll("[src]"))
+      loaded.add(join(DIST, element.getAttribute("src")!.split("?")[0]!));
+    const bytes = [...loaded].reduce((total, path) => total + statSync(path).size, 0);
+    // Before compression: the page, its stylesheet and one font. The home page measures 44 KB.
+    expect(bytes).toBeLessThan(50_000);
   });
 });
 
@@ -164,6 +226,21 @@ describe("the order form", () => {
         control.closest("label") ?? document.querySelector(`label[for="${control.id}"]`);
       expect(labelled, `${control.getAttribute("name")} has no label`).toBeTruthy();
     }
+  });
+
+  it("leaves checking to the browser: required fields, typed inputs, and nothing switching that off", () => {
+    const form = dom("index.html").querySelector("form.form")!;
+    expect(form.hasAttribute("novalidate")).toBe(false);
+    const required = [...form.querySelectorAll("[required]")].map((field) => field.id);
+    expect(required).toEqual(["name", "email", "pickup"]);
+    expect(form.querySelector("#email")?.getAttribute("type")).toBe("email");
+    expect(form.querySelector("#pickup")?.getAttribute("type")).toBe("date");
+    expect(form.querySelectorAll('button:not([type]), button[type="submit"]')).toHaveLength(1);
+  });
+
+  it("comes back to a page of this site once the order is in", () => {
+    const back = dom("index.html").querySelector('form input[name="_redirect"]');
+    expect(existsSync(join(DIST, back!.getAttribute("value")!, "index.html"))).toBe(true);
   });
 
   it("sends every ticked item under one name, as a checkbox group", () => {
