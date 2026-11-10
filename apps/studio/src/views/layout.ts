@@ -558,6 +558,8 @@ body.plain { display: block; }
 .site-ticks label { overflow-wrap: anywhere; }
 .editor-sites { flex: 1 1 100%; margin: 0; }
 .folders li > form { margin: 0; }
+.folders li > input { flex: none; margin: 0; }
+.folders label { cursor: pointer; }
 .notice.warn { margin: 0 0 .85rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--ink); font-size: .85rem; }
 .app-logo { display: flex; gap: .9rem; align-items: center; margin: 1rem 0; padding: .75rem .9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .app-logo img { flex: none; border-radius: 12px; }
@@ -1163,8 +1165,7 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
 .sign-in-form > .theme-switch { width: max-content; margin: 2.5rem auto 0; }
 .sign-in-github { margin: 0; }
 .sign-in-github .button { width: 100%; min-height: 2.75rem; justify-content: center; font-size: .9rem; }
-.sign-in-or { display: flex; align-items: center; gap: .75rem; margin: 1.1rem 0; font-size: .75rem; color: var(--ink-2); }
-.sign-in-or::before, .sign-in-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.sign-in-other { margin: 1rem 0 0; text-align: center; font-size: .8rem; }
 @media (max-width: 52rem) {
   .sign-in { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .sign-in-art { gap: 1.5rem; padding: 1.1rem 1.25rem 1.25rem; }

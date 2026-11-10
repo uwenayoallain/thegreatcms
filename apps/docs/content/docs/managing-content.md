@@ -16,10 +16,12 @@ On your own machine `npx greatcms studio`, run in the site's folder, opens the
 studio with that site already connected. On a shared studio, connecting is the
 owner's job, done once per site from **Connect a site**:
 
+- **From GitHub.** The repositories you gave the studio on GitHub are
+  listed, those already using GreatCMS first. Tick any number and press
+  **Add selected**: one with a schema opens as a site, any other waits for a
+  starter.
 - **In the sites folder.** Folders in the studio's sites folder are listed;
   one with a schema connects with a click.
-- **From GitHub.** Once GitHub is connected on **Git access**, the
-  repositories you allowed are listed and each copies with a click.
 - **Copy from Git.** Paste any https or SSH address. Only files are fetched:
   no hooks, no submodules.
 - **By path.** Any other folder on the machine.
@@ -151,7 +153,8 @@ the sites that person may open. Editors change content: regions, entries,
 images, drafts and publishes. When two people have the same content open, each
 sees the other's name.
 
-With GitHub connected, people can **Continue with GitHub** instead. Whoever can
+With GitHub connected, **Continue with GitHub** is the sign-in, and a password
+is a link away. Whoever can
 push to a site's repository on GitHub edits that site here, and sees only that
 site. Give or remove access on GitHub: nothing is set up in the studio.
 

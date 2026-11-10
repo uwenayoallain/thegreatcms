@@ -117,10 +117,15 @@ export function signInPage(
     editors?: boolean;
     /** Whether the studio's GitHub App can sign people in. */
     github?: boolean;
+    /** Asked for by address, or after a password was tried: the password form instead. */
+    password?: boolean;
   } = {},
 ): string {
   // A `next` that is a full address is a sibling host, such as the preview, asking us to vouch.
   const onward = options.next?.startsWith("/") === false ? new URL(options.next).host : null;
+  const next = options.next ? `next=${encodeURIComponent(options.next)}` : "";
+  // GitHub is how people sign in once the studio has its app; a password is the way round it.
+  const withGithub = options.github && !options.password;
   return outside(
     "Sign in",
     html`
@@ -136,48 +141,56 @@ export function signInPage(
         </p>
       </div>
       ${
-        options.github
+        withGithub
           ? html`<p class="sign-in-github">
-                <a
-                  class="button"
-                  href="/sign-in/github${options.next ? `?next=${encodeURIComponent(options.next)}` : ""}"
+                <a class="button" href="/sign-in/github${next ? `?${next}` : ""}"
                   >${icon("github")} Continue with GitHub</a
                 >
               </p>
-              <p class="sign-in-or"><span>or with a password</span></p>`
-          : ""
+              <p class="sign-in-other">
+                <a href="/sign-in?with=password${next ? `&${next}` : ""}">Use a password instead</a>
+              </p>`
+          : html`<form method="POST" action="/sign-in">
+                ${options.next ? html`<input type="hidden" name="next" value="${options.next}" />` : ""}
+                ${
+                  options.editors
+                    ? html`<div class="field">
+                        <label for="email">Email</label>
+                        <span class="hint" id="email-hint"
+                          >Leave empty to sign in as the owner.</span
+                        >
+                        <input
+                          type="email"
+                          id="email"
+                          name="email"
+                          autocomplete="username"
+                          aria-describedby="email-hint"
+                          value="${options.email ?? ""}"
+                        />
+                      </div>`
+                    : ""
+                }
+                <div class="field">
+                  <label for="password">Password</label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    autocomplete="current-password"
+                    required
+                    autofocus
+                  />
+                </div>
+                <div class="actions"><button type="submit">Sign in</button></div>
+              </form>
+              ${
+                options.github
+                  ? html`<p class="sign-in-other">
+                      <a href="/sign-in/github${next ? `?${next}` : ""}">Continue with GitHub</a>
+                    </p>`
+                  : ""
+              }`
       }
-      <form method="POST" action="/sign-in">
-        ${options.next ? html`<input type="hidden" name="next" value="${options.next}" />` : ""}
-        ${
-          options.editors
-            ? html`<div class="field">
-                <label for="email">Email</label>
-                <span class="hint" id="email-hint">Leave empty to sign in as the owner.</span>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  autocomplete="username"
-                  aria-describedby="email-hint"
-                  value="${options.email ?? ""}"
-                />
-              </div>`
-            : ""
-        }
-        <div class="field">
-          <label for="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            autocomplete="current-password"
-            required
-            autofocus
-          />
-        </div>
-        <div class="actions"><button type="submit">Sign in</button></div>
-      </form>
       ${
         onward
           ? html`<p class="hint outsider">

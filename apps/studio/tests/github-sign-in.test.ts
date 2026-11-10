@@ -329,15 +329,24 @@ describe("an app made before sign-in existed", () => {
 });
 
 describe("the sign-in page", () => {
-  it("offers GitHub as a plain link above the password, in valid HTML with no script", async () => {
+  it("offers GitHub as the way in, a plain link with the password a click away, in valid HTML with no script", async () => {
     const body = await text(app.request("/sign-in?next=%2Fsites%2Fsite-1"));
     const page = new JSDOM(body).window.document;
     const link = page.querySelector(".sign-in-github a") as HTMLAnchorElement;
     expect(link.textContent?.trim()).toBe("Continue with GitHub");
     expect(link.getAttribute("href")).toBe("/sign-in/github?next=%2Fsites%2Fsite-1");
-    expect(
-      link.compareDocumentPosition(page.querySelector("form[action='/sign-in']") as Node) & 4, // DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(page.querySelector("form[action='/sign-in']")).toBeNull();
+    expect(page.querySelector("input[type=password]")).toBeNull();
+    const other = page.querySelector(".sign-in-other a") as HTMLAnchorElement;
+    expect(other.getAttribute("href")).toBe("/sign-in?with=password&next=%2Fsites%2Fsite-1");
+
+    const typed = new JSDOM(await text(app.request(other.getAttribute("href") as string))).window
+      .document;
+    expect(typed.querySelector("form[action='/sign-in'] input[type=password]")).toBeTruthy();
+    expect(typed.querySelector("input[name=next]")?.getAttribute("value")).toBe("/sites/site-1");
+    expect(typed.querySelector(".sign-in-other a")?.getAttribute("href")).toBe(
+      "/sign-in/github?next=%2Fsites%2Fsite-1",
+    );
     expect(page.querySelectorAll("script")).toHaveLength(0);
     expect(page.querySelectorAll("img")).toHaveLength(0);
 

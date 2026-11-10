@@ -544,19 +544,23 @@ describe.skipIf(!browser)("layout stability", () => {
   });
 
   it.each([375, 1280])(
-    "at %ipx, lines the GitHub button up with the password form, with no script",
+    "at %ipx, gives the GitHub button the width of the password form's, with no script",
     async (width) => {
       const context = await newContext(width, { signedOut: true, js: false });
       try {
         const page = await context.newPage();
         await page.goto(`${origin}/sign-in`);
         const github = await page.locator(".sign-in-github a").boundingBox();
+        await expect(page.locator("input[type=password]").count()).resolves.toBe(0);
+        const other = await page.locator(".sign-in-other a").boundingBox();
+        expect(github && other).toBeTruthy();
+        expect(github!.height).toBeGreaterThanOrEqual(44);
+        expect(github!.y + github!.height).toBeLessThan(other!.y);
+        await page.goto(`${origin}/sign-in?with=password`);
         const submit = await page.locator("form[action='/sign-in'] button").boundingBox();
-        expect(github && submit).toBeTruthy();
         expect(github!.x).toBe(submit!.x);
         expect(github!.width).toBe(submit!.width);
-        expect(github!.height).toBeGreaterThanOrEqual(44);
-        expect(github!.y + github!.height).toBeLessThan(submit!.y);
+        await page.goto(`${origin}/sign-in`);
         const overflow = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );

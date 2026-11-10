@@ -44,6 +44,8 @@ export interface Repository {
   cloneUrl: string;
   private: boolean;
   defaultBranch: string;
+  /** The installation that reaches it, for asking GitHub about its files. */
+  installationId?: number;
 }
 
 /**
@@ -74,6 +76,9 @@ export class GitHubError extends Error {
 /** Creations waiting for GitHub to send the browser back; the oldest is dropped past this. */
 const MAX_STATES = 20;
 
+/** The most repositories looked into for a schema on one page. */
+const MAX_SCHEMA_CHECKS = 300;
+
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** The least an app needs to clone and push: file contents, and metadata GitHub always grants. */
@@ -92,6 +97,7 @@ export class GitHub {
   private readonly tokens = new Map<number, { token: Promise<string>; until: number }>();
   private listed: { at: number; value: Promise<Repository[]> } | undefined;
   private installed: { at: number; value: Promise<Installation[]> } | undefined;
+  private readonly schemas = new Map<string, { at: number; value: Promise<boolean> }>();
 
   constructor(
     private readonly file: string,
@@ -409,11 +415,53 @@ export class GitHub {
           cloneUrl: repo.clone_url,
           private: repo.private,
           defaultBranch: repo.default_branch,
+          installationId: installation.id,
         });
       }
       if (answer.repositories.length < 100) break;
     }
     return all;
+  }
+
+  /** The repositories among these that already hold a GreatCMS schema, by full name. */
+  async withSchema(repositories: Repository[]): Promise<Set<string>> {
+    const queue = repositories.slice(0, MAX_SCHEMA_CHECKS);
+    const found = new Set<string>();
+    const worker = async () => {
+      for (let repo = queue.shift(); repo; repo = queue.shift()) {
+        // oxlint-disable-next-line no-await-in-loop -- a few at a time, so GitHub is not flooded
+        if (await this.hasSchema(repo).catch(() => false)) found.add(repo.fullName);
+      }
+    };
+    await Promise.all(Array.from({ length: 8 }, worker));
+    return found;
+  }
+
+  /** Whether a repository has `.cms/schema.*` on its main branch; asked again after ten minutes. */
+  private hasSchema(repo: Repository): Promise<boolean> {
+    const known = this.schemas.get(repo.fullName);
+    if (known && Date.now() - known.at < 10 * 60_000) return known.value;
+    const value = (async () => {
+      if (repo.installationId === undefined) return false;
+      const path = `/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/contents/.cms`;
+      try {
+        const entries = await this.request(path, { token: await this.token(repo.installationId) });
+        return (
+          Array.isArray(entries) &&
+          entries.some(
+            (entry: { type?: string; name?: string }) =>
+              entry?.type === "file" && /^schema\.(?:ya?ml|json)$/.test(String(entry.name)),
+          )
+        );
+      } catch (error) {
+        // No such folder, or a repository with no commits yet.
+        if (error instanceof GitHubError && error.status === 404) return false;
+        throw error;
+      }
+    })();
+    this.schemas.set(repo.fullName, { at: Date.now(), value });
+    value.catch(() => this.schemas.delete(repo.fullName));
+    return value;
   }
 
   /**
@@ -478,6 +526,7 @@ export class GitHub {
     this.tokens.clear();
     this.listed = undefined;
     this.installed = undefined;
+    this.schemas.clear();
   }
 
   /** An installation token, reused until five minutes before it expires; one request at a time. */

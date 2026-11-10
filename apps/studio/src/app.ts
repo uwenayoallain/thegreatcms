@@ -111,6 +111,7 @@ import { newSitePage, setupPage, sitesPage } from "./views/sites-pages.js";
 import {
   type CloneGit,
   type CloneLimits,
+  type CloneState,
   Clones,
   cloneUrlProblem,
   folderFromUrl,
@@ -251,6 +252,9 @@ type Variables = {
   /** Why a "publish later" was not scheduled; the editor shows it with the form as submitted. */
   refused?: string;
 };
+
+/** The most repositories copied from one tick-list. */
+const MAX_ADDED_AT_ONCE = 20;
 
 export function createApp(options: AppOptions) {
   const { store, password, secret } = options;
@@ -740,6 +744,7 @@ export function createApp(options: AppOptions) {
       "/sites/setup",
       "/sites/clone",
       "/sites/clone/*",
+      "/sites/github",
       "/git-access",
       "/git-access/*",
       "/editors",
@@ -769,6 +774,7 @@ export function createApp(options: AppOptions) {
     "/sites/setup",
     "/sites/clone",
     "/sites/clone/*",
+    "/sites/github",
     "/git-access",
     "/git-access/*",
     "/sites/:id/settings",
@@ -982,7 +988,14 @@ export function createApp(options: AppOptions) {
       if (next) signIn(c, session!.actor);
       return c.redirect(next ?? "/", 303);
     }
-    return c.html(signInPage({ next, editors: hasEditors(), github: githubSignIn() }));
+    return c.html(
+      signInPage({
+        next,
+        editors: hasEditors(),
+        github: githubSignIn(),
+        password: c.req.query("with") === "password",
+      }),
+    );
   });
 
   /** Sends the browser to GitHub to say who it is, remembering in a cookie that it was sent. */
@@ -1046,8 +1059,11 @@ export function createApp(options: AppOptions) {
     signIn(c, `github:${person.id}`);
     c.header("Set-Cookie", clearGithubTrip(isSecure(c)), { append: true });
     const all = store.listSites();
-    const sites = isGithubOwner(person) ? all : ((await access?.among(person, all)) ?? []);
-    return c.redirect(next ?? (sites.length === 1 ? `/sites/${sites[0]!.id}` : "/"), 303);
+    const owner = isGithubOwner(person);
+    const sites = owner ? all : ((await access?.among(person, all)) ?? []);
+    // An owner with nothing here yet lands on their repositories, ready to add.
+    const first = owner && all.length === 0 && options.sitesRoot ? "/sites/new" : "/";
+    return c.redirect(next ?? (sites.length === 1 ? `/sites/${sites[0]!.id}` : first), 303);
   });
 
   const editorsView = (extra: Partial<Parameters<typeof editorsPage>[0]> = {}) =>
@@ -1145,6 +1161,7 @@ export function createApp(options: AppOptions) {
       return c.html(
         signInPage({
           error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+          password: true,
         }),
         429,
         { "retry-after": String(limit.retryAfterSeconds) },
@@ -1152,7 +1169,9 @@ export function createApp(options: AppOptions) {
     }
 
     const raw = await readLimited(c.req.raw, MAX_SIGN_IN_BYTES);
-    if (!raw) return c.html(signInPage({ error: "That request was too large." }), 413);
+    if (!raw) {
+      return c.html(signInPage({ error: "That request was too large.", password: true }), 413);
+    }
     const form = await new Response(raw, {
       headers: { "content-type": c.req.header("content-type") ?? "" },
     }).formData();
@@ -1177,6 +1196,7 @@ export function createApp(options: AppOptions) {
           email,
           editors: hasEditors(),
           github: githubSignIn(),
+          password: true,
         }),
         401,
       );
@@ -1186,7 +1206,9 @@ export function createApp(options: AppOptions) {
     signIn(c, actor);
     const sites = await sitesAfterSignIn(actor);
     const only = sites.length === 1 ? `/sites/${sites[0]!.id}` : "/";
-    return c.redirect(next ?? only, 303);
+    // A studio with no GitHub App yet: the owner's first stop is making one.
+    const setUp = actor === "studio" && hub && !hub.config() ? "/git-access" : only;
+    return c.redirect(next ?? setUp, 303);
   });
 
   app.post("/sign-out", (c) => {
@@ -1271,6 +1293,7 @@ export function createApp(options: AppOptions) {
     const installUrl = github.installUrl() ?? undefined;
     try {
       const repositories = await github.repositories();
+      const uses = await github.withSchema(repositories);
       // A folder is a repository's copy when its origin says so, whatever the folder is called.
       const origins = await Promise.all(folders.map((folder) => originOf(folder.path)));
       const copyOf = new Map(
@@ -1283,22 +1306,31 @@ export function createApp(options: AppOptions) {
       return {
         connected: true,
         installUrl,
-        repositories: repositories.map((repo) => {
-          const copy = copyOf.get(sameRepository(repo.cloneUrl));
-          return {
-            fullName: repo.fullName,
-            cloneUrl: repo.cloneUrl,
-            private: repo.private,
-            folder: names.has(repo.name.toLowerCase()) ? "" : repo.name,
-            state: copy?.state ?? null,
-            siteId: copy?.siteId,
-          };
-        }),
+        repositories: repositories
+          .map((repo) => {
+            const copy = copyOf.get(sameRepository(repo.cloneUrl));
+            return {
+              fullName: repo.fullName,
+              cloneUrl: repo.cloneUrl,
+              private: repo.private,
+              uses: uses.has(repo.fullName),
+              folder: names.has(repo.name.toLowerCase())
+                ? repo.fullName.replace("/", "-")
+                : repo.name,
+              state: copy?.state ?? null,
+              siteId: copy?.siteId,
+            };
+          })
+          // The ones that already use GreatCMS first: they are the likeliest to be wanted.
+          .toSorted((a, b) => Number(b.uses) - Number(a.uses)),
       };
     } catch (error) {
       return { connected: true, installUrl, error: describeError(error) };
     }
   };
+
+  /** Copies chosen from GitHub that wait their turn; shown as being copied. */
+  const waiting = new Map<string, CloneState>();
 
   /** The connect page, with the sites folder's contents when there is one. */
   const connectPage = async (extra: Parameters<typeof newSitePage>[0] = {}) => {
@@ -1306,7 +1338,7 @@ export function createApp(options: AppOptions) {
     return newSitePage({
       sitesRoot: options.sitesRoot,
       folders,
-      clones: clones?.list() ?? [],
+      clones: [...(clones?.list() ?? []), ...waiting.values()],
       previewTemplate: options.previewUrl,
       gitAccess: Boolean(options.gitAccess || options.github),
       github: await githubRepositories(folders),
@@ -1315,6 +1347,18 @@ export function createApp(options: AppOptions) {
   };
 
   app.get("/sites/new", async (c) => c.html(await connectPage()));
+
+  const newSite = (values: { name: string; path: string; devUrl: string }): Site => ({
+    id: crypto.randomUUID(),
+    name: values.name || nameFromFolder(basename(values.path)),
+    path: values.path,
+    devUrl:
+      values.devUrl || (previews ? previews.suggest(basename(values.path), store.listSites()) : ""),
+    // Off until someone chooses where publishes go: pushing a default branch can put them live.
+    pushAfterPublish: false,
+    deployRoot: "",
+    createdAt: new Date().toISOString(),
+  });
 
   /**
    * Connects a folder that has a schema: checked by reading it, stored only if that works.
@@ -1327,18 +1371,7 @@ export function createApp(options: AppOptions) {
     // One folder, one site: a second connection would show the same content under two names.
     const existing = store.listSites().find((known) => known.path === values.path);
     if (existing) return c.redirect(`/sites/${existing.id}`, 303);
-    const site: Site = {
-      id: crypto.randomUUID(),
-      name: values.name || nameFromFolder(basename(values.path)),
-      path: values.path,
-      devUrl:
-        values.devUrl ||
-        (previews ? previews.suggest(basename(values.path), store.listSites()) : ""),
-      // Off until someone chooses where publishes go: pushing a default branch can put them live.
-      pushAfterPublish: false,
-      deployRoot: "",
-      createdAt: new Date().toISOString(),
-    };
+    const site = newSite(values);
     if (!hasSchema(site.path)) {
       return c.html(
         setupPage({
@@ -1464,6 +1497,53 @@ export function createApp(options: AppOptions) {
     return connect(c, values);
   });
 
+  /** Starts copying a repository into the sites folder: why it cannot, or the copy itself. */
+  const beginCopy = async (cloneValues: {
+    url: string;
+    branch: string;
+    folder: string;
+  }): Promise<string | { copied: Promise<void> }> => {
+    if (!clones || !options.sitesRoot) return "This studio has no sites folder.";
+    const urlProblem = cloneUrlProblem(cloneValues.url);
+    if (urlProblem) return urlProblem;
+    if (cloneValues.branch && !isBranchName(cloneValues.branch)) {
+      return "That branch name is not one Git accepts.";
+    }
+    const folder = cloneValues.folder || folderFromUrl(cloneValues.url);
+    if (!isFolderName(folder)) {
+      return "Give a folder name of letters, digits, dots, dashes and underscores.";
+    }
+    const target = join(options.sitesRoot, folder);
+    if (!isInside(options.sitesRoot, target) || existsSync(target)) {
+      return `${target} already exists: choose another folder name.`;
+    }
+    const busy = clones.busy(folder);
+    if (busy) return busy;
+    let config: Array<[string, string]> = [];
+    try {
+      config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
+    } catch (error) {
+      return describeError(error);
+    }
+    // Looked up once: git is then held to the addresses that were checked.
+    const route = options.clonePrivate
+      ? undefined
+      : await cloneRoute(cloneValues.url, config, options.resolveHost, options.sshLookup);
+    if (route?.private) {
+      return "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.";
+    }
+    // Asked again: another copy may have started while the address was being looked up.
+    const taken = clones.busy(folder);
+    if (taken) return taken;
+    // Wrapped, so whoever asked hears that it started without waiting for it to finish.
+    return {
+      copied: clones.start(cloneValues.url, folder, cloneValues.branch, [
+        ...config,
+        ...(route?.pin ?? []),
+      ]),
+    };
+  };
+
   /** Copies a repository into the sites folder; the page shows it until it finishes. */
   app.post("/sites/clone", async (c) => {
     if (!clones || !options.sitesRoot) return c.notFound();
@@ -1473,45 +1553,72 @@ export function createApp(options: AppOptions) {
       branch: String(form.get("branch") ?? "").trim(),
       folder: String(form.get("folder") ?? "").trim(),
     };
-    const again = async (cloneError: string) =>
-      c.html(await connectPage({ error: "Nothing was copied.", cloneError, cloneValues }), 422);
-    const urlProblem = cloneUrlProblem(cloneValues.url);
-    if (urlProblem) return again(urlProblem);
-    if (cloneValues.branch && !isBranchName(cloneValues.branch)) {
-      return again("That branch name is not one Git accepts.");
-    }
-    const folder = cloneValues.folder || folderFromUrl(cloneValues.url);
-    if (!isFolderName(folder)) {
-      return again("Give a folder name of letters, digits, dots, dashes and underscores.");
-    }
-    const target = join(options.sitesRoot, folder);
-    if (!isInside(options.sitesRoot, target) || existsSync(target)) {
-      return again(`${target} already exists: choose another folder name.`);
-    }
-    const busy = clones.busy(folder);
-    if (busy) return again(busy);
-    let config: Array<[string, string]> = [];
-    try {
-      config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
-    } catch (error) {
-      return again(describeError(error));
-    }
-    // Looked up once: git is then held to the addresses that were checked.
-    const route = options.clonePrivate
-      ? undefined
-      : await cloneRoute(cloneValues.url, config, options.resolveHost, options.sshLookup);
-    if (route?.private) {
-      return again(
-        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
+    const started = await beginCopy(cloneValues);
+    if (typeof started === "string") {
+      return c.html(
+        await connectPage({ error: "Nothing was copied.", cloneError: started, cloneValues }),
+        422,
       );
     }
-    // Asked again: another copy may have started while the address was being looked up.
-    const taken = clones.busy(folder);
-    if (taken) return again(taken);
-    void clones.start(cloneValues.url, folder, cloneValues.branch, [
-      ...config,
-      ...(route?.pin ?? []),
-    ]);
+    void started.copied;
+    return c.redirect("/sites/new", 303);
+  });
+
+  /** Copies each chosen repository in turn, and connects the ones that already hold a schema. */
+  const addFromGithub = async (chosen: Array<{ folder: string; url: string; name: string }>) => {
+    for (const { folder, url, name } of chosen) {
+      // oxlint-disable-next-line no-await-in-loop -- one copy at a time, so the limit is never hit
+      const started = await beginCopy({ url, branch: "", folder }).catch(describeError);
+      waiting.delete(folder);
+      if (typeof started === "string") {
+        clones?.fail(folder, url, started);
+        continue;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- see above
+      await started.copied;
+      const path = join(options.sitesRoot as string, folder);
+      if (!hasSchema(path) || store.listSites().some((known) => known.path === path)) continue;
+      const site = newSite({ name: nameFromFolder(name), path, devUrl: "" });
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- see above
+        await new SiteClient(site).context();
+      } catch {
+        // A schema that does not read: left in the sites folder, where connecting it says why.
+        continue;
+      }
+      store.addSite(site);
+      sitesChanged();
+      clones?.dismiss(folder);
+    }
+  };
+
+  /** Adds the repositories ticked on the connect page: only ever ones the GitHub App was given. */
+  app.post("/sites/github", async (c) => {
+    if (!clones || !options.sitesRoot || !options.github?.config()) return c.notFound();
+    const form = await c.req.formData();
+    const wanted = new Set(form.getAll("repo").map(String));
+    const folders = listFolders(options.sitesRoot, store.listSites());
+    const listed = await githubRepositories(folders);
+    if (listed?.error) return c.html(await connectPage({ error: listed.error }), 502);
+    const chosen = (listed?.repositories ?? [])
+      .filter((repo) => wanted.has(repo.fullName) && repo.state === null)
+      .filter((repo) => !waiting.has(repo.folder) && !clones.busy(repo.folder)?.includes("already"))
+      .slice(0, MAX_ADDED_AT_ONCE)
+      .map((repo) => ({
+        folder: repo.folder,
+        url: repo.cloneUrl,
+        name: repo.fullName.split("/")[1] as string,
+      }));
+    if (chosen.length === 0) {
+      return c.html(
+        await connectPage({ error: "Nothing was added: tick at least one repository." }),
+        422,
+      );
+    }
+    for (const { folder, url } of chosen) waiting.set(folder, { state: "cloning", folder, url });
+    void addFromGithub(chosen).finally(() => {
+      for (const { folder } of chosen) waiting.delete(folder);
+    });
     return c.redirect("/sites/new", 303);
   });
 

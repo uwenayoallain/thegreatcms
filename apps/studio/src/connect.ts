@@ -536,6 +536,12 @@ export class Clones {
     if (this.jobs.get(folder)?.state !== "cloning") this.jobs.delete(folder);
   }
 
+  /** Records a copy that could not start, so the page says why. */
+  fail(folder: string, url: string, reason: string): void {
+    if (this.jobs.get(folder)?.state === "cloning") return;
+    this.jobs.set(folder, { state: "failed", folder, url, reason });
+  }
+
   /** Why a copy into `folder` cannot start now, or null when it can. */
   busy(folder: string): string | null {
     if (this.jobs.get(folder)?.state === "cloning") return `${folder} is already being copied.`;

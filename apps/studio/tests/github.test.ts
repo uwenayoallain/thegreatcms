@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createVerify, generateKeyPairSync } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HtmlValidate } from "html-validate";
@@ -25,6 +25,8 @@ let file: string;
 let calls: Array<{ method: string; path: string; auth: string }>;
 let repositoryCount: number;
 let tokenNumber: number;
+/** The repositories whose `.cms` folder holds a schema. */
+let schemaIn: Set<string>;
 
 function json(body: unknown, status = 200) {
   return new Response(status === 204 ? null : JSON.stringify(body), { status });
@@ -72,6 +74,10 @@ const fakeGitHub: typeof fetch = async (input, init) => {
       })),
     });
   }
+  const contents = /^\/repos\/(acme\/site-\d+)\/contents\/\.cms$/.exec(url.pathname);
+  if (contents && schemaIn.has(contents[1] as string)) {
+    return json([{ type: "file", name: "schema.yaml" }]);
+  }
   return json({ message: "Not Found" }, 404);
 };
 
@@ -90,6 +96,7 @@ beforeEach(() => {
   calls = [];
   repositoryCount = 2;
   tokenNumber = 0;
+  schemaIn = new Set();
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -271,14 +278,25 @@ function post(target: ReturnType<typeof createApp>, path: string, fields: Record
   });
 }
 
+function signIn(target: ReturnType<typeof createApp>) {
+  return target.request("/sign-in", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", origin: "http://localhost" },
+    body: new URLSearchParams({ password: PASSWORD }),
+  });
+}
+
 describe("the pages", () => {
   let root: string;
   let cloned: Array<{ args: string[]; config: Array<[string, string]> }>;
+  /** What a copy brings with it, by repository name; a name not here copies nothing. */
+  let copies: Record<string, Record<string, string>>;
 
   beforeEach(() => {
     root = join(dir, "sites");
     mkdirSync(root);
     cloned = [];
+    copies = {};
   });
 
   function app(github: GitHub) {
@@ -291,6 +309,15 @@ describe("the pages", () => {
       resolveHost: async () => ["140.82.112.3"],
       cloneGit: async (args, config) => {
         cloned.push({ args, config });
+        const target = args.at(-1) as string;
+        const files = copies[target.split("/").at(-1) as string];
+        if (!files) return;
+        execFileSync("git", ["init", "-q", target]);
+        execFileSync("git", ["-C", target, "remote", "add", "origin", args.at(-2) as string]);
+        for (const [name, content] of Object.entries(files)) {
+          mkdirSync(join(target, name, ".."), { recursive: true });
+          writeFileSync(join(target, name), content);
+        }
       },
     });
   }
@@ -353,22 +380,96 @@ describe("the pages", () => {
     );
   });
 
-  it("lists the app's repositories to copy with a click, signed in for that copy alone", async () => {
+  it("lists the app's repositories to tick and add, signed in for that copy alone", async () => {
     const target = app(await connected());
     const { document } = new JSDOM(
       await (await target.request("/sites/new", { headers: signedIn })).text(),
     ).window;
-    const rows = [...document.querySelectorAll("#github ~ .folders li")];
+    const rows = [...document.querySelectorAll("form[action='/sites/github'] .folders li")];
     expect(rows.map((row) => row.querySelector("strong")?.textContent)).toEqual([
       "acme/site-0",
       "acme/site-1",
     ]);
+    // Each name is the label of its own tick box, so a click on the name ticks it.
+    const box = rows[0]?.querySelector<HTMLInputElement>("input[type=checkbox][name=repo]");
+    expect(box?.value).toBe("acme/site-0");
+    expect(rows[0]?.querySelector("label")?.getAttribute("for")).toBe(box?.id);
+    expect(document.querySelectorAll("script")).toHaveLength(0);
 
-    const url = rows[0]?.querySelector<HTMLInputElement>("input[name=url]")?.value ?? "";
-    expect((await post(target, "/sites/clone", { url })).status).toBe(303);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect((await post(target, "/sites/github", { repo: "acme/site-0" })).status).toBe(303);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(cloned[0]?.args).toContain("https://github.com/acme/site-0.git");
     expect(cloned[0]?.config[0]?.[0]).toBe("http.https://github.com/.extraheader");
+  });
+
+  it("copies nothing the app was not given, and says so when nothing is ticked", async () => {
+    const target = app(await connected());
+    const answers = await Promise.all(
+      ["someone/else", "", "acme/site-0/../../x"].map((repo) =>
+        post(target, "/sites/github", { repo }),
+      ),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual([422, 422, 422]);
+    expect(await answers[0]!.text()).toContain("tick at least one repository");
+    expect(cloned).toEqual([]);
+  });
+
+  it("puts the repositories that already use GreatCMS first, and says which they are", async () => {
+    schemaIn.add("acme/site-1");
+    const target = app(await connected());
+    const { document } = new JSDOM(
+      await (await target.request("/sites/new", { headers: signedIn })).text(),
+    ).window;
+    const rows = [...document.querySelectorAll("form[action='/sites/github'] .folders li")];
+    expect(rows.map((row) => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      "acme/site-1 Private · Uses GreatCMS",
+      "acme/site-0 Private · Not set up yet",
+    ]);
+  });
+
+  it("adds every ticked repository: one with a schema opens as a site, one without waits for a starter", async () => {
+    copies = {
+      "site-0": { "README.md": "plain\n" },
+      "site-1": {
+        ".cms/schema.yaml":
+          "version: 1\nsite:\n  name: One\nregions:\n  home.hero:\n    label: Hero\n    fields:\n      heading: { type: text }\n",
+      },
+    };
+    const target = app(await connected());
+    const response = await target.request("/sites/github", {
+      method: "POST",
+      headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+      body: "repo=acme%2Fsite-0&repo=acme%2Fsite-1",
+    });
+    expect(response.status).toBe(303);
+    // Both are shown as being copied from the first moment, though they are copied in turn.
+    const during = await (await target.request("/sites/new", { headers: signedIn })).text();
+    expect(during).toContain('http-equiv="refresh"');
+    await expect
+      .poll(
+        async () =>
+          (await (await target.request("/", { headers: signedIn })).text()).includes("Site 1"),
+        {
+          timeout: 10_000,
+        },
+      )
+      .toBe(true);
+    expect(cloned.map((copy) => copy.args.at(-2))).toEqual([
+      "https://github.com/acme/site-0.git",
+      "https://github.com/acme/site-1.git",
+    ]);
+    const { document } = new JSDOM(
+      await (await target.request("/sites/new", { headers: signedIn })).text(),
+    ).window;
+    const rows = [...document.querySelectorAll("form[action='/sites/github'] .folders li")].map(
+      (row) => row.textContent?.replace(/\s+/g, " ").trim(),
+    );
+    expect(rows).toContain("acme/site-1 Private · Added Open acme/site-1");
+    expect(rows).toContain("acme/site-0 Private · In the sites folder");
+    expect(document.querySelector("a[href^='/sites/setup?path=']")?.textContent).toContain(
+      "site-0",
+    );
+    expect(document.querySelector("meta[http-equiv=refresh]")).toBeNull();
   });
 
   it("marks a repository already copied here by its origin, whatever the folder is called", async () => {
@@ -380,11 +481,11 @@ describe("the pages", () => {
     const { document } = new JSDOM(
       await (await target.request("/sites/new", { headers: signedIn })).text(),
     ).window;
-    const row = [...document.querySelectorAll("#github ~ .folders li")].find((li) =>
-      li.textContent?.includes("acme/site-1"),
+    const row = [...document.querySelectorAll("form[action='/sites/github'] .folders li")].find(
+      (li) => li.textContent?.includes("acme/site-1"),
     );
-    expect(row?.textContent).toContain("in the sites folder");
-    expect(row?.querySelector("form")).toBeNull();
+    expect(row?.textContent).toContain("In the sites folder");
+    expect(row?.querySelector("input")).toBeNull();
   });
 
   it("shows what the connected app reaches, and how to give it the GreatCMS logo", async () => {
@@ -417,11 +518,18 @@ describe("the pages", () => {
     ).toEqual([]);
   });
 
+  it("sends an owner signing in with the password to make the app, until there is one", async () => {
+    const fresh = await signIn(app(new GitHub(file, undefined, fakeGitHub)));
+    expect(fresh.headers.get("location")).toBe("/git-access");
+    const made = await signIn(app(await connected()));
+    expect(made.headers.get("location")).toBe("/");
+  });
+
   it("offers to connect GitHub where it is not connected yet", async () => {
     const target = app(new GitHub(file, undefined, fakeGitHub));
     const body = await (await target.request("/sites/new", { headers: signedIn })).text();
     expect(
-      new JSDOM(body).window.document.querySelector("#github ~ p a")?.getAttribute("href"),
+      new JSDOM(body).window.document.querySelector("#github ~ p a.button")?.getAttribute("href"),
     ).toBe("/git-access");
   });
 });

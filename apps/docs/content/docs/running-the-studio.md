@@ -99,12 +99,14 @@ directly: those headers are then the visitor's to forge.
 A site is a folder on the machine the studio runs on. **Connect a site** finds
 one three ways:
 
+- **From GitHub.** Connect GitHub once: the studio makes its own GitHub App
+  and you choose the repositories it may use. They are listed with the ones
+  that already use GreatCMS first; tick any number and **Add selected**
+  copies each, signing in with a token that lasts an hour. One with a schema
+  is connected as it lands; any other offers **Set up**.
 - **In the sites folder.** With `STUDIO_SITES_ROOT` set, the page lists the
   folders in it. One with a schema connects with a click, named after its
   folder; one without offers **Set up**.
-- **From GitHub.** Connect GitHub once on **Git access**: the studio makes
-  its own GitHub App, you choose the repositories it may use, and each copies
-  with a click, signing in with a token that lasts an hour.
 - **Copy from Git.** Paste any https or SSH address, without a token in it:
   for a private repository, save one on **Git access**. Only files are
   fetched: no hooks, submodules or redirects. The host is looked up once and
@@ -143,8 +145,10 @@ other's name; if both publish, the second is refused, not overwritten.
 
 ### Sign in with GitHub
 
-Once GitHub is connected on **Git access**, the sign-in page offers
-**Continue with GitHub**. Whoever GitHub lets push to a connected site's
+A new studio is opened once with `STUDIO_PASSWORD`, which leads straight to
+connecting GitHub. From then on the sign-in page is **Continue with GitHub**,
+with the password behind a link for the owner and for editors given one.
+Whoever GitHub lets push to a connected site's
 repository edits that site and sees no other: its content, images, history,
 search and inbox.
 

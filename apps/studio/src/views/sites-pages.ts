@@ -420,6 +420,8 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
   const working = clones.filter((clone) => clone.state === "cloning");
   const failed = clones.filter((clone) => clone.state === "failed");
   return html`
+    ${github ? githubList(github) : ""}
+
     <section class="connect-section" aria-labelledby="found">
       <h2 id="found">In the sites folder</h2>
       <p>
@@ -466,8 +468,6 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
           : html`<p class="muted">Nothing here yet. Copy a site from Git below.</p>`
       }
     </section>
-
-    ${github ? githubList(github) : ""}
 
     <section class="connect-section" aria-labelledby="clone">
       <h2 id="clone">Copy from Git</h2>
@@ -546,81 +546,90 @@ export interface GitHubRepositories {
     fullName: string;
     cloneUrl: string;
     private: boolean;
-    /** The folder it would be copied to; empty when that name is taken by another folder. */
+    /** Whether it already holds a GreatCMS schema. */
+    uses: boolean;
+    /** The folder it would be copied to. */
     folder: string;
     state: Folder["state"] | null;
     siteId?: string;
   }>;
 }
 
-/** The repositories the GitHub App was given, each a click from being copied here. */
+/** The repositories the GitHub App was given, to tick and add; those using GreatCMS come first. */
 function githubList(github: GitHubRepositories) {
   if (!github.connected) {
     return html`<section class="connect-section" aria-labelledby="github">
       <h2 id="github">From GitHub</h2>
-      <p>
-        <a href="/git-access">Connect GitHub</a> to pick from your repositories, private ones
-        included, instead of typing an address.
-      </p>
+      <p>Pick from your repositories, private ones included, instead of typing an address.</p>
+      <p><a class="button" href="/git-access">Connect GitHub</a></p>
     </section>`;
   }
   const repositories = github.repositories ?? [];
+  const addable = repositories.some((repo) => repo.state === null);
   return html`<section class="connect-section" aria-labelledby="github">
     <h2 id="github">From GitHub</h2>
     <p>
-      The repositories this studio's GitHub App may use.
+      The repositories you gave this studio on GitHub. Tick the ones to add: a repository that
+      already uses GreatCMS opens ready to edit, and any other gets a starter first.
       ${
         github.installUrl
           ? html`Missing one? <a href="${github.installUrl}">Choose repositories on GitHub</a>.`
           : ""
       }
-      <a href="/git-access">Manage the GitHub connection</a>.
     </p>
     ${
       github.error
         ? html`<p class="error-text">${github.error}</p>`
         : repositories.length
-          ? html`<ul class="folders" role="list">
-              ${repositories.map(
-                (repo) => html`<li>
-                  <div>
-                    <strong>${repo.fullName}</strong>
-                    <span class="muted"
-                      >${repo.private ? "Private" : "Public"}${
-                        repo.state === "connected"
-                          ? " · connected"
-                          : repo.state
-                            ? " · in the sites folder"
-                            : ""
-                      }</span
-                    >
-                  </div>
-                  ${
+          ? html`<form method="POST" action="/sites/github">
+              <ul class="folders" role="list">
+                ${repositories.map((repo, index) => {
+                  const about = `${repo.private ? "Private" : "Public"} · ${
                     repo.state === "connected"
-                      ? html`<a class="button secondary" href="/sites/${repo.siteId}"
-                          >Open<span class="visually-hidden"> ${repo.fullName}</span></a
-                        >`
+                      ? "Added"
                       : repo.state
-                        ? ""
-                        : html`<form method="POST" action="/sites/clone">
-                            <input type="hidden" name="url" value="${repo.cloneUrl}" />
-                            ${
-                              repo.folder
-                                ? ""
-                                : html`<input
-                                    type="hidden"
-                                    name="folder"
-                                    value="${repo.fullName.replace("/", "-")}"
-                                  />`
-                            }
-                            <button type="submit">
-                              Copy<span class="visually-hidden"> ${repo.fullName}</span>
-                            </button>
-                          </form>`
-                  }
-                </li>`,
-              )}
-            </ul>`
+                        ? "In the sites folder"
+                        : repo.uses
+                          ? "Uses GreatCMS"
+                          : "Not set up yet"
+                  }`;
+                  return html`<li>
+                    ${
+                      repo.state === null
+                        ? html`<input
+                            type="checkbox"
+                            id="repo-${index}"
+                            name="repo"
+                            value="${repo.fullName}"
+                          />`
+                        : ""
+                    }
+                    <div>
+                      ${
+                        repo.state === null
+                          ? html`<label for="repo-${index}"
+                              ><strong>${repo.fullName}</strong></label
+                            >`
+                          : html`<strong>${repo.fullName}</strong>`
+                      }
+                      <span class="muted">${about}</span>
+                    </div>
+                    ${
+                      repo.state === "connected"
+                        ? html`<a class="button secondary" href="/sites/${repo.siteId}"
+                            >Open<span class="visually-hidden"> ${repo.fullName}</span></a
+                          >`
+                        : ""
+                    }
+                  </li>`;
+                })}
+              </ul>
+              ${
+                addable
+                  ? html`<div class="actions"><button type="submit">Add selected</button></div>`
+                  : ""
+              }
+            </form>`
           : html`<p class="muted">The app was not given any repositories yet.</p>`
     }
   </section>`;

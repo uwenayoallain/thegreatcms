@@ -1138,10 +1138,12 @@ On your own machine `npx greatcms studio`, run in the site's folder, opens the
 studio with that site already connected. On a shared studio, connecting is the
 owner's job, done once per site from **Connect a site**:
 
+- **From GitHub.** The repositories you gave the studio on GitHub are
+  listed, those already using GreatCMS first. Tick any number and press
+  **Add selected**: one with a schema opens as a site, any other waits for a
+  starter.
 - **In the sites folder.** Folders in the studio's sites folder are listed;
   one with a schema connects with a click.
-- **From GitHub.** Once GitHub is connected on **Git access**, the
-  repositories you allowed are listed and each copies with a click.
 - **Copy from Git.** Paste any https or SSH address. Only files are fetched:
   no hooks, no submodules.
 - **By path.** Any other folder on the machine.
@@ -1273,7 +1275,8 @@ the sites that person may open. Editors change content: regions, entries,
 images, drafts and publishes. When two people have the same content open, each
 sees the other's name.
 
-With GitHub connected, people can **Continue with GitHub** instead. Whoever can
+With GitHub connected, **Continue with GitHub** is the sign-in, and a password
+is a link away. Whoever can
 push to a site's repository on GitHub edits that site here, and sees only that
 site. Give or remove access on GitHub: nothing is set up in the studio.
 
@@ -1418,12 +1421,14 @@ directly: those headers are then the visitor's to forge.
 A site is a folder on the machine the studio runs on. **Connect a site** finds
 one three ways:
 
+- **From GitHub.** Connect GitHub once: the studio makes its own GitHub App
+  and you choose the repositories it may use. They are listed with the ones
+  that already use GreatCMS first; tick any number and **Add selected**
+  copies each, signing in with a token that lasts an hour. One with a schema
+  is connected as it lands; any other offers **Set up**.
 - **In the sites folder.** With `STUDIO_SITES_ROOT` set, the page lists the
   folders in it. One with a schema connects with a click, named after its
   folder; one without offers **Set up**.
-- **From GitHub.** Connect GitHub once on **Git access**: the studio makes
-  its own GitHub App, you choose the repositories it may use, and each copies
-  with a click, signing in with a token that lasts an hour.
 - **Copy from Git.** Paste any https or SSH address, without a token in it:
   for a private repository, save one on **Git access**. Only files are
   fetched: no hooks, submodules or redirects. The host is looked up once and
@@ -1462,8 +1467,10 @@ other's name; if both publish, the second is refused, not overwritten.
 
 ### Sign in with GitHub
 
-Once GitHub is connected on **Git access**, the sign-in page offers
-**Continue with GitHub**. Whoever GitHub lets push to a connected site's
+A new studio is opened once with `STUDIO_PASSWORD`, which leads straight to
+connecting GitHub. From then on the sign-in page is **Continue with GitHub**,
+with the password behind a link for the owner and for editors given one.
+Whoever GitHub lets push to a connected site's
 repository edits that site and sees no other: its content, images, history,
 search and inbox.
 
