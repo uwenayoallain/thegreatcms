@@ -190,7 +190,9 @@ describe("a clone", () => {
   });
 
   it("is stopped with the studio, and leaves no folder behind", async () => {
+    const work = mkdtempSync(join(tmpdir(), "greatcms-clone-work-"));
     const target = app({
+      cloneWorkDir: work,
       cloneGit: (args, _config, signal) =>
         new Promise((_, reject) => {
           mkdirSync(args.at(-1) as string, { recursive: true });
@@ -198,10 +200,13 @@ describe("a clone", () => {
         }),
     });
     await post(target, "/sites/clone", { url: "https://example.com/slow.git" });
-    expect(readdirSync(root)).toEqual([".slow.cloning"]);
-    target.stop();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // The copy is made in the studio's own folder, never where a site's code can write.
     expect(readdirSync(root)).toEqual([]);
+    expect(readdirSync(work)).toHaveLength(1);
+    target.stop();
+    await expect.poll(() => readdirSync(work)).toEqual([]);
+    expect(readdirSync(root)).toEqual([]);
+    rmSync(work, { recursive: true, force: true });
   });
 
   it("forgets the oldest finished copies rather than keeping every one", async () => {

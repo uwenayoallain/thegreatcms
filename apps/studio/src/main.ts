@@ -76,7 +76,10 @@ const store = new Store(databaseFile);
 // A publish the last run had taken but not finished is tried again rather than left hanging.
 const recovered = store.recoverScheduled();
 // Copies a stopped studio left half-made would block the same name from being copied again.
-const swept = process.env.STUDIO_SITES_ROOT ? sweepStaleClones(process.env.STUDIO_SITES_ROOT) : [];
+const cloneWorkDir = join(dirname(databaseFile), "clones");
+const swept = process.env.STUDIO_SITES_ROOT
+  ? sweepStaleClones(process.env.STUDIO_SITES_ROOT, cloneWorkDir)
+  : [];
 
 // An inbox is not an archive: with STUDIO_SUBMISSION_DAYS set, older submissions are deleted.
 const retentionDays = Number(process.env.STUDIO_SUBMISSION_DAYS ?? 0);
@@ -98,6 +101,7 @@ const app = createApp({
   cookieDomain: process.env.STUDIO_COOKIE_DOMAIN || undefined,
   probeUrls: new Map(sites.filter((site) => site.probeUrl).map((site) => [site.id, site.probeUrl])),
   sitesRoot: process.env.STUDIO_SITES_ROOT || undefined,
+  cloneWorkDir,
   previewUrl: process.env.STUDIO_PREVIEW_URL || undefined,
   previewsFile: process.env.STUDIO_PREVIEWS_FILE || undefined,
   previewProbe: process.env.STUDIO_PREVIEW_PROBE || undefined,

@@ -1,20 +1,29 @@
 /**
  * Getting a site in front of the studio without a terminal: the folders under the sites folder,
  * copying a repository into it, and the preview address a new site gets. Cloning only fetches
- * files; nothing from the repository runs here, hooks included.
+ * files, into a folder no site can write; nothing from the repository runs here, hooks included.
  */
 
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { request as httpRequest } from "node:http";
-import { mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { lstat, readdir } from "node:fs/promises";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { cp, lstat, readdir } from "node:fs/promises";
 import { isIP } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { Site } from "./db.js";
-import { originFromConfig } from "./git-guard.js";
+import { configRefusal, findRepository, gitIn, originFromConfig } from "./git-guard.js";
 import { withGitConfig } from "./repo.js";
 
 /** A folder path as typed: `~` is this machine's home, and anything else must be absolute. */
@@ -388,16 +397,67 @@ export const CLONE_LIMITS: CloneLimits = {
 /** Finished copies remembered for the page; the oldest is forgotten past this. */
 const MAX_FINISHED = 20;
 
-/** Removes copies a stopped studio left half-made, so the same name can be copied again. */
-export function sweepStaleClones(root: string): string[] {
-  let names: string[];
+/** Removes copies a stopped studio left half-made, here and in its own work folder. */
+export function sweepStaleClones(root: string, workDir?: string): string[] {
+  if (workDir) {
+    for (const name of namesIn(workDir)) {
+      rmSync(join(workDir, name), { recursive: true, force: true });
+    }
+  }
+  const names = namesIn(root).filter((name) => /^\..+\.cloning$/.test(name));
+  for (const name of names) rmSync(join(root, name), { recursive: true, force: true });
+  return names;
+}
+
+function namesIn(folder: string): string[] {
   try {
-    names = readdirSync(root).filter((name) => /^\..+\.cloning$/.test(name));
+    return readdirSync(folder);
   } catch {
     return [];
   }
-  for (const name of names) rmSync(join(root, name), { recursive: true, force: true });
-  return names;
+}
+
+type Rename = (from: string, to: string) => void;
+
+/**
+ * Moves a finished copy into the sites folder: a rename on one filesystem, and otherwise a copy
+ * under a name nobody can guess, renamed when whole, so a half-copied folder is never listed.
+ */
+export async function moveInto(
+  from: string,
+  root: string,
+  folder: string,
+  rename: Rename = renameSync,
+): Promise<void> {
+  const path = join(root, folder);
+  try {
+    rename(from, path);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+  }
+  const staging = join(root, `.${folder}.${randomBytes(6).toString("hex")}.cloning`);
+  try {
+    await cp(from, staging, {
+      recursive: true,
+      verbatimSymlinks: true,
+      preserveTimestamps: true,
+      force: false,
+      errorOnExist: true,
+    });
+    renameSync(staging, path);
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/** Stops a copy whose git config, once in the sites folder, is not one the studio works with. */
+async function assertGuarded(path: string): Promise<void> {
+  const layout = await findRepository(path);
+  if (layout?.top !== path) return;
+  const problems = (await gitIn(path))?.problems ?? [];
+  if (problems.length > 0) throw new Error(configRefusal(problems).message);
 }
 
 /** Bytes under a folder, stopping early once past `limit`; links are counted, not followed. */
@@ -435,13 +495,31 @@ export class Clones {
   private readonly jobs = new Map<string, CloneState>();
   private readonly running = new Set<AbortController>();
   private readonly limits: CloneLimits;
+  private made?: string;
 
+  /** `workDir` is where copies are made: a folder only the studio writes, never the sites folder. */
   constructor(
     private readonly root: string,
     private readonly git: CloneGit = runGit,
     limits: Partial<CloneLimits> = {},
+    private readonly workDir?: string,
   ) {
     this.limits = { ...CLONE_LIMITS, ...limits };
+  }
+
+  /** A new folder for one copy, closed to every other user. */
+  private workFolder(): string {
+    if (this.workDir) {
+      mkdirSync(this.workDir, { recursive: true, mode: 0o700 });
+      chmodSync(this.workDir, 0o700);
+      return mkdtempSync(join(this.workDir, "copy-"));
+    }
+    if (!this.made) {
+      const made = mkdtempSync(join(tmpdir(), "greatcms-clones-"));
+      process.once("exit", () => rmSync(made, { recursive: true, force: true }));
+      this.made = made;
+    }
+    return mkdtempSync(join(this.made, "copy-"));
   }
 
   list(): CloneState[] {
@@ -480,9 +558,9 @@ export class Clones {
     if (problem) return Promise.reject(new Error(problem));
     this.jobs.delete(folder);
     this.jobs.set(folder, { state: "cloning", folder, url });
-    // Cloned beside its final name and renamed when complete, so a half-copied folder is never listed.
-    const temporary = join(this.root, `.${folder}.cloning`);
-    rmSync(temporary, { recursive: true, force: true });
+    // Cloned where no site's code can write: nothing can be planted in the copy while git reads it.
+    const work = this.workFolder();
+    const temporary = join(work, folder);
     const args = [
       // Nothing in the repository runs: no hooks, no fsmonitor, no transport that runs a command.
       "-c",
@@ -516,13 +594,18 @@ export class Clones {
     }, this.limits.measureEveryMs);
     measure.unref();
     return this.git(args, config, stop.signal)
-      .then(() => {
-        renameSync(temporary, path);
+      .then(async () => {
+        clearInterval(measure);
+        await moveInto(temporary, this.root, folder);
+        try {
+          await assertGuarded(path);
+        } catch (error) {
+          rmSync(path, { recursive: true, force: true });
+          throw error;
+        }
         this.jobs.set(folder, { state: "done", folder, url, path });
       })
       .catch((error: Error) => {
-        // A failed clone leaves nothing behind for the next attempt to trip over.
-        rmSync(temporary, { recursive: true, force: true });
         const reason = tooLarge
           ? `The repository is larger than ${Math.round(this.limits.maxBytes / 1024 / 1024)} MB, so the copy was stopped.`
           : cloneFailure(error);
@@ -530,6 +613,8 @@ export class Clones {
       })
       .finally(() => {
         clearInterval(measure);
+        // Nothing is left behind for the next attempt to trip over.
+        rmSync(work, { recursive: true, force: true });
         this.running.delete(stop);
         const finished = this.list().filter((job) => job.state !== "cloning");
         for (const job of finished.slice(0, Math.max(0, finished.length - MAX_FINISHED))) {
