@@ -208,6 +208,8 @@ a:hover {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   text-decoration: none;
+  /* As wide as it is in Space Grotesk, so what follows it sits still when the stand-in is drawn. */
+  width: 7.74em;
 }
 
 .wordmark .mark {
@@ -399,7 +401,6 @@ main {
   font-weight: 500;
   color: var(--ink-2);
   cursor: pointer;
-  user-select: none;
 }
 
 .seams-switch .switch {
