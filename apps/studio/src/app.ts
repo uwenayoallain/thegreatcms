@@ -253,6 +253,16 @@ type Variables = {
   refused?: string;
 };
 
+/** Why a GitHub sign-in ended on the sign-in page: named in the address, so a reload says it again. */
+const SIGN_IN_PROBLEMS: Record<string, string | undefined> = {
+  started: "That sign-in was not started in this browser, or it took too long. Start again.",
+  refused: "GitHub did not sign you in. Nothing was changed.",
+  incomplete: "GitHub did not complete that sign-in. Start again.",
+};
+
+/** Repositories listed on one page of the connect screen. */
+const REPOSITORIES_A_PAGE = 10;
+
 /** The most repositories copied from one tick-list. */
 const MAX_ADDED_AT_ONCE = 20;
 
@@ -617,6 +627,15 @@ export function createApp(options: AppOptions) {
       });
     }
   };
+
+  // One address per page: a trailing slash is the same page, never a dead end.
+  app.use("*", async (c, next) => {
+    const path = c.req.path;
+    const read = c.req.method === "GET" || c.req.method === "HEAD";
+    // Only a path that stays on this host once trimmed: `//elsewhere/` is not one.
+    if (!read || !/^\/[^/\\].*\/$/.test(path)) return next();
+    return c.redirect(`${path.replace(/\/+$/, "")}${new URL(c.req.url).search}`, 308);
+  });
 
   // Before sign-in, so the sign-in page is drawn in the theme the visitor chose too.
   app.use("*", (c, next) => withTheme(themeOf(c.req.header("cookie")), next));
@@ -991,6 +1010,7 @@ export function createApp(options: AppOptions) {
     return c.html(
       signInPage({
         next,
+        error: SIGN_IN_PROBLEMS[c.req.query("problem") ?? ""],
         editors: hasEditors(),
         github: githubSignIn(),
         password: c.req.query("with") === "password",
@@ -1019,29 +1039,39 @@ export function createApp(options: AppOptions) {
     const address = addressOf(c);
     const trip = readGithubTrip(c.req.header("cookie"), signingKey, Date.now(), isSecure(c));
     const next = allowedNext(trip?.next) ?? undefined;
-    const refuse = (error: string, status: 400 | 429 = 400) => {
+    // Back on the sign-in page under its own address: a reload there repeats nothing sent to GitHub.
+    const refuse = (problem: keyof typeof SIGN_IN_PROBLEMS) => {
       c.header("Set-Cookie", clearGithubTrip(isSecure(c)));
-      return c.html(signInPage({ error, next, editors: hasEditors(), github: true }), status);
+      const query = new URLSearchParams({ problem: String(problem), ...(next ? { next } : {}) });
+      return c.redirect(`/sign-in?${query}`, 303);
     };
     const limit = signInLimiter.check(`github:${address}`);
     if (!limit.allowed) {
       c.header("retry-after", String(limit.retryAfterSeconds));
-      return refuse(
-        `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+      c.header("Set-Cookie", clearGithubTrip(isSecure(c)), { append: true });
+      return c.html(
+        signInPage({
+          error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+          next,
+          editors: hasEditors(),
+          github: true,
+        }),
         429,
       );
     }
     const started =
       trip && sameText(c.req.query("state") ?? "", trip.state) && !store.isSessionRevoked(trip.id);
     if (!trip || !started) {
-      return refuse(
-        "That sign-in was not started in this browser, or it took too long. Start again.",
-      );
+      // The callback opened again, by Back or a reload, after it already signed this browser in.
+      if (viewerOf(readSession(c.req.header("cookie"), signingKey, isSecure(c)))) {
+        return c.redirect(next ?? "/", 303);
+      }
+      return refuse("started");
     }
     // Good for one answer: the same address opened again signs nobody in.
     store.revokeSession(trip.id, trip.expiresAt);
     // Whatever GitHub says went wrong is its text in the address bar, so none of it is repeated.
-    if (c.req.query("error")) return refuse("GitHub did not sign you in. Nothing was changed.");
+    if (c.req.query("error")) return refuse("refused");
     let person: GithubPerson;
     try {
       const found = await hub.identify(
@@ -1051,7 +1081,7 @@ export function createApp(options: AppOptions) {
       );
       person = store.saveGithubPerson({ ...found, name: found.name || found.login });
     } catch {
-      return refuse("GitHub did not complete that sign-in. Start again.");
+      return refuse("incomplete");
     }
     // A session this browser already carried is not kept alongside the new one.
     retire(c);
@@ -1329,6 +1359,30 @@ export function createApp(options: AppOptions) {
     }
   };
 
+  /** The repositories whose name holds the search, a page at a time, with how many there are. */
+  const pageOfRepositories = (
+    listed: Awaited<ReturnType<typeof githubRepositories>>,
+    query: string,
+    asked: number,
+  ) => {
+    if (!listed || !("repositories" in listed) || !listed.repositories) return listed;
+    const wanted = query.toLowerCase();
+    const found = listed.repositories.filter((repo) =>
+      repo.fullName.toLowerCase().includes(wanted),
+    );
+    const pages = Math.max(1, Math.ceil(found.length / REPOSITORIES_A_PAGE));
+    const shown = Math.min(Math.max(1, Math.floor(asked)), pages);
+    return {
+      ...listed,
+      repositories: found.slice((shown - 1) * REPOSITORIES_A_PAGE, shown * REPOSITORIES_A_PAGE),
+      query,
+      page: shown,
+      pages,
+      total: listed.repositories.length,
+      found: found.length,
+    };
+  };
+
   /** Copies chosen from GitHub that wait their turn; shown as being copied. */
   const waiting = new Map<string, CloneState>();
 
@@ -1341,12 +1395,23 @@ export function createApp(options: AppOptions) {
       clones: [...(clones?.list() ?? []), ...waiting.values()],
       previewTemplate: options.previewUrl,
       gitAccess: Boolean(options.gitAccess || options.github),
-      github: await githubRepositories(folders),
       ...extra,
+      github: pageOfRepositories(
+        await githubRepositories(folders),
+        extra.repoQuery ?? "",
+        extra.repoPage ?? 1,
+      ),
     });
   };
 
-  app.get("/sites/new", async (c) => c.html(await connectPage()));
+  app.get("/sites/new", async (c) =>
+    c.html(
+      await connectPage({
+        repoQuery: (c.req.query("q") ?? "").trim().slice(0, 100),
+        repoPage: Number(c.req.query("page")) || 1,
+      }),
+    ),
+  );
 
   const newSite = (values: { name: string; path: string; devUrl: string }): Site => ({
     id: crypto.randomUUID(),
@@ -1713,7 +1778,12 @@ export function createApp(options: AppOptions) {
         }),
       );
     }
-    return done(c, "/sites/new#github", "GitHub is connected. Choose a repository to copy.");
+    // Signed in with the password until now: from here on the owner is their GitHub account.
+    const viewer = c.get("viewer");
+    if (!viewer.github && githubSignIn() && github.config()?.ownerType === "User") {
+      return c.redirect(`/sign-in/github?next=${encodeURIComponent("/sites/new")}`, 303);
+    }
+    return done(c, "/sites/new#github", "GitHub is connected. Tick the repositories to add.");
   });
 
   /** For an app made before sign-in existed: the client secret its owner generated on GitHub. */

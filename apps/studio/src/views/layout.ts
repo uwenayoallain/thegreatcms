@@ -559,6 +559,10 @@ body.plain { display: block; }
 .editor-sites { flex: 1 1 100%; margin: 0; }
 .folders li > form { margin: 0; }
 .folders li > input { flex: none; margin: 0; }
+.repo-search { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 .75rem; }
+.repo-search input { flex: 1 1 14rem; max-width: 24rem; }
+.repo-actions { flex-wrap: wrap; justify-content: space-between; gap: .75rem 1.5rem; }
+.pager { display: flex; align-items: center; gap: .9rem; margin-left: auto; font-size: .85rem; }
 .folders label { cursor: pointer; }
 .notice.warn { margin: 0 0 .85rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--ink); font-size: .85rem; }
 .app-logo { display: flex; gap: .9rem; align-items: center; margin: 1rem 0; padding: .75rem .9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }

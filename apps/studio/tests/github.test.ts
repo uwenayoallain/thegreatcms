@@ -289,6 +289,12 @@ function signIn(target: ReturnType<typeof createApp>) {
   });
 }
 
+function names(document: Document) {
+  return [...document.querySelectorAll("form[action='/sites/github'] .folders strong")].map(
+    (name) => name.textContent,
+  );
+}
+
 describe("the pages", () => {
   let root: string;
   let cloned: Array<{ args: string[]; config: Array<[string, string]> }>;
@@ -473,6 +479,69 @@ describe("the pages", () => {
       "site-0",
     );
     expect(document.querySelector("meta[http-equiv=refresh]")).toBeNull();
+  });
+
+  it("shows many repositories a page at a time, the GreatCMS ones first, and finds one by name", async () => {
+    repositoryCount = 37;
+    schemaIn.add("acme/site-30");
+    const target = app(await connected());
+    const read = async (path: string) =>
+      new JSDOM(await (await target.request(path, { headers: signedIn })).text()).window.document;
+    const first = await read("/sites/new");
+    expect(names(first)).toHaveLength(10);
+    expect(names(first)[0]).toBe("acme/site-30");
+    expect(first.querySelector(".pager")?.textContent?.replace(/\s+/g, " ").trim()).toBe(
+      "Page 1 of 4 · 37 found Next",
+    );
+    const next = first.querySelector(".pager a[rel=next]")?.getAttribute("href") as string;
+    expect(next).toBe("/sites/new?page=2#github");
+    expect(names(await read(next.replace("#github", "")))).not.toContain("acme/site-30");
+    // A page past the end is the last one, not an empty screen.
+    expect(names(await read("/sites/new?page=99"))).toHaveLength(7);
+
+    const search = first.querySelector<HTMLFormElement>("form.repo-search");
+    expect(search?.method).toBe("get");
+    expect(search?.querySelector("input[name=q]")?.getAttribute("placeholder")).toBe(
+      "Search 37 repositories",
+    );
+    const found = await read("/sites/new?q=SITE-3");
+    expect(names(found)).toEqual([
+      "acme/site-30",
+      "acme/site-3",
+      "acme/site-31",
+      "acme/site-32",
+      "acme/site-33",
+      "acme/site-34",
+      "acme/site-35",
+      "acme/site-36",
+    ]);
+    expect(found.querySelector<HTMLInputElement>("input[name=q]")?.value).toBe("SITE-3");
+    const none = await read("/sites/new?q=%3Cscript%3E");
+    expect(none.body.textContent).toContain("No repository's name contains “<script>”.");
+    expect(none.querySelectorAll("script")).toHaveLength(0);
+  });
+
+  it("opens the same page with or without a trailing slash, and follows none off this host", async () => {
+    const target = app(await connected());
+    const slashed = await target.request("/sign-in/?with=password");
+    expect(slashed.status).toBe(308);
+    expect(slashed.headers.get("location")).toBe("/sign-in?with=password");
+    const inside = await target.request("/sites/new/", { headers: signedIn });
+    expect(inside.headers.get("location")).toBe("/sites/new");
+    for (const path of ["//evil.example/", "/\\evil.example/"]) {
+      // oxlint-disable-next-line no-await-in-loop -- two addresses, one after the other
+      const answer = await target.request(path, { headers: signedIn });
+      expect(answer.headers.get("location") ?? "", path).not.toContain("evil.example");
+    }
+    // A form is never replayed somewhere else.
+    expect((await post(target, "/sites/github/", { repo: "acme/site-0" })).status).not.toBe(308);
+  });
+
+  it("leaves two repositories unsearched and unpaged", async () => {
+    const target = app(await connected());
+    const body = await (await target.request("/sites/new", { headers: signedIn })).text();
+    expect(body).not.toContain("repo-search");
+    expect(body).not.toContain('class="pager"');
   });
 
   it("marks a repository already copied here by its origin, whatever the folder is called", async () => {

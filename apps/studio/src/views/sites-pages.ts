@@ -137,6 +137,9 @@ export function newSitePage(
     gitAccess?: boolean;
     /** The repositories the GitHub App reaches, when GitHub can be connected. */
     github?: GitHubRepositories;
+    /** What the repository list is searched for, and the page of it asked for. */
+    repoQuery?: string;
+    repoPage?: number;
   } = {},
 ): string {
   const { editing, fieldErrors = {} } = options;
@@ -557,6 +560,12 @@ export interface GitHubRepositories {
     state: Folder["state"] | null;
     siteId?: string;
   }>;
+  /** The search these were found by, the page shown, and how many there are in all. */
+  query?: string;
+  page?: number;
+  pages?: number;
+  total?: number;
+  found?: number;
 }
 
 /** The repositories the GitHub App was given, to tick and add; those using GreatCMS come first. */
@@ -570,6 +579,10 @@ function githubList(github: GitHubRepositories) {
   }
   const repositories = github.repositories ?? [];
   const addable = repositories.some((repo) => repo.state === null);
+  const { query = "", page: shown = 1, pages = 1, total = repositories.length } = github;
+  const found = github.found ?? total;
+  const pageHref = (to: number) =>
+    `/sites/new?${new URLSearchParams({ ...(query ? { q: query } : {}), page: String(to) })}#github`;
   return html`<section class="connect-section" aria-labelledby="github">
     <h2 id="github">From GitHub</h2>
     <p>
@@ -583,59 +596,92 @@ function githubList(github: GitHubRepositories) {
       <a href="/git-access">Manage the GitHub connection</a>.
     </p>
     ${
+      !github.error && total > 10
+        ? html`<form method="GET" action="/sites/new#github" class="repo-search" role="search">
+            <label class="visually-hidden" for="repo-q">Search your repositories</label>
+            <input
+              type="search"
+              id="repo-q"
+              name="q"
+              value="${query}"
+              placeholder="Search ${total} repositories"
+            />
+            <button class="secondary" type="submit">Search</button>
+            ${query ? html`<a href="/sites/new#github">Show all</a>` : ""}
+          </form>`
+        : ""
+    }
+    ${
       github.error
         ? html`<p class="error-text">${github.error}</p>`
-        : repositories.length
-          ? html`<form method="POST" action="/sites/github">
-              <ul class="folders" role="list">
-                ${repositories.map((repo, index) => {
-                  const about = `${repo.private ? "Private" : "Public"} · ${
-                    repo.state === "connected"
-                      ? "Added"
-                      : repo.state
-                        ? "In the sites folder"
-                        : repo.uses
-                          ? "Uses GreatCMS"
-                          : "Not set up yet"
-                  }`;
-                  return html`<li>
-                    ${
-                      repo.state === null
-                        ? html`<input
-                            type="checkbox"
-                            id="repo-${index}"
-                            name="repo"
-                            value="${repo.fullName}"
-                          />`
-                        : ""
-                    }
-                    <div>
+        : total > 0 && repositories.length === 0
+          ? html`<p class="muted">No repository's name contains “${query}”.</p>`
+          : repositories.length
+            ? html`<form method="POST" action="/sites/github">
+                <ul class="folders" role="list">
+                  ${repositories.map((repo, index) => {
+                    const about = `${repo.private ? "Private" : "Public"} · ${
+                      repo.state === "connected"
+                        ? "Added"
+                        : repo.state
+                          ? "In the sites folder"
+                          : repo.uses
+                            ? "Uses GreatCMS"
+                            : "Not set up yet"
+                    }`;
+                    return html`<li>
                       ${
                         repo.state === null
-                          ? html`<label for="repo-${index}"
-                              ><strong>${repo.fullName}</strong></label
-                            >`
-                          : html`<strong>${repo.fullName}</strong>`
+                          ? html`<input
+                              type="checkbox"
+                              id="repo-${index}"
+                              name="repo"
+                              value="${repo.fullName}"
+                            />`
+                          : ""
                       }
-                      <span class="muted">${about}</span>
-                    </div>
-                    ${
-                      repo.state === "connected"
-                        ? html`<a class="button secondary" href="/sites/${repo.siteId}"
-                            >Open<span class="visually-hidden"> ${repo.fullName}</span></a
-                          >`
-                        : ""
-                    }
-                  </li>`;
-                })}
-              </ul>
-              ${
-                addable
-                  ? html`<div class="actions"><button type="submit">Add selected</button></div>`
-                  : ""
-              }
-            </form>`
-          : html`<p class="muted">The app was not given any repositories yet.</p>`
+                      <div>
+                        ${
+                          repo.state === null
+                            ? html`<label for="repo-${index}"
+                                ><strong>${repo.fullName}</strong></label
+                              >`
+                            : html`<strong>${repo.fullName}</strong>`
+                        }
+                        <span class="muted">${about}</span>
+                      </div>
+                      ${
+                        repo.state === "connected"
+                          ? html`<a class="button secondary" href="/sites/${repo.siteId}"
+                              >Open<span class="visually-hidden"> ${repo.fullName}</span></a
+                            >`
+                          : ""
+                      }
+                    </li>`;
+                  })}
+                </ul>
+                <div class="actions repo-actions">
+                  ${addable ? html`<button type="submit">Add selected</button>` : ""}
+                  ${
+                    pages > 1
+                      ? html`<nav class="pager" aria-label="Pages of repositories">
+                          ${
+                            shown > 1
+                              ? html`<a href="${pageHref(shown - 1)}" rel="prev">Previous</a>`
+                              : ""
+                          }
+                          <span class="muted">Page ${shown} of ${pages} · ${found} found</span>
+                          ${
+                            shown < pages
+                              ? html`<a href="${pageHref(shown + 1)}" rel="next">Next</a>`
+                              : ""
+                          }
+                        </nav>`
+                      : ""
+                  }
+                </div>
+              </form>`
+            : html`<p class="muted">The app was not given any repositories yet.</p>`
     }
   </section>`;
 }

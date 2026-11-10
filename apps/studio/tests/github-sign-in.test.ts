@@ -478,7 +478,8 @@ describe("the trip to GitHub and back", () => {
       const answer = await app.request(`/sign-in/github/callback?${query}`, {
         headers: cookie ? { cookie } : {},
       });
-      expect(answer.status, query).toBe(400);
+      expect(answer.status, query).toBe(303);
+      expect(answer.headers.get("location"), query).toBe("/sign-in?problem=started");
       expect(cookieOf(answer, "greatcms_session"), query).toBeUndefined();
     }
   });
@@ -490,7 +491,7 @@ describe("the trip to GitHub and back", () => {
       `/sign-in/github/callback?code=code-ada&state=${authorize.searchParams.get("state")}`,
       { headers: { cookie: trip } },
     );
-    expect(again.status).toBe(400);
+    expect(again.headers.get("location")).toBe("/sign-in?problem=started");
     expect(cookieOf(again, "greatcms_session")).toBeUndefined();
   });
 
@@ -502,7 +503,7 @@ describe("the trip to GitHub and back", () => {
     const late = await app.request(`/sign-in/github/callback?code=code-ada&state=${state}`, {
       headers: { cookie: cookieOf(start, "greatcms_github") as string },
     });
-    expect(late.status).toBe(400);
+    expect(late.headers.get("location")).toBe("/sign-in?problem=started");
   });
 
   it("repeats nothing GitHub puts in the address when it refuses", async () => {
@@ -512,8 +513,10 @@ describe("the trip to GitHub and back", () => {
       `/sign-in/github/callback?error=access_denied&error_description=%3Cb%3Ecall+0800+now%3C%2Fb%3E&state=${state}`,
       { headers: { cookie: cookieOf(start, "greatcms_github") as string } },
     );
-    expect(denied.status).toBe(400);
-    const body = await denied.text();
+    // Sent back to the sign-in page itself, so the address GitHub wrote is gone and a reload is safe.
+    expect(denied.status).toBe(303);
+    expect(denied.headers.get("location")).toBe("/sign-in?problem=refused");
+    const body = await text(app.request("/sign-in?problem=refused"));
     expect(body).not.toContain("0800");
     expect(body).toContain("GitHub did not sign you in");
     expect(cookieOf(denied, "greatcms_session")).toBeUndefined();
@@ -521,7 +524,7 @@ describe("the trip to GitHub and back", () => {
 
   it("signs nobody in on a code GitHub does not know", async () => {
     const { callback } = await roundTrip("nobody");
-    expect(callback.status).toBe(400);
+    expect(callback.headers.get("location")).toBe("/sign-in?problem=incomplete");
     expect(cookieOf(callback, "greatcms_session")).toBeUndefined();
   });
 
@@ -529,11 +532,26 @@ describe("the trip to GitHub and back", () => {
     app = studio({ signInLimiter: new RateLimiter(3, 60_000) });
     for (let attempt = 0; attempt < 3; attempt++) {
       // oxlint-disable-next-line no-await-in-loop -- counted one after another
-      expect((await app.request("/sign-in/github/callback?code=x&state=y")).status).toBe(400);
+      expect((await app.request("/sign-in/github/callback?code=x&state=y")).status).toBe(303);
     }
     const limited = await app.request("/sign-in/github/callback?code=x&state=y");
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("sends a signed-in browser home when the callback is opened again, by Back or a reload", async () => {
+    const session = await signInAs("ada");
+    const again = await app.request("/sign-in/github/callback?code=code-ada&state=used", {
+      headers: session,
+    });
+    expect(again.status).toBe(303);
+    expect(again.headers.get("location")).toBe("/");
+  });
+
+  it("says nothing it was not asked to: an unknown problem in the address shows no error", async () => {
+    const body = await text(app.request("/sign-in?problem=%3Cb%3Ehello"));
+    expect(body).not.toContain("hello");
+    expect(new JSDOM(body).window.document.querySelector("[role=alert], .notice")).toBeNull();
   });
 
   it("retires the session a browser arrived with", async () => {
