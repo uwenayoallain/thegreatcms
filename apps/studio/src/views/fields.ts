@@ -181,7 +181,11 @@ ${asText(readRichText(value))}</textarea>
 
     case "select": {
       const options = selectOptions(def);
-      const selected = new Set(Array.isArray(value) ? value.map(String) : [String(value ?? "")]);
+      // An empty value resolves to the schema's default, so that is what the control shows.
+      const preset = typeof def.default === "string" && !def.multiple ? def.default : undefined;
+      const selected = new Set(
+        Array.isArray(value) ? value.map(String) : [String(value ?? "") || (preset ?? "")],
+      );
       if (def.multiple) {
         // Several at once reads better as ticks than as a list box that wants Ctrl-click.
         return html`<fieldset
@@ -210,7 +214,7 @@ ${asText(readRichText(value))}</textarea>
       }
       return shell(html`
         <select ${shared}>
-          ${def.required ? "" : html`<option value="">None</option>`}
+          ${def.required || preset ? "" : html`<option value="">None</option>`}
           ${options.map(
             (option) => html`
               <option value="${option.value}" ${attrs({ selected: selected.has(option.value) })}>
@@ -326,7 +330,13 @@ ${asText(readRichText(value))}</textarea>
           </div>
           <div class="field">
             <label for="${id}-alt">
-              Alt text${decorative ? "" : html` <span aria-hidden="true">*</span>`}
+              Alt
+              text${
+                decorative
+                  ? ""
+                  : html` <span aria-hidden="true">*</span
+                      ><span class="visually-hidden"> (required)</span>`
+              }
             </label>
             <input
               type="text"
@@ -636,6 +646,22 @@ export function errorsByPath(
     if (!map.has(issue.path)) map.set(issue.path, issue.message);
   }
   return map;
+}
+
+/** What is wrong, for the person editing: named as the form names it, without the schema author's remedy. */
+export function issueLines(issues: ReadonlyArray<{ path?: string; message: string }>): string[] {
+  return issues.map((issue) => {
+    if (!issue.path) return issue.message;
+    const parts = issue.path.split(".");
+    const where = parts.flatMap((part, index) => {
+      if (part === "blocks" && /^\d+$/.test(parts[index + 1] ?? "")) return [];
+      if (/^\d+$/.test(part)) {
+        return [`${parts[index - 1] === "blocks" ? "Section" : "Item"} ${Number(part) + 1}`];
+      }
+      return [humanize(part)];
+    });
+    return `${where.join(" \u203a ")}: ${issue.message}`;
+  });
 }
 
 /** Renders an attribute list. */

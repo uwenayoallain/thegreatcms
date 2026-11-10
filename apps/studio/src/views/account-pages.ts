@@ -236,6 +236,17 @@ export function gitAccessPage(options: {
   host?: string;
 }): string {
   const { tokens, tokenError, github } = options;
+  const wrong = !tokenError
+    ? ""
+    : /host name/.test(tokenError)
+      ? "host"
+      : /user name/.test(tokenError)
+        ? "user"
+        : "value";
+  const tokenProblem = (field: string) =>
+    wrong === field ? html`<p class="error-text" id="token-error">${tokenError}</p>` : "";
+  const invalid = (field: string) =>
+    wrong === field ? html`aria-describedby="token-error" aria-invalid="true"` : "";
   return page(
     {
       title: "Git access",
@@ -294,7 +305,9 @@ export function gitAccessPage(options: {
               autocomplete="off"
               spellcheck="false"
               required
+              ${invalid("host")}
             />
+            ${tokenProblem("host")}
           </div>
           <div class="field">
             <label for="token-value">Token</label>
@@ -304,24 +317,26 @@ export function gitAccessPage(options: {
               name="token"
               autocomplete="off"
               required
-              ${tokenError ? html`aria-describedby="token-error" aria-invalid="true"` : ""}
+              ${invalid("value")}
             />
-            ${tokenError ? html`<p class="error-text" id="token-error">${tokenError}</p>` : ""}
+            ${tokenProblem("value")}
           </div>
           <div class="field">
-            <label for="token-user">User name <span class="tag">optional</span></label>
+            <label for="token-user">User name</label>
             <input
               type="text"
               id="token-user"
               name="username"
               autocomplete="off"
               spellcheck="false"
-              aria-describedby="token-user-hint"
+              aria-describedby="token-user-hint${wrong === "user" ? " token-error" : ""}"
+              ${wrong === "user" ? html`aria-invalid="true"` : ""}
             />
             <span class="hint" id="token-user-hint"
-              >Known for GitHub, GitLab and Bitbucket. Other hosts: the account the token belongs
-              to.</span
+              >Leave empty for GitHub, GitLab and Bitbucket. Any other host needs the account the
+              token belongs to.</span
             >
+            ${tokenProblem("user")}
           </div>
           <div class="form-actions">
             <button type="submit">Save token</button>

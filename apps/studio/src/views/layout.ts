@@ -323,13 +323,17 @@ function navigation(
                       >${icon("mail")} Submissions</a
                     >
                   </li>
-                  <li>
-                    <a
-                      href="/sites/${site.id}/settings"
-                      aria-current="${site.current === "settings" ? "page" : undefined}"
-                      >${icon("settings")} Settings</a
-                    >
-                  </li>
+                  ${
+                    viewer()?.owner === false
+                      ? ""
+                      : html`<li>
+                          <a
+                            href="/sites/${site.id}/settings"
+                            aria-current="${site.current === "settings" ? "page" : undefined}"
+                            >${icon("settings")} Settings</a
+                          >
+                        </li>`
+                  }
                   ${
                     site.devUrl
                       ? html`<li>
@@ -1210,9 +1214,14 @@ textarea[data-richtext] { height: 15rem; }
 /** One stylesheet for every screen, served as a file rather than inlined into each page. */
 export const STYLESHEET = STYLES;
 
-/** Errors carry their remedy after `fix:`; on screen it reads better as a line of its own. */
+/** An error and the remedy it carries after `fix:`, which starts a sentence of its own on screen. */
+export function withRemedy(message: string): [headline: string, fix?: string] {
+  const [headline = "", fix] = message.split(/\n\s*fix:\s*/, 2);
+  return fix ? [headline, fix.charAt(0).toUpperCase() + fix.slice(1)] : [headline];
+}
+
 function flashMessage(message: string) {
-  const [headline, fix] = message.split(/\n\s*fix:\s*/, 2);
+  const [headline, fix] = withRemedy(message);
   return html`<p>${headline}</p>
     ${fix ? html`<p class="fix">${fix}</p>` : ""}`;
 }
