@@ -7,9 +7,10 @@ import type { CloneState, Folder } from "../connect.js";
 import type { BranchState } from "../repo.js";
 import { siteNav } from "./editor-parts.js";
 import { chrome } from "./chrome.js";
-import { page, type PageOptions } from "./layout.js";
+import { page, type PageOptions, withRemedy } from "./layout.js";
 import { icon } from "./icons.js";
 import { siteAvatar } from "./pixel.js";
+import { viewer } from "./viewer.js";
 
 export function sitesPage(
   sites: Site[],
@@ -17,13 +18,14 @@ export function sitesPage(
   flash?: PageOptions["flash"],
   running: ReadonlyMap<string, boolean | null> = new Map(),
 ): string {
+  const owner = viewer()?.owner !== false;
   return page(
     { title: "Sites", flash, section: "sites", unread },
     html`
       <div class="page-head">
         <div class="section-head">
           <h1>Sites</h1>
-          ${sites.length > 0 ? html`<a class="button" href="/sites/new">${icon("plus")} Connect a site</a>` : ""}
+          ${sites.length > 0 && owner ? html`<a class="button" href="/sites/new">${icon("plus")} Connect a site</a>` : ""}
         </div>
         <p class="lede">Every site the studio can edit. Content lives in your repository.</p>
       </div>
@@ -33,11 +35,16 @@ export function sitesPage(
           ? html`
               <div class="empty">
                 <h2>No sites yet</h2>
-                <p>
-                  Point the studio at a folder on this machine. It needs a
-                  <code>.cms/schema.yaml</code> file describing what is editable.
-                </p>
-                <a class="button" href="/sites/new">Connect your first site</a>
+                ${
+                  owner
+                    ? html`<p>
+                          Point the studio at a folder on this machine, or copy one from Git. A
+                          folder with no <code>.cms/schema.yaml</code> yet can be set up from a
+                          starter.
+                        </p>
+                        <a class="button" href="/sites/new">Connect your first site</a>`
+                    : html`<p>The studio's owner has not connected a site yet.</p>`
+                }
               </div>
             `
           : html`
@@ -305,7 +312,7 @@ export function newSitePage(
                         ${
                           fieldErrors.branch
                             ? html`<p class="error-text" id="branch-hint-error">
-                                ${fieldErrors.branch}
+                                ${withRemedy(fieldErrors.branch).join(" ")}
                               </p>`
                             : ""
                         }

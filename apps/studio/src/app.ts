@@ -64,6 +64,7 @@ import type { Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
 import { ALLOWED_TYPES, MAX_BYTES, UploadError, type UploadResult } from "./media.js";
 import {
+  replyAddress,
   assessSpam,
   contentFields,
   type Notifier,
@@ -76,14 +77,16 @@ import { type Author, type BranchState, ConflictError } from "./repo.js";
 import { type Viewer, withViewer } from "./views/viewer.js";
 import { THEME_COOKIE, THEMES, themeOf, withTheme } from "./views/theme.js";
 import { panesOf, withChrome } from "./views/chrome.js";
-import { errorsByPath } from "./views/fields.js";
+import { errorsByPath, issueLines } from "./views/fields.js";
 import { page, type PageOptions } from "./views/layout.js";
 import { asset, compressed, icon, ICONS } from "./assets.js";
 import {
   editorsPage,
   gitAccessPage,
   githubCreatePage,
+  shareCard,
   sharePage,
+  shareProblemPage,
   signInPage,
 } from "./views/account-pages.js";
 import { collectionPage, editEntryPage } from "./views/collection-pages.js";
@@ -214,6 +217,8 @@ type Variables = {
   session: string;
   /** Another origin this one page may post a form to, such as GitHub. */
   formTarget?: string;
+  /** Why a "publish later" was not scheduled; the editor shows it with the form as submitted. */
+  refused?: string;
 };
 
 export function createApp(options: AppOptions) {
@@ -428,6 +433,14 @@ export function createApp(options: AppOptions) {
         kind: "submission",
         subject: `${site.name}: new ${form} submission`,
         lines: Object.entries(data).map(([key, value]) => `${key}: ${value}`),
+        site: site.name,
+        form,
+        fields: data,
+        replyTo: replyAddress(data),
+        // Only an address the operator set: the request's own host is the visitor's to choose.
+        inbox: options.publicUrl
+          ? `${options.publicUrl}/inbox?site=${encodeURIComponent(site.id)}`
+          : undefined,
       });
     }
 
@@ -660,6 +673,10 @@ export function createApp(options: AppOptions) {
     const uri = c.req.header("x-forwarded-uri") ?? "/";
     const token =
       new URL(uri, "http://preview.invalid").searchParams.get("greatcms-share") ?? undefined;
+    // A link that has run out says so, rather than asking a stranger for the studio's password.
+    if (token && options.publicUrl && !shareFits(token, host)) {
+      return c.redirect(`${options.publicUrl}/share`, 302);
+    }
     if (token && options.publicUrl && shareFits(token, host)) {
       const clean = new URL(uri, "http://preview.invalid");
       clean.searchParams.delete("greatcms-share");
@@ -688,10 +705,12 @@ export function createApp(options: AppOptions) {
     const next = allowedNext(c.req.query("next"));
     const siteId = readShareToken(token, signingKey);
     if (!token || !siteId || !next || next.startsWith("/")) {
-      return c.html(
-        errorPage("Preview link", "This preview link has expired or is not valid."),
-        403,
-      );
+      return c.html(shareProblemPage(), 403);
+    }
+    // A chat app unfurling the link gets a card about the preview, not a session or the site's contents.
+    if (!c.req.query("open") && LINK_PREVIEWER.test(c.req.header("user-agent") ?? "")) {
+      const open = new URLSearchParams({ token, next, open: "1" });
+      return c.html(shareCard(store.getSite(siteId)?.name ?? "a site", `/share?${open}`));
     }
     c.header("Set-Cookie", shareCookie(token, isSecure(c), options.cookieDomain));
     return c.redirect(next, 302);
@@ -707,8 +726,10 @@ export function createApp(options: AppOptions) {
     let url = new URL(path.startsWith("/") ? path : "/", preview);
     // `//elsewhere` is a path to another host: the token would travel with it.
     if (url.origin !== preview.origin) url = new URL("/", preview);
-    url.searchParams.set("greatcms-share", createShareToken(signingKey, site.id));
-    return c.html(sharePage({ site, url: url.href }));
+    const token = createShareToken(signingKey, site.id);
+    url.searchParams.set("greatcms-share", token);
+    const until = new Date(Number(token.split(".").at(-2))).toISOString();
+    return c.html(sharePage({ site, url: url.href, until }));
   });
 
   app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|greatcms-logo\\.png}", (c) => {
@@ -757,9 +778,9 @@ export function createApp(options: AppOptions) {
     const next = allowedNext(c.req.query("next")) ?? undefined;
     // Signed in here already, sent from the preview: renew its cookie rather than ask again.
     const session = readSession(c.req.header("cookie"), signingKey);
-    if (next && viewerOf(session)) {
-      signIn(c, session!.actor);
-      return c.redirect(next, 303);
+    if (viewerOf(session)) {
+      if (next) signIn(c, session!.actor);
+      return c.redirect(next ?? "/", 303);
     }
     return c.html(signInPage({ next, editors: hasEditors() }));
   });
@@ -896,10 +917,23 @@ export function createApp(options: AppOptions) {
     );
   });
 
+  /** The inbox as it was filtered when a submission in it was acted on. */
+  const inboxView = (form: FormData) => {
+    const query = new URLSearchParams();
+    const siteId = String(form.get("site") ?? "");
+    if (store.getSite(siteId)) query.set("site", siteId);
+    if (form.get("spam") === "1") query.set("spam", "1");
+    return query.size > 0 ? `/inbox?${query}` : "/inbox";
+  };
+
   app.get("/inbox.csv", (c) => {
     const siteId = c.req.query("site") || undefined;
     const rows = store.listSubmissions({ siteId, includeSpam: false, limit: 5000 });
-    return c.body(toCsv(rows), 200, {
+    const names = new Map(store.listSites().map((site) => [site.id, site.name]));
+    const named = rows.map((row) =>
+      Object.assign({ site: names.get(row.siteId) ?? row.siteId }, row),
+    );
+    return c.body(toCsv(named), 200, {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": 'attachment; filename="submissions.csv"',
     });
@@ -910,14 +944,16 @@ export function createApp(options: AppOptions) {
     if (id === null) return c.notFound();
     const form = await c.req.formData();
     store.markRead(id, String(form.get("read") ?? "1") === "1");
-    return c.redirect("/inbox", 303);
+    return c.redirect(inboxView(form), 303);
   });
 
-  app.post("/inbox/:id/delete", (c) => {
+  app.post("/inbox/:id/delete", async (c) => {
     const id = submissionId(c.req.param("id"));
     if (id === null) return c.notFound();
     store.deleteSubmission(id);
-    return c.redirect("/inbox", 303);
+    // A bare POST still deletes; it just has no filter to go back to.
+    const form = await c.req.formData().catch(() => new FormData());
+    return c.redirect(inboxView(form), 303);
   });
 
   /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
@@ -981,6 +1017,9 @@ export function createApp(options: AppOptions) {
     c: Context<{ Variables: Variables }>,
     values: { name: string; path: string; devUrl: string },
   ) => {
+    // One folder, one site: a second connection would show the same content under two names.
+    const existing = store.listSites().find((known) => known.path === values.path);
+    if (existing) return c.redirect(`/sites/${existing.id}`, 303);
     const site: Site = {
       id: crypto.randomUUID(),
       name: values.name || nameFromFolder(basename(values.path)),
@@ -1398,24 +1437,22 @@ export function createApp(options: AppOptions) {
       const site = store.getSite(c.req.param("id") ?? "");
       const target = contentOf(c);
       if (!site || !target || target.collection?.slug === "new") return c.notFound();
-      const back = `/sites/${site.id}/${target.back}`;
       const dueAt = zonedToEpoch(String(form.get("publishAt") ?? ""), timeZone);
-      const refuse = (message: string) =>
-        c.html(
-          page(
-            { title: "Not scheduled", flash: { kind: "error", message } },
-            html`<p><a class="button secondary" href="${back}">Back to the editor</a></p>`,
-          ),
-          422,
-        );
+      // The editor answers, so what was typed is still in the form.
+      const refuse = (message: string) => {
+        c.set("refused", message);
+        return next();
+      };
       if (dueAt === null || dueAt < Date.now() + 60_000) {
-        return refuse("Pick a time at least a minute from now.");
+        return refuse("Nothing was scheduled: pick a time at least a minute from now.");
       }
       const entries: Array<[string, string]> = [];
       for (const [key, value] of form.entries()) {
         if (typeof value !== "string") {
           if (value.size > 0) {
-            return refuse("New images cannot wait: publish them now, or schedule without them.");
+            return refuse(
+              "Nothing was scheduled: new images cannot wait. Publish them now, or schedule without them.",
+            );
           }
           continue;
         }
@@ -1804,6 +1841,20 @@ export function createApp(options: AppOptions) {
       decodeForm(entries, collection.fields, blockFieldsOf(context), mdxBody(collection)),
     );
 
+    const refused = c.get("refused");
+    if (refused) {
+      return c.html(
+        renderEntry({
+          slug: requested,
+          document,
+          errors: new Map(),
+          headSha,
+          flash: { kind: "error", message: refused },
+        }),
+        422,
+      );
+    }
+
     if (action.startsWith("nested:")) {
       const updated = applyNestedBlockAction(context.schema, collection, document, action, form);
       // The preview shows the draft, so a reordered or added section has to land there too.
@@ -1844,7 +1895,7 @@ export function createApp(options: AppOptions) {
           flash: {
             kind: "error",
             message: "Nothing was published: this entry is not valid yet.",
-            detail: validation.issues.map((issue) => issue.toString()),
+            detail: issueLines(validation.issues),
           },
         }),
         422,
@@ -2178,6 +2229,19 @@ export function createApp(options: AppOptions) {
         }
       : decodeForm(entries, region.fields, blockFieldsOf(context));
 
+    const refused = c.get("refused");
+    if (refused) {
+      return c.html(
+        renderRegion({
+          document,
+          errors: new Map(),
+          headSha,
+          flash: { kind: "error", message: refused },
+        }),
+        422,
+      );
+    }
+
     if (action.startsWith("nested:")) {
       const updated = applyNestedBlockAction(context.schema, region, document, action, form);
       if (updated.changed) {
@@ -2239,7 +2303,7 @@ export function createApp(options: AppOptions) {
           flash: {
             kind: "error",
             message: "Nothing was published: this content is not valid yet.",
-            detail: validation.issues.map((issue) => issue.toString()),
+            detail: issueLines(validation.issues),
           },
         }),
         422,
@@ -2442,6 +2506,10 @@ function baseOf(entries: Array<[string, string]>): string | undefined {
   const sha = entries.find(([key]) => key === "headSha")?.[1];
   return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
 }
+
+/** Programs that fetch a pasted link to draw a card for it. */
+const LINK_PREVIEWER =
+  /bot\b|crawler|spider|facebookexternalhit|WhatsApp\/|SkypeUriPreview|Iframely|Embedly/i;
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;

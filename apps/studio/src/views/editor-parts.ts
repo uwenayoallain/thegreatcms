@@ -80,6 +80,13 @@ export function livePanel(
               `
             : ""
         }
+        ${
+          framed
+            ? html`<form method="POST" action="/sites/${site.id}/share" id="share-form" hidden>
+                <input type="hidden" name="path" value="${pathOf(url)}" />
+              </form>`
+            : ""
+        }
         <p class="muted" id="live-status" role="status">
           ${
             !url
@@ -239,4 +246,14 @@ export function draftNotice(discard: string, stale = false) {
       </details>
     </div>
   `;
+}
+
+/** The page a preview address is on, which is where a shared link should open. */
+function pathOf(url: string): string {
+  try {
+    const { pathname, search } = new URL(url);
+    return `${pathname}${search}`;
+  } catch {
+    return "/";
+  }
 }

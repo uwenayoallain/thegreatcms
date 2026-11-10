@@ -158,6 +158,7 @@ export function previewPage(options: {
 <html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(options.title)}</title>
 ${options.refresh ? `<meta http-equiv="refresh" content="${options.refresh}">` : ""}
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <meta name="color-scheme" content="light dark">
 <style>
 :root{--bg:#f6f6f4;--ink:#16181b;--muted:#5d6168;--line:#dcddd8}
@@ -185,7 +186,7 @@ export function waitingPage(runner: PreviewRunner): string {
     return previewPage({
       title: "The preview did not start",
       lines: [`The site's dev server ${failure}.`],
-      note: "Its output is in the preview service's log. Reload this page to try again.",
+      note: "Reload this page to try again. If it keeps happening, tell whoever runs the site: the reason is in the preview service's log.",
     });
   }
   return previewPage({

@@ -108,6 +108,43 @@ export interface Notification {
   kind?: "submission" | "publish";
   subject: string;
   lines: string[];
+  /** For a submission: the site's name, the form's, and what the visitor sent, field by field. */
+  site?: string;
+  form?: string;
+  fields?: Record<string, string>;
+  /** The visitor's own address, when the form asked for one, so a reply goes to them. */
+  replyTo?: string;
+  /** Where the submission can be read in the studio. */
+  inbox?: string;
+}
+
+const ADDRESS = /^[^\s@<>(),;:"\\]+@[^\s@<>(),;:"\\]+\.[^\s@<>(),;:"\\]+$/;
+
+/** The one address a visitor gave in a field named for it; anything else is not a place to reply to. */
+export function replyAddress(fields: Record<string, string>): string | undefined {
+  for (const [key, value] of Object.entries(fields)) {
+    if (!/^e-?mail$/i.test(key.trim())) continue;
+    const address = value.trim();
+    if (address.length <= 254 && ADDRESS.test(address)) return address;
+  }
+  return undefined;
+}
+
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
+
+/** A submission as an email reads it: each field under its name, long answers keeping their lines. */
+export function submissionHtml(message: Notification): string {
+  const rows = Object.entries(message.fields ?? {})
+    .map(
+      ([key, value]) =>
+        `<tr><th align="left" valign="top" style="padding:4px 16px 4px 0;font-weight:600">${escapeHtml(key)}</th><td style="padding:4px 0;white-space:pre-wrap">${escapeHtml(value)}</td></tr>`,
+    )
+    .join("");
+  const inbox = message.inbox
+    ? `<p style="margin:16px 0 0;color:#5d6168">Read it in the studio: <a href="${escapeHtml(message.inbox)}">${escapeHtml(message.inbox)}</a></p>`
+    : "";
+  return `<div style="font:15px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;color:#16181b"><p style="margin:0 0 12px">${escapeHtml(message.subject)}</p><table cellpadding="0" cellspacing="0" style="border-collapse:collapse">${rows}</table>${inbox}</div>`;
 }
 
 export interface Notifier {
@@ -149,7 +186,8 @@ export class WebhookNotifier implements Notifier {
       const response = await this.fetchImpl(this.url, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, content: text, ...message }),
+        // Discord refuses `content` over 2000 characters; the whole of it is in `lines` and `fields`.
+        body: JSON.stringify({ text, content: text.slice(0, 2000), ...message }),
         signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) process.stderr.write(`webhook failed: ${response.status}\n`);
@@ -179,8 +217,13 @@ export class ResendNotifier implements Notifier {
         body: JSON.stringify({
           from: this.options.from,
           to: this.options.to,
-          subject: message.subject,
-          text: message.lines.join("\n"),
+          subject: message.subject.replace(/\s+/g, " ").slice(0, 200),
+          text: [
+            ...message.lines,
+            ...(message.inbox ? ["", `Read it in the studio: ${message.inbox}`] : []),
+          ].join("\n"),
+          ...(message.fields ? { html: submissionHtml(message) } : {}),
+          ...(message.replyTo ? { reply_to: message.replyTo } : {}),
         }),
       });
       if (!response.ok) {
@@ -193,24 +236,39 @@ export class ResendNotifier implements Notifier {
 }
 
 export function toCsv(
-  rows: Array<{ createdAt: string; form: string; data: Record<string, string> }>,
+  rows: Array<{ createdAt: string; form: string; site?: string; data: Record<string, string> }>,
 ): string {
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row.data)))].toSorted();
-  const header = ["received", "form", ...columns];
+  const sites = rows.some((row) => row.site !== undefined);
+  // The fixed columns say what they are; a visitor's field named the same stays apart from them.
+  const header = ["Received (UTC)", ...(sites ? ["Site"] : []), "Form", ...columns];
   const lines = [header.map(csvCell).join(",")];
 
   for (const row of rows) {
     lines.push(
-      [row.createdAt, row.form, ...columns.map((column) => row.data[column] ?? "")]
+      [
+        utc(row.createdAt),
+        ...(sites ? [row.site ?? ""] : []),
+        row.form,
+        ...columns.map((column) => row.data[column] ?? ""),
+      ]
         .map(csvCell)
         .join(","),
     );
   }
-  return `${lines.join("\n")}\n`;
+  // CRLF is what the format asks for, and what spreadsheets expect inside a quoted cell's row.
+  return `${lines.join("\r\n")}\r\n`;
+}
+
+/** SQLite's `2026-11-10 00:01:35` as the same instant, said unambiguously. */
+function utc(stored: string): string {
+  return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(stored)
+    ? `${stored.replace(" ", "T")}Z`
+    : stored;
 }
 
 function csvCell(value: string): string {
   // A leading =, +, -, or @ makes a spreadsheet treat the cell as a formula.
-  const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  const guarded = /^\s*[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return `"${guarded.replace(/"/g, '""')}"`;
 }

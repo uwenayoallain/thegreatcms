@@ -409,7 +409,16 @@ export class LocalRepository implements Repository {
 
     const paths = request.files.map((file) => file.path);
     const staged = (
-      await this.git(["diff", "--cached", "--no-ext-diff", "--name-only", "-z", "--", ...paths])
+      await this.git([
+        "diff",
+        "--cached",
+        "--no-ext-diff",
+        "--name-only",
+        "--relative",
+        "-z",
+        "--",
+        ...paths,
+      ])
     )
       .split("\0")
       .filter(Boolean);
@@ -532,8 +541,8 @@ export class LocalRepository implements Repository {
       .filter(Boolean);
     if (changed.length > 0) {
       throw new LocalRepositoryError(
-        `The folder has ${changed.length} ${changed.length === 1 ? "change" : "changes"} that are not committed, so the branch was not changed.`,
-        "commit or set them aside in the site's folder first, then try again.",
+        `The folder has ${changed.length} ${changed.length === 1 ? "change that is" : "changes that are"} not committed, so the branch was not changed.`,
+        "commit or stash what changed in the site's folder, then try again.",
       );
     }
     if ((await this.tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${name}`])) !== null) {

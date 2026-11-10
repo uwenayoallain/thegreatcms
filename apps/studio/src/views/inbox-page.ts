@@ -15,6 +15,10 @@ export function inboxPage(options: {
   const { submissions, sites, siteId, includeSpam, flash } = options;
   const nameOf = (id: string) => sites.find((site) => site.id === id)?.name ?? id;
   const unread = submissions.filter((submission) => !submission.readAt).length;
+  // Carried by each action, so marking or deleting one keeps the list as it was filtered.
+  const filter = html`${siteId ? html`<input type="hidden" name="site" value="${siteId}" />` : ""}${
+    includeSpam ? html`<input type="hidden" name="spam" value="1" />` : ""
+  }`;
 
   return page(
     {
@@ -99,6 +103,7 @@ export function inboxPage(options: {
                       </dl>
                       <div class="actions compact">
                         <form method="POST" action="/inbox/${submission.id}/read">
+                          ${filter}
                           <input
                             type="hidden"
                             name="read"
@@ -111,6 +116,7 @@ export function inboxPage(options: {
                         <details class="inline-confirm">
                           <summary>Delete</summary>
                           <form method="POST" action="/inbox/${submission.id}/delete">
+                            ${filter}
                             <button class="danger" type="submit">Confirm delete</button>
                           </form>
                         </details>
