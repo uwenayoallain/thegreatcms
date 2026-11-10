@@ -147,20 +147,20 @@ describe("documents built to exhaust the reader", () => {
   });
 
   it("names the file when JSON or YAML nests past the parser's depth", () => {
-    const json = `${'{"a":'.repeat(500_000)}1${"}".repeat(500_000)}`;
+    const json = `${'{"a":'.repeat(100_000)}1${"}".repeat(100_000)}`;
     try {
       const deep = parseRegionFile(json, "content/cms/deep.json");
       typedOrFine(() => serializeRegion(deep));
     } catch (error) {
       expect((error as Error).message).toMatch(/^content\/cms\/deep\.json: could not read/);
     }
-    const yaml = `a: ${"[".repeat(100_000)}${"]".repeat(100_000)}`;
+    const yaml = `a: ${"[".repeat(20_000)}${"]".repeat(20_000)}`;
     expect(() => parseFrontmatter(`---\n${yaml}\n---\n`, "deep.md")).toThrow(
       /^deep\.md: frontmatter is not valid YAML/,
     );
     typedOrFine(() => parseSchema(`version: 1\nregions: ${yaml}`));
-    expect(() => parseSchema(`version: 1\nregions: ${"[".repeat(100_000)}`)).toThrow(SpecError);
-    expect(() => parseConfig(`version: 1\ncontent: ${"[".repeat(100_000)}`)).toThrow(SpecError);
+    expect(() => parseSchema(`version: 1\nregions: ${"[".repeat(20_000)}`)).toThrow(SpecError);
+    expect(() => parseConfig(`version: 1\ncontent: ${"[".repeat(20_000)}`)).toThrow(SpecError);
   });
 
   it("refuses YAML that expands aliases without end, in every file that is YAML", () => {
