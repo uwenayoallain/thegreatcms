@@ -614,8 +614,8 @@ export interface GitHubRepositories {
     fullName: string;
     cloneUrl: string;
     private: boolean;
-    /** Whether it already holds a GreatCMS schema. */
-    uses: boolean;
+    /** Whether it already holds a GreatCMS schema; unset while GitHub has not said yet. */
+    uses?: boolean;
     /** The folder it would be copied to. */
     folder: string;
     state: Folder["state"] | null;
@@ -682,15 +682,17 @@ function githubList(github: GitHubRepositories) {
             ? html`<form method="POST" action="/sites/github">
                 <ul class="folders" role="list">
                   ${repositories.map((repo, index) => {
-                    const about = `${repo.private ? "Private" : "Public"} · ${
+                    const state =
                       repo.state === "connected"
                         ? "Added"
                         : repo.state
                           ? "In the sites folder"
-                          : repo.uses
-                            ? "Uses GreatCMS"
-                            : "Not set up yet"
-                    }`;
+                          : repo.uses === undefined
+                            ? ""
+                            : repo.uses
+                              ? "Uses GreatCMS"
+                              : "Not set up yet";
+                    const about = `${repo.private ? "Private" : "Public"}${state ? ` · ${state}` : ""}`;
                     return html`<li>
                       ${
                         repo.state === null

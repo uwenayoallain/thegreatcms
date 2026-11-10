@@ -584,6 +584,35 @@ describe("the pages", () => {
     expect(body).not.toContain('class="pager"');
   });
 
+  it("does not hold the list for a slow GitHub: what is unknown is left blank and filled in later", async () => {
+    schemaIn.add("acme/site-1");
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).includes("/contents/.cms")) await held;
+      return fakeGitHub(input, init);
+    };
+    const github = await connected();
+    const patient = new GitHub(file, undefined, slow);
+    const repositories = await patient.repositories();
+    const began = Date.now();
+    expect((await patient.withSchema(repositories, 50)).size).toBe(0);
+    expect(Date.now() - began).toBeLessThan(1000);
+    release?.();
+    // The same questions, already on their way, answer the next call without being asked again.
+    const known = await patient.withSchema(repositories);
+    expect([...known]).toEqual(
+      expect.arrayContaining([
+        ["acme/site-0", false],
+        ["acme/site-1", true],
+      ]),
+    );
+    expect(calls.filter((call) => call.path.includes("/contents/.cms"))).toHaveLength(2);
+    expect(github.config()).not.toBeNull();
+  });
+
   it("marks a repository already copied here by its origin, whatever the folder is called", async () => {
     const copy = join(root, "renamed");
     mkdirSync(copy);

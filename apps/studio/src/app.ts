@@ -260,6 +260,9 @@ const SIGN_IN_PROBLEMS: Record<string, string | undefined> = {
   incomplete: "GitHub did not complete that sign-in. Start again.",
 };
 
+/** How long the connect screen waits to learn which repositories use GreatCMS. */
+const SCHEMA_PATIENCE_MS = 1200;
+
 /** Repositories listed on one page of the connect screen. */
 const REPOSITORIES_A_PAGE = 10;
 
@@ -1091,6 +1094,13 @@ export function createApp(options: AppOptions) {
     const all = store.listSites();
     const owner = isGithubOwner(person);
     const sites = owner ? all : ((await access?.among(person, all)) ?? []);
+    // Asked now, so the repository list has its answers by the time the owner opens it.
+    if (owner) {
+      void hub
+        .repositories()
+        .then((repositories) => hub.withSchema(repositories))
+        .catch(() => undefined);
+    }
     // An owner with nothing here yet lands on their repositories, ready to add.
     const first = owner && all.length === 0 && options.sitesRoot ? "/sites/new" : "/";
     return c.redirect(next ?? (sites.length === 1 ? `/sites/${sites[0]!.id}` : first), 303);
@@ -1323,7 +1333,8 @@ export function createApp(options: AppOptions) {
     const installUrl = github.installUrl() ?? undefined;
     try {
       const repositories = await github.repositories();
-      const uses = await github.withSchema(repositories);
+      // Known within a moment or left blank: the list never waits on GitHub for every repository.
+      const uses = await github.withSchema(repositories, SCHEMA_PATIENCE_MS);
       // A folder is a repository's copy when its origin says so, whatever the folder is called.
       const origins = await Promise.all(folders.map((folder) => originOf(folder.path)));
       const copyOf = new Map(
@@ -1347,7 +1358,7 @@ export function createApp(options: AppOptions) {
               fullName: repo.fullName,
               cloneUrl: repo.cloneUrl,
               private: repo.private,
-              uses: uses.has(repo.fullName),
+              uses: uses.get(repo.fullName),
               folder: names.has(repo.name.toLowerCase())
                 ? repo.fullName.replace("/", "-")
                 : repo.name,
@@ -1356,7 +1367,7 @@ export function createApp(options: AppOptions) {
             };
           })
           // The ones that already use GreatCMS first: they are the likeliest to be wanted.
-          .toSorted((a, b) => Number(b.uses) - Number(a.uses)),
+          .toSorted((a, b) => Number(b.uses === true) - Number(a.uses === true)),
       };
     } catch (error) {
       return { connected: true, installUrl, error: describeError(error) };

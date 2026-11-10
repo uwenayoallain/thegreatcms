@@ -429,18 +429,38 @@ export class GitHub {
     return all;
   }
 
-  /** The repositories among these that already hold a GreatCMS schema, by full name. */
-  async withSchema(repositories: Repository[]): Promise<Set<string>> {
+  /**
+   * Which of these repositories already hold a GreatCMS schema, by full name. Every one is asked
+   * about, a few at a time; with `patienceMs` the answer is whatever is known by then, and the
+   * rest is kept for the next call, so a page never waits on a long list.
+   */
+  async withSchema(
+    repositories: Repository[],
+    patienceMs = Number.POSITIVE_INFINITY,
+  ): Promise<Map<string, boolean>> {
     const queue = repositories.slice(0, MAX_SCHEMA_CHECKS);
-    const found = new Set<string>();
+    const known = new Map<string, boolean>();
     const worker = async () => {
       for (let repo = queue.shift(); repo; repo = queue.shift()) {
         // oxlint-disable-next-line no-await-in-loop -- a few at a time, so GitHub is not flooded
-        if (await this.hasSchema(repo).catch(() => false)) found.add(repo.fullName);
+        const has = await this.hasSchema(repo).catch(() => undefined);
+        if (has !== undefined) known.set(repo.fullName, has);
       }
     };
-    await Promise.all(Array.from({ length: 8 }, worker));
-    return found;
+    const all = Promise.all(Array.from({ length: 16 }, worker));
+    if (Number.isFinite(patienceMs)) {
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        all,
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, patienceMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      return new Map(known);
+    }
+    await all;
+    return known;
   }
 
   /** Whether a repository has `.cms/schema.*` on its main branch; asked again after ten minutes. */
