@@ -150,6 +150,10 @@ adds each person with a name, an email and a password of their own. Editors
 change content: regions, entries, images, drafts and publishes. When two
 people have the same content open, each sees the other's name.
 
+With GitHub connected, people can **Continue with GitHub** instead. Whoever can
+push to a site's repository on GitHub edits that site here, and sees only that
+site. Give or remove access on GitHub: nothing is set up in the studio.
+
 Form submissions from the site land in the **Inbox**, separate from content;
 see [Forms and submissions](/docs/forms-and-submissions/).
 

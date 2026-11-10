@@ -226,8 +226,15 @@ server. The same compose file also runs the previews for editors anywhere:
   hostname per preview, if other names must not reach the tunnel).
 
 `SITES_DIR` is the sites folder the connect page lists and clones into;
-`SITES_ROOT` names another when `SITES_DIR` is a single repository. Signing in sets the preview cookie for
-`PREVIEW_DOMAIN` too, and the cookie opens the previews and nothing else.
+`SITES_ROOT` names another when `SITES_DIR` is a single repository. Signing in
+sets the preview cookie for `PREVIEW_DOMAIN` too, and it opens the previews
+and nothing else.
+
+### Bring your own domain
+
+Anyone can run a studio of their own on their own domain, with this tunnel or
+the server stack below. A studio hosts only the sites its owner connects:
+signing in, with GitHub or a password, never adds one.
 
 ## A complete example
 

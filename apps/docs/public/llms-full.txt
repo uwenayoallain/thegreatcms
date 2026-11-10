@@ -1261,6 +1261,10 @@ adds each person with a name, an email and a password of their own. Editors
 change content: regions, entries, images, drafts and publishes. When two
 people have the same content open, each sees the other's name.
 
+With GitHub connected, people can **Continue with GitHub** instead. Whoever can
+push to a site's repository on GitHub edits that site here, and sees only that
+site. Give or remove access on GitHub: nothing is set up in the studio.
+
 Form submissions from the site land in the **Inbox**, separate from content;
 see [Forms and submissions](/docs/forms-and-submissions/).
 
@@ -1386,6 +1390,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 | `STUDIO_SITES_ROOT`      | The folder of sites the connect page lists, and where copies go.                                                 |
 | `STUDIO_CLONE_PRIVATE`   | `1` lets Copy from Git reach this machine and its private network, for a Git server that lives there.            |
+| `STUDIO_GITHUB_OWNERS`   | GitHub logins, comma-separated, that are owners when they sign in. Unset: the person who owns the GitHub App.    |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -1431,12 +1436,29 @@ of at least twelve characters. Each signs in as themselves, and each publish
 is committed under their name and address, so `git log` says who changed what.
 
 Sites and people stay the owner's: an editor cannot connect, reconfigure or
-disconnect a site, or manage editors. An editor reads the body of an MDX
-entry but cannot change it: MDX is code the site's build runs, so whatever an
-editor posts for it, the stored source is kept. Removing someone signs them out on their
-next request. When two people have the same content open, each sees the
-other's name; if both publish, the second is refused rather than overwriting
-the first.
+disconnect a site, or manage editors, and reads an MDX entry's body without
+changing it, because MDX is code the site's build runs. Removing someone signs
+them out on their next request. Two people with the same content open see each
+other's name; if both publish, the second is refused, not overwritten.
+
+### Sign in with GitHub
+
+Once GitHub is connected on **Git access**, the sign-in page offers
+**Continue with GitHub**. Whoever GitHub lets push to a connected site's
+repository edits that site and sees no other: its content, images, history,
+search and inbox. An editor with a password still sees every site.
+
+- The studio asks GitHub who may push, believes the answer for under two
+  minutes, and asks again on every publish. Access removed on GitHub ends here.
+- It asks for no email and keeps no token. Commits are authored as
+  `id+login@users.noreply.github.com`.
+- Signing in never connects a repository. Someone who can push to none of the
+  connected sites sees a page saying so.
+- The person who owns the GitHub App is an owner; `STUDIO_GITHUB_OWNERS` names
+  others instead. Disconnecting GitHub signs all of them out.
+
+An app made before sign-in existed needs a callback URL and a client secret:
+**Git access** gives the steps.
 
 Search, history, scheduled publishes and the rest of a day's editing are in
 [Managing content](/docs/managing-content/).
@@ -1693,8 +1715,15 @@ server. The same compose file also runs the previews for editors anywhere:
   hostname per preview, if other names must not reach the tunnel).
 
 `SITES_DIR` is the sites folder the connect page lists and clones into;
-`SITES_ROOT` names another when `SITES_DIR` is a single repository. Signing in sets the preview cookie for
-`PREVIEW_DOMAIN` too, and the cookie opens the previews and nothing else.
+`SITES_ROOT` names another when `SITES_DIR` is a single repository. Signing in
+sets the preview cookie for `PREVIEW_DOMAIN` too, and it opens the previews
+and nothing else.
+
+### Bring your own domain
+
+Anyone can run a studio of their own on their own domain, with this tunnel or
+the server stack below. A studio hosts only the sites its owner connects:
+signing in, with GitHub or a password, never adds one.
 
 ## A complete example
 

@@ -83,6 +83,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 | `STUDIO_SITES_ROOT`      | The folder of sites the connect page lists, and where copies go.                                                 |
 | `STUDIO_CLONE_PRIVATE`   | `1` lets Copy from Git reach this machine and its private network, for a Git server that lives there.            |
+| `STUDIO_GITHUB_OWNERS`   | GitHub logins, comma-separated, that are owners when they sign in. Unset: the person who owns the GitHub App.    |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -128,12 +129,29 @@ of at least twelve characters. Each signs in as themselves, and each publish
 is committed under their name and address, so `git log` says who changed what.
 
 Sites and people stay the owner's: an editor cannot connect, reconfigure or
-disconnect a site, or manage editors. An editor reads the body of an MDX
-entry but cannot change it: MDX is code the site's build runs, so whatever an
-editor posts for it, the stored source is kept. Removing someone signs them out on their
-next request. When two people have the same content open, each sees the
-other's name; if both publish, the second is refused rather than overwriting
-the first.
+disconnect a site, or manage editors, and reads an MDX entry's body without
+changing it, because MDX is code the site's build runs. Removing someone signs
+them out on their next request. Two people with the same content open see each
+other's name; if both publish, the second is refused, not overwritten.
+
+### Sign in with GitHub
+
+Once GitHub is connected on **Git access**, the sign-in page offers
+**Continue with GitHub**. Whoever GitHub lets push to a connected site's
+repository edits that site and sees no other: its content, images, history,
+search and inbox. An editor with a password still sees every site.
+
+- The studio asks GitHub who may push, believes the answer for under two
+  minutes, and asks again on every publish. Access removed on GitHub ends here.
+- It asks for no email and keeps no token. Commits are authored as
+  `id+login@users.noreply.github.com`.
+- Signing in never connects a repository. Someone who can push to none of the
+  connected sites sees a page saying so.
+- The person who owns the GitHub App is an owner; `STUDIO_GITHUB_OWNERS` names
+  others instead. Disconnecting GitHub signs all of them out.
+
+An app made before sign-in existed needs a callback URL and a client secret:
+**Git access** gives the steps.
 
 Search, history, scheduled publishes and the rest of a day's editing are in
 [Managing content](/docs/managing-content/).
