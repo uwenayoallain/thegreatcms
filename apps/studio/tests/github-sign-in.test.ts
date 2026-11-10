@@ -61,6 +61,8 @@ let calls: Array<{ method: string; url: string; auth: string; body: string }>;
 let permissions: Record<string, Record<string, string>>;
 /** The account GitHub now has under a login, when it is no longer the one who signed in. */
 let renamed: Record<string, number>;
+/** The repositories the owner chose for the app. */
+let given: string[];
 
 const json = (body: unknown, status = 200) =>
   new Response(status === 204 ? null : JSON.stringify(body), { status });
@@ -107,7 +109,18 @@ const fakeGitHub: typeof fetch = async (input, init) => {
     });
   }
   if (url.pathname === "/app/installations/11" && method === "DELETE") return json(null, 204);
-  if (url.pathname === "/installation/repositories") return json({ repositories: [] });
+  if (url.pathname === "/installation/repositories") {
+    return json({
+      repositories: given.map((name) => ({
+        full_name: `acme/${name}`,
+        name,
+        owner: { login: "acme" },
+        clone_url: `https://github.com/acme/${name}.git`,
+        private: false,
+        default_branch: "main",
+      })),
+    });
+  }
   const about = /^\/repos\/acme\/(\w+)\/collaborators\/(\w+)\/permission$/.exec(url.pathname);
   if (about && auth === "token ghs_installation") {
     const [, repository, login] = about as unknown as [string, string, string];
@@ -192,6 +205,7 @@ beforeEach(async () => {
   file = join(dir, "git", "github-app.json");
   calls = [];
   renamed = {};
+  given = ["alpha", "beta"];
   permissions = { ada: { alpha: "write" }, ghopper: { beta: "admin" }, boss: {} };
   // oxlint-disable-next-line unicorn/consistent-function-scoping -- read beside the sites it fills
   const files = (name: string) => ({
@@ -554,6 +568,13 @@ describe("access follows GitHub", () => {
     renamed.ghopper = 999;
     const grace = await signInAs("ghopper");
     expect((await get(`/sites/${BETA}`, grace)).status).toBe(404);
+  });
+
+  it("opens nothing in a repository the app was not given, whoever can push to it", async () => {
+    given = ["alpha"];
+    const grace = await signInAs("ghopper");
+    expect((await get(`/sites/${BETA}`, grace)).status).toBe(404);
+    expect(calls.some((call) => call.url.includes("/repos/acme/beta/"))).toBe(false);
   });
 
   it("asks GitHub again after a minute or two, and at once for a publish", async () => {

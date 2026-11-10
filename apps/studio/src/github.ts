@@ -309,6 +309,12 @@ export class GitHub {
       (entry) => entry.account.toLowerCase() === repository.owner.toLowerCase(),
     );
     if (!installation) return false;
+    // A public repository answers anyone; only one the app was given counts.
+    const wanted = `${repository.owner}/${repository.name}`.toLowerCase();
+    const given = (await this.repositories()).some(
+      (entry) => entry.fullName.toLowerCase() === wanted,
+    );
+    if (!given) return false;
     const path = `/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/collaborators/${encodeURIComponent(person.login)}/permission`;
     let answer: { permission?: string; role_name?: string; user?: { id?: number } };
     try {
