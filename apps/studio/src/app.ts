@@ -398,6 +398,11 @@ export function createApp(options: AppOptions) {
     if (error instanceof TypeError && /form ?data|parse body|boundary/i.test(error.message)) {
       return c.text("That form could not be read.", 400);
     }
+    // A site whose schema or repository is broken says so on a page, on any of its screens.
+    const site = c.get("viewer") && store.getSite(/^\/sites\/([^/]+)/.exec(c.req.path)?.[1] ?? "");
+    if (site && SITE_ERRORS.has(error.name)) {
+      return c.html(errorPage(site.name, describeError(error)), 502);
+    }
     process.stderr.write(`${error.stack ?? error}\n`);
     return c.text("Something went wrong in the studio.", 500);
   });
@@ -2891,6 +2896,9 @@ function previewHost(devUrl: string): string | null {
 /** Programs that fetch a pasted link to draw a card for it. */
 const LINK_PREVIEWER =
   /bot\b|crawler|spider|facebookexternalhit|WhatsApp\/|SkypeUriPreview|Iframely|Embedly/i;
+
+/** What a site that cannot be read throws, as opposed to a fault in the studio. */
+const SITE_ERRORS = new Set(["SpecError", "SiteNotConfiguredError", "LocalRepositoryError"]);
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;

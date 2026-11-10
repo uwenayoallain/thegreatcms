@@ -100,7 +100,11 @@ describe("what a broken site tells each person", () => {
     rmSync(join(site.root, ".cms/schema.yaml"));
     for (const path of pages) {
       // oxlint-disable-next-line no-await-in-loop -- one page at a time
-      const theirs = await (await get(site, path, editor)).text();
+      const answer = await get(site, path, editor);
+      expect(answer.status, path).toBe(502);
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time
+      const theirs = await answer.text();
+      expect(theirs, path).toContain("has no .cms/schema.yaml.");
       expect(theirs, path).not.toContain(site.root);
       expect(theirs, path).not.toContain("/tmp/");
     }
@@ -180,6 +184,47 @@ describe("what a broken site tells each person", () => {
       expect(theirs?.message).not.toContain("/tmp/");
     } finally {
       rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("a build that failed", () => {
+  it("shows its log to an editor without the builder's folders", async () => {
+    const deployRoot = mkdtempSync(join(tmpdir(), "greatcms-builder-"));
+    try {
+      site.store.updateSite(SITE_ID, {
+        name: "Example",
+        devUrl: "",
+        pushAfterPublish: false,
+        deployRoot,
+      });
+      writeFileSync(
+        join(deployRoot, "status.json"),
+        JSON.stringify({
+          failed: {
+            sha: "b".repeat(40),
+            message: "Change the hero",
+            at: "2026-08-16T10:00:00Z",
+            log: [
+              "content/posts/hello.json: title is required",
+              "  at render (/srv/work/site-1/src/pages/index.astro:12:5)",
+              "  at file:///srv/work/site-1/node_modules/astro/dist/core.js:9:1",
+              `copying to ${deployRoot}/releases/next failed`,
+            ].join("\n"),
+          },
+        }),
+      );
+      const owners = await (await get(site, `/sites/${SITE_ID}`)).text();
+      expect(owners).toContain("/srv/work/site-1/src/pages/index.astro:12:5");
+      expect(owners).toContain(`${deployRoot}/releases/next`);
+
+      const theirs = await (await get(site, `/sites/${SITE_ID}`, editor)).text();
+      expect(theirs).toContain("content/posts/hello.json: title is required");
+      expect(theirs).toContain("copying to releases/next failed");
+      expect(theirs).not.toContain("/srv/work");
+      expect(theirs).not.toContain(deployRoot);
+    } finally {
+      rmSync(deployRoot, { recursive: true, force: true });
     }
   });
 });

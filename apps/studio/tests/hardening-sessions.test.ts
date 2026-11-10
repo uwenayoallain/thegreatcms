@@ -361,7 +361,12 @@ describe("property 6: security headers on HTML pages including error pages", () 
 
   it("403 Forbidden HTML error page carries security headers", async () => {
     const signingKey = sessionKey(SECRET, PASSWORD);
-    site.store.addEditor({ name: "Ed", email: "ed@example.com", passwordHash: "dummy", allSites: true });
+    site.store.addEditor({
+      name: "Ed",
+      email: "ed@example.com",
+      passwordHash: "dummy",
+      allSites: true,
+    });
     const stamp = editorStamp(signingKey, "dummy");
     const editorCookie = createSessionCookie(signingKey, { actor: "editor:1", stamp }).split(
       ";",

@@ -5,7 +5,7 @@ import { realpathSync } from "node:fs";
 const ELSEWHERE = "(a path on this server)";
 // A slash that starts a path: not one inside a relative path, a web address or `origin/main`.
 const ABSOLUTE =
-  /(?<![\w.:/@~+-])\/(?!\/)[\w.@~+-][^\s'"`<>|;,)\]]*|(?<![A-Za-z])[A-Za-z]:\\[^\s'"`<>|;,)\]]+/g;
+  /file:\/\/[^\s'"`<>|;,)\]]*|(?<![\w.:/@~+-])\/(?!\/)[\w.@~+-][^\s'"`<>|;,)\]]*|(?<![A-Za-z])[A-Za-z]:\\[^\s'"`<>|;,)\]]+/g;
 
 /** A folder as it was given and as the system resolves it, since an error may name either. */
 function spellings(root: string): string[] {
