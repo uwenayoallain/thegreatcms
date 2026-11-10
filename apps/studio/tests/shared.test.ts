@@ -77,11 +77,97 @@ describe("the page that makes a preview link", () => {
     const text = document.querySelector("main")?.textContent?.replace(/\s+/g, " ") ?? "";
     expect(text).toMatch(/unpublished edits included/);
     expect(text).toMatch(/Seven days, until/);
-    expect(text).toMatch(/Changing the studio's password ends every preview link/);
+    expect(text).toMatch(/Stop sharing ends this link and every other link made for Example/);
+    expect(text).toMatch(/Links to other sites keep working/);
+    expect(
+      document.querySelector(`form[action="/sites/${SITE_ID}/share/stop"] button[type="submit"]`),
+    ).not.toBeNull();
     const until = document.querySelector("time")?.getAttribute("datetime") ?? "";
     expect(Date.parse(until) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
     // No script on this screen: the field is there to select and copy by hand.
     expect(document.querySelectorAll("script")).toHaveLength(0);
+  });
+});
+
+describe("stopping a site's preview links", () => {
+  const opens = async (host: string, token: string) =>
+    (
+      await app.request("/auth/check", {
+        headers: {
+          "x-forwarded-host": host,
+          "x-forwarded-proto": "https",
+          "x-forwarded-uri": "/",
+          cookie: `greatcms_share=${encodeURIComponent(token)}`,
+        },
+      })
+    ).status === 204;
+  const linkFor = async (siteId: string) => {
+    const response = await app.request(`/sites/${siteId}/share`, {
+      method: "POST",
+      headers: { ...signedIn, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ path: "/" }),
+    });
+    const field = (await page(response)).querySelector<HTMLInputElement>("#share-url")!;
+    return new URL(field.value).searchParams.get("greatcms-share")!;
+  };
+
+  it("ends that site's links at once, and leaves another site's and later ones working", async () => {
+    site.store.addSite({
+      id: "site-2",
+      name: "Other",
+      path: site.root,
+      devUrl: "https://other.example.com",
+      createdAt: "2026-08-16",
+    });
+    const before = await linkFor(SITE_ID);
+    const older = createShareToken(key, SITE_ID);
+    const other = await linkFor("site-2");
+    expect(await opens("preview.example.com", before)).toBe(true);
+    expect(await opens("preview.example.com", older)).toBe(true);
+    expect(await opens("other.example.com", other)).toBe(true);
+
+    const stopped = await app.request(`/sites/${SITE_ID}/share/stop`, {
+      method: "POST",
+      headers: signedIn,
+    });
+    expect(stopped.status).toBe(303);
+    expect(stopped.headers.get("location")).toBe(`/sites/${SITE_ID}/settings`);
+    const flash = stopped.headers
+      .getSetCookie()
+      .find((value) => value.startsWith("greatcms_flash="))!
+      .split(";")[0];
+    const settings = await page(
+      await app.request(`/sites/${SITE_ID}/settings`, {
+        headers: { cookie: `${signedIn.cookie}; ${flash}` },
+      }),
+    );
+    expect(settings.querySelector(".flash")?.textContent).toMatch(
+      /Every preview link made for Example so far has stopped working/,
+    );
+    expect(
+      settings.querySelector(`form[action="/sites/${SITE_ID}/share/stop"] button`),
+    ).not.toBeNull();
+
+    expect(await opens("preview.example.com", before)).toBe(false);
+    expect(await opens("preview.example.com", older)).toBe(false);
+    expect(await opens("other.example.com", other)).toBe(true);
+    // Arriving by the link itself is told it no longer works, like any other dead link.
+    const arrived = await check(`/?greatcms-share=${encodeURIComponent(before)}`);
+    expect(arrived.headers.get("location")).toBe("https://studio.example.com/share");
+
+    const after = await linkFor(SITE_ID);
+    expect(after).not.toBe(before);
+    expect(await opens("preview.example.com", after)).toBe(true);
+    // A round cannot be claimed: the signature covers it.
+    expect(await opens("preview.example.com", before.replace(/^site-1\./, "site-1.r1."))).toBe(
+      false,
+    );
+  });
+
+  it("is refused to someone who is not signed in", async () => {
+    const response = await app.request(`/sites/${SITE_ID}/share/stop`, { method: "POST" });
+    expect(response.status).toBe(401);
+    expect(site.store.shareRound(SITE_ID)).toBe(0);
   });
 });
 

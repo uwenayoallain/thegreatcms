@@ -64,19 +64,34 @@ const SHARE_DAYS = 7;
  * A preview link for someone without an account: the site it is for, when it stops working, and
  * a signature. It opens the preview and nothing else; the studio never reads it as a session.
  */
-export function createShareToken(secret: string, siteId: string, now = Date.now()): string {
-  const payload = `${siteId}.${now + SHARE_DAYS * 86_400_000}`;
+export function createShareToken(
+  secret: string,
+  siteId: string,
+  now = Date.now(),
+  round = 0,
+): string {
+  // A site that never stopped sharing signs what it always did, so links made before still open.
+  const payload = `${siteId}${round > 0 ? `.r${round}` : ""}.${now + SHARE_DAYS * 86_400_000}`;
   return `${payload}.${sign(payload, keyFor(secret, "share"))}`;
 }
 
-/** The site a share token is for, or null when it is forged or has run out. */
-export function readShareToken(token: string | undefined, secret: string): string | null {
+/**
+ * The site a share token is for, or null when it is forged, has run out, or was made before
+ * that site last stopped sharing. `roundOf` says how many times a site has.
+ */
+export function readShareToken(
+  token: string | undefined,
+  secret: string,
+  roundOf: (siteId: string) => number = () => 0,
+): string | null {
   const parts = decoded(token)?.split(".");
-  if (parts?.length !== 3) return null;
-  const [siteId, expiry, signature] = parts as [string, string, string];
-  if (!constantTimeEqual(sign(`${siteId}.${expiry}`, keyFor(secret, "share")), signature))
-    return null;
+  if (!parts || parts.length < 3 || parts.length > 4) return null;
+  const signature = parts.pop() as string;
+  if (!constantTimeEqual(sign(parts.join("."), keyFor(secret, "share")), signature)) return null;
+  const expiry = parts.pop() as string;
   if (!(Number(expiry) > Date.now())) return null;
+  const [siteId, round = "r0"] = parts as [string, string?];
+  if (!/^r\d+$/.test(round) || Number(round.slice(1)) !== roundOf(siteId)) return null;
   return siteId;
 }
 

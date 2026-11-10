@@ -5,6 +5,7 @@ import type { Site } from "../db.js";
 import type { CmsSchema } from "@greatcms/spec";
 import type { CloneState, Folder } from "../connect.js";
 import type { BranchState } from "../repo.js";
+import { stopSharing } from "./account-pages.js";
 import { siteNav } from "./editor-parts.js";
 import { chrome } from "./chrome.js";
 import { page, type PageOptions, withRemedy } from "./layout.js";
@@ -359,6 +360,18 @@ export function newSitePage(
           <a class="button secondary" href="${editing ? `/sites/${editing.id}` : "/"}">Cancel</a>
         </div>
       </form>
+      ${
+        editing?.devUrl
+          ? html`<section class="danger-zone" aria-labelledby="sharing">
+              <h2 id="sharing">Preview links</h2>
+              <p>
+                A preview link opens this site's preview for seven days, for anyone who has it. Stop
+                sharing ends every link made for this site so far; other sites' links keep working.
+              </p>
+              ${stopSharing(editing)}
+            </section>`
+          : ""
+      }
       ${
         editing && !chrome().local
           ? html`<section class="danger-zone" aria-labelledby="danger">

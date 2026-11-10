@@ -773,9 +773,10 @@ export function createApp(options: AppOptions) {
    * otherwise a redirect to sign in that comes back to the page it wanted. Caddy's
    * `forward_auth` sends the original request's host and path in these headers.
    */
+  const shareRound = (siteId: string) => store.shareRound(siteId);
   /** A share token is good for the preview host of the site it names, and no other. */
   const shareFits = (token: string | undefined, host: string | undefined) => {
-    const siteId = readShareToken(token, signingKey);
+    const siteId = readShareToken(token, signingKey, shareRound);
     const site = siteId ? store.getSite(siteId) : null;
     if (!site?.devUrl || !host) return false;
     try {
@@ -831,7 +832,7 @@ export function createApp(options: AppOptions) {
   app.get("/share", (c) => {
     const token = c.req.query("token");
     const next = allowedNext(c.req.query("next"));
-    const siteId = readShareToken(token, signingKey);
+    const siteId = readShareToken(token, signingKey, shareRound);
     if (!token || !siteId || !next || next.startsWith("/")) {
       return c.html(shareProblemPage(), 403);
     }
@@ -854,10 +855,23 @@ export function createApp(options: AppOptions) {
     let url = new URL(path.startsWith("/") ? path : "/", preview);
     // `//elsewhere` is a path to another host: the token would travel with it.
     if (url.origin !== preview.origin) url = new URL("/", preview);
-    const token = createShareToken(signingKey, site.id);
+    const token = createShareToken(signingKey, site.id, Date.now(), store.shareRound(site.id));
     url.searchParams.set("greatcms-share", token);
     const until = new Date(Number(token.split(".").at(-2))).toISOString();
     return c.html(sharePage({ site, url: url.href, until }));
+  });
+
+  /** Ends this site's preview links, and no other site's: the next link made starts a new round. */
+  app.post("/sites/:id/share/stop", (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    store.stopSharing(site.id);
+    const back = c.get("viewer").owner ? `/sites/${site.id}/settings` : `/sites/${site.id}`;
+    return done(
+      c,
+      back,
+      `Every preview link made for ${site.name} so far has stopped working. A new one works as usual.`,
+    );
   });
 
   app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|greatcms-logo\\.png}", (c) => {
