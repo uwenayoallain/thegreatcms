@@ -1,5 +1,5 @@
 # The builder: git, Node and pnpm, and nothing of the site until it clones it.
-FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS build
+FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS build
 WORKDIR /app
 ENV PNPM_HOME=/pnpm COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
@@ -14,7 +14,7 @@ RUN pnpm --filter @greatcms/deploy build
 # It has no dependencies of its own: the build output and two launchers are the whole program.
 # Debian rather than Alpine: as the preview service it runs dev servers from node_modules that
 # may have been installed on the host, whose native packages are built for glibc.
-FROM node:24-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9
+FROM node:26-bookworm-slim@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/* && corepack enable
 WORKDIR /app/packages/deploy
