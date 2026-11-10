@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import {
+  cookieDomainWarning,
   createPreviewCookie,
   createSessionCookie,
   createShareToken,
@@ -263,5 +264,22 @@ describe("cookies the page reads for looks alone", () => {
       expect(page).not.toContain("alert(");
       expect(page).not.toContain("<img src=x>");
     }
+  });
+});
+
+describe("a parent cookie domain without HTTPS", () => {
+  it("is warned about at start, with what to do", () => {
+    for (const url of [undefined, "", "http://studio.example.com"]) {
+      const warning = cookieDomainWarning(".example.com", url);
+      expect(warning, String(url)).toContain("STUDIO_COOKIE_DOMAIN is example.com");
+      expect(warning).toContain("a preview under example.com");
+      expect(warning).toContain("fix: serve the studio over HTTPS");
+    }
+  });
+
+  it("is not, over HTTPS or with no parent domain, as on one machine", () => {
+    expect(cookieDomainWarning("example.com", "https://studio.example.com")).toBeNull();
+    expect(cookieDomainWarning(undefined, "http://localhost:8787")).toBeNull();
+    expect(cookieDomainWarning("", undefined)).toBeNull();
   });
 });

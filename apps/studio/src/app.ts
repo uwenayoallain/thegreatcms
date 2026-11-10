@@ -200,6 +200,8 @@ export interface AppOptions {
   originOf?: (path: string) => Promise<string | null>;
   /** Replaces git for clones, in tests. */
   cloneGit?: CloneGit;
+  /** Where copies from Git are made before they move into the sites folder; no site may write here. */
+  cloneWorkDir?: string;
   /** How many copies run at once and how large one may grow. */
   cloneLimits?: Partial<CloneLimits>;
   /**
@@ -262,7 +264,7 @@ export function createApp(options: AppOptions) {
     if (probe) warmPreview(probe, site.devUrl);
   });
   const clones = options.sitesRoot
-    ? new Clones(options.sitesRoot, options.cloneGit, options.cloneLimits)
+    ? new Clones(options.sitesRoot, options.cloneGit, options.cloneLimits, options.cloneWorkDir)
     : undefined;
   // Pushes to a repository the GitHub App reaches sign in with a token minted for that push.
   useRemoteAuth(

@@ -71,8 +71,8 @@ export type PatternMatcher = (pattern: RegExp, value: string) => boolean | null;
 let matcher: PatternMatcher | undefined;
 
 /**
- * Lets a long-running host, such as the studio, put a time limit on a schema's patterns. Without
- * one a pattern is simply tested, which is what a build and the command line do.
+ * Lets a host put a time limit on a schema's patterns, as the studio and `greatcms check` do with
+ * `boundedMatch` from `@greatcms/spec/node`. Without one a pattern is simply tested.
  */
 export function usePatternMatcher(next: PatternMatcher | undefined): void {
   matcher = next;
@@ -200,6 +200,7 @@ function validateField(
             path,
             "pattern_timeout",
             `Could not be checked against pattern ${def.pattern} in time, so it was not accepted.`,
+            "Write the pattern in the schema without lookahead, lookbehind, backreferences or repeat counts above 16, so it is always quick to check.",
           );
         } else if (!matched) {
           push(

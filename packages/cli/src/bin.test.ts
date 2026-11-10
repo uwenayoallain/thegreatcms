@@ -1,9 +1,11 @@
 /** The built binary itself, started as a person starts it. */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { VERSION } from "./version.js";
 
 const bin = fileURLToPath(new URL("../bin/greatcms.mjs", import.meta.url));
@@ -49,6 +51,56 @@ describe("the binary", () => {
     const outside = greatcms(["check"], fileURLToPath(new URL("../bin", import.meta.url)));
     expect(outside.code).toBe(1);
     expect(outside.err).toContain("No .cms/schema.yaml found");
+  });
+});
+
+describe("check, on a pattern that backtracks without end", () => {
+  let site: string;
+  beforeEach(() => {
+    site = mkdtempSync(join(tmpdir(), "greatcms-check-pattern-"));
+    mkdirSync(join(site, ".cms"));
+    mkdirSync(join(site, "content/cms"), { recursive: true });
+    writeFileSync(
+      join(site, ".cms/schema.yaml"),
+      'version: 1\nregions:\n  home.hero:\n    fields:\n      code: { type: text, pattern: "^(?=(a+)+$)" }\n      sku: { type: text, pattern: "^(a+){20}$" }\n',
+    );
+    writeFileSync(
+      join(site, "content/cms/home.hero.json"),
+      JSON.stringify({ code: `${"a".repeat(64)}!`, sku: `${"a".repeat(64)}!` }),
+    );
+  });
+  afterEach(() => rmSync(site, { recursive: true, force: true }));
+
+  it("stops, names the field and the pattern, and exits non-zero", () => {
+    // The limit here only ends a run that hung; nothing is asserted about how long a good one takes.
+    const result = spawnSync(process.execPath, [bin, "check", "--json"], {
+      cwd: site,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(1);
+    const report = JSON.parse(result.stdout) as {
+      ok: boolean;
+      issues: Array<Record<string, string>>;
+    };
+    expect(report.ok).toBe(false);
+    expect(report.issues).toHaveLength(2);
+    expect(report.issues[0]).toEqual({
+      code: "pattern_timeout",
+      file: "content/cms/home.hero.json",
+      path: "code",
+      message: "Could not be checked against pattern ^(?=(a+)+$) in time, so it was not accepted.",
+      fix: expect.any(String),
+    });
+    expect(report.issues[1]).toMatchObject({ code: "pattern_timeout", path: "sku" });
+  });
+
+  it("says so in words too", () => {
+    const { code, err } = greatcms(["check"], site);
+    expect(code).toBe(1);
+    expect(err).toContain("^(?=(a+)+$) in time");
   });
 });
 

@@ -18,7 +18,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
-import { configRefusal, gitIn, localEnd, trackBranch } from "./git-guard.js";
+import { gitIn, localEnd, trackBranch } from "./git-guard.js";
 
 const run = promisify(execFile);
 
@@ -74,6 +74,8 @@ const answers = new Map<
 const MAX_ANSWERS = 500;
 /** Folders where reading `.git` gave the same commit as git did, so it can stand in for it. */
 const headFromFiles = new Map<string, boolean>();
+/** Folders where git had an identity of its own to commit as; asked again when a commit fails. */
+const identified = new Set<string>();
 /** The branch and remote per folder, for as long as the files git keeps them in are unchanged. */
 const branches = new Map<string, { key: string; at: number; value: Promise<BranchState> }>();
 /** Past this a change outside the folder, such as the machine's own git config, is picked up. */
@@ -400,38 +402,59 @@ export class LocalRepository implements Repository {
       await this.git(["rm", "-q", "--cached", "--ignore-unmatch", "--", ...removed]);
 
     const paths = request.files.map((file) => file.path);
-    const staged = (
-      await this.git([
-        "diff",
-        "--cached",
-        "--no-ext-diff",
-        "--name-only",
-        "--relative",
-        "-z",
-        "--",
-        ...paths,
-      ])
-    )
-      .split("\0")
-      .filter(Boolean);
-    // "Nothing to commit" is a success: what is on disk already matches.
-    if (staged.length === 0) return { commitSha: await this.getHead(), url };
+    try {
+      // Almost every publish changes each of its files, so git is asked which did only if it refuses.
+      await this.commit(request, paths);
+    } catch (error) {
+      const staged = (
+        await this.git([
+          "diff",
+          "--cached",
+          "--no-ext-diff",
+          "--name-only",
+          "--relative",
+          "-z",
+          "--",
+          ...paths,
+        ])
+      )
+        .split("\0")
+        .filter(Boolean);
+      // "Nothing to commit" is a success: what is on disk already matches.
+      if (staged.length === 0) return { commitSha: await this.getHead(), url };
+      if (staged.length === paths.length) throw error;
+      // A path with nothing staged, such as a removal of a file git never had, is left out.
+      await this.commit(request, staged);
+    }
+    return { commitSha: await this.getHead(), url };
+  }
+
+  private async commit(request: CommitRequest, paths: string[]): Promise<void> {
     const author = request.author
       ? ["--author", `${clean(request.author.name)} <${clean(request.author.email)}>`]
       : [];
-    // A machine with no git identity still publishes: the editor commits as themselves.
-    const committer =
-      request.author && !(await this.tryGit(["var", "GIT_COMMITTER_IDENT"]))
-        ? {
-            GIT_COMMITTER_NAME: clean(request.author.name),
-            GIT_COMMITTER_EMAIL: clean(request.author.email),
-          }
-        : undefined;
-    await this.git(
-      ["commit", "--no-verify", ...author, "-m", request.message, "--", ...staged],
-      committer,
-    );
-    return { commitSha: await this.getHead(), url };
+    const args = ["commit", "--no-verify", ...author, "-m", request.message, "--", ...paths];
+    const known = identified.has(this.root);
+    try {
+      await this.git(args, await this.committer(request.author));
+    } catch (error) {
+      if (!known) throw error;
+      // The identity git had when last asked may be gone, so it is asked again, once.
+      identified.delete(this.root);
+      const committer = await this.committer(request.author);
+      if (!committer) throw error;
+      await this.git(args, committer);
+    }
+  }
+
+  /** A machine with no git identity still publishes: the editor commits as themselves. */
+  private async committer(author?: Author): Promise<Record<string, string> | undefined> {
+    if (!author || identified.has(this.root)) return undefined;
+    if (await this.tryGit(["var", "GIT_COMMITTER_IDENT"])) {
+      identified.add(this.root);
+      return undefined;
+    }
+    return { GIT_COMMITTER_NAME: clean(author.name), GIT_COMMITTER_EMAIL: clean(author.email) };
   }
 
   /**
@@ -619,9 +642,8 @@ export class LocalRepository implements Repository {
   private async pushNow(): Promise<PushResult> {
     const guard = await gitIn(this.root);
     if (!guard) return { ok: false, reason: "The folder is not a git repository." };
-    if (guard.problems.length > 0) {
-      const { message, fix } = configRefusal(guard.problems);
-      return { ok: false, reason: `${message}\n  fix: ${fix}` };
+    if (guard.refusal) {
+      return { ok: false, reason: `${guard.refusal.message}\n  fix: ${guard.refusal.fix}` };
     }
     const tracked = await this.syncState();
     const where = await this.branchState();
@@ -839,10 +861,8 @@ export class LocalRepository implements Repository {
 
   /** Stops a publish or branch change in a folder whose git config holds more than the studio reads. */
   private async refuseUncheckedConfig(): Promise<void> {
-    const problems = (await gitIn(this.root))?.problems ?? [];
-    if (problems.length === 0) return;
-    const { message, fix } = configRefusal(problems);
-    throw new LocalRepositoryError(message, fix);
+    const refusal = (await gitIn(this.root))?.refusal;
+    if (refusal) throw new LocalRepositoryError(refusal.message, refusal.fix);
   }
 
   /** A new branch from the remote's, with that as its upstream. */
@@ -869,6 +889,9 @@ export class LocalRepository implements Repository {
   private async git(args: string[], env?: Record<string, string>): Promise<string> {
     const guard = await gitIn(this.root);
     if (!guard) throw new LocalRepositoryError(`git ${args[0]} failed: not a git repository`);
+    if (guard.blocked && guard.refusal) {
+      throw new LocalRepositoryError(guard.refusal.message, guard.refusal.fix);
+    }
     try {
       const { stdout } = await run("git", [...guard.args, ...args], {
         cwd: this.root,

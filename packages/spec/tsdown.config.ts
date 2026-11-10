@@ -2,7 +2,7 @@ import { defineConfig } from "tsdown";
 
 // Rolldown + oxc: builds in milliseconds, emits ESM and declarations.
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/node.ts"],
   format: ["esm"],
   dts: true,
   // Written over in place, never emptied first: running dev servers import these files.

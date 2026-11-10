@@ -2,7 +2,7 @@
 
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
-import { randomSecret } from "./auth.js";
+import { cookieDomainWarning, randomSecret } from "./auth.js";
 import { applySites, parseSites, withoutSecrets } from "./config.js";
 import { warmAssets } from "./assets.js";
 import { PreviewAddresses, sweepStaleClones } from "./connect.js";
@@ -66,6 +66,10 @@ try {
   process.exit(1);
 }
 
+// Said at every start, and never a reason to stop: on one machine, plain http is how it is run.
+const cookieWarning = cookieDomainWarning(process.env.STUDIO_COOKIE_DOMAIN, process.env.STUDIO_URL);
+if (cookieWarning) process.stderr.write(`warning: ${cookieWarning}\n`);
+
 const emailed = Boolean(process.env.RESEND_API_KEY);
 const hooked = Boolean(process.env.STUDIO_WEBHOOK_URL);
 const sessionsKept = Boolean(process.env.STUDIO_SECRET);
@@ -76,7 +80,10 @@ const store = new Store(databaseFile);
 // A publish the last run had taken but not finished is tried again rather than left hanging.
 const recovered = store.recoverScheduled();
 // Copies a stopped studio left half-made would block the same name from being copied again.
-const swept = process.env.STUDIO_SITES_ROOT ? sweepStaleClones(process.env.STUDIO_SITES_ROOT) : [];
+const cloneWorkDir = join(dirname(databaseFile), "clones");
+const swept = process.env.STUDIO_SITES_ROOT
+  ? sweepStaleClones(process.env.STUDIO_SITES_ROOT, cloneWorkDir)
+  : [];
 
 // An inbox is not an archive: with STUDIO_SUBMISSION_DAYS set, older submissions are deleted.
 const retentionDays = Number(process.env.STUDIO_SUBMISSION_DAYS ?? 0);
@@ -98,6 +105,7 @@ const app = createApp({
   cookieDomain: process.env.STUDIO_COOKIE_DOMAIN || undefined,
   probeUrls: new Map(sites.filter((site) => site.probeUrl).map((site) => [site.id, site.probeUrl])),
   sitesRoot: process.env.STUDIO_SITES_ROOT || undefined,
+  cloneWorkDir,
   previewUrl: process.env.STUDIO_PREVIEW_URL || undefined,
   previewsFile: process.env.STUDIO_PREVIEWS_FILE || undefined,
   previewProbe: process.env.STUDIO_PREVIEW_PROBE || undefined,

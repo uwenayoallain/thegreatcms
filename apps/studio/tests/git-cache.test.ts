@@ -1,7 +1,7 @@
 /** Answers from git are kept per commit: never stale once the branch moves, by the studio or anyone. */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,5 +103,100 @@ describe("a machine with no git identity", () => {
     });
     await expect(publish).rejects.toBeInstanceOf(LocalRepositoryError);
     await expect(publish).rejects.toThrow(/fix: Nothing was committed\. Give git an identity/);
+  });
+});
+
+describe("a publish", () => {
+  let log: string;
+  /** The git commands the studio starts from here on, by name. */
+  const watch = () => {
+    const bin = mkdtempSync(join(tmpdir(), "greatcms-git-watch-"));
+    log = join(bin, "log");
+    const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+    writeFileSync(
+      join(bin, "git"),
+      `#!/bin/sh\nfor a in "$@"; do case "$a" in -c) skip=1;; *) if [ -n "$skip" ]; then skip=; else echo "$a" >> '${log}'; break; fi;; esac; done\nexec '${real}' "$@"\n`,
+    );
+    chmodSync(join(bin, "git"), 0o755);
+    vi.stubEnv("PATH", `${bin}:${process.env.PATH}`);
+  };
+  const started = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []);
+  const editor = { name: "Editor", email: "editor@example.com" };
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("starts git three times once the folder is known: the check, the staging, the commit", async () => {
+    const repo = new LocalRepository(root);
+    const publish = async (content: string) =>
+      repo.commitFiles({
+        message: "content: update a",
+        author: editor,
+        expectedHeadSha: await repo.getHead(),
+        files: [{ path: "a.json", content }],
+      });
+    await publish('{"round":1}');
+    watch();
+    const { commitSha } = await publish('{"round":2}');
+
+    expect(started()).toEqual(["diff", "add", "commit"]);
+    expect(commitSha).toBe(git("rev-parse", "HEAD"));
+    expect(git("show", "HEAD:a.json")).toBe('{"round":2}');
+  });
+
+  it("with nothing changed is a success, and makes no commit", async () => {
+    const repo = new LocalRepository(root);
+    const before = git("rev-parse", "HEAD");
+    const { commitSha } = await repo.commitFiles({
+      message: "content: update a",
+      author: editor,
+      files: [{ path: "a.json", content: "{}" }],
+    });
+
+    expect(commitSha).toBe(before);
+    expect(git("rev-parse", "HEAD")).toBe(before);
+    expect(git("status", "--porcelain")).toBe("");
+  });
+
+  it("is still one commit when one of its files had nothing to stage", async () => {
+    const repo = new LocalRepository(root);
+    await repo.commitFiles({
+      message: "content: update a",
+      author: editor,
+      files: [
+        { path: "a.json", content: '{"changed":true}' },
+        { path: "never-there.json", delete: true },
+      ],
+    });
+
+    expect(git("log", "--format=%s")).toBe("content: update a\nfirst");
+    expect(git("show", "--name-only", "--format=", "HEAD")).toBe("a.json");
+    expect(git("status", "--porcelain")).toBe("");
+  });
+
+  it("commits as the editor when the identity git had is gone by the next publish", async () => {
+    const config = join(root, "..", `${root.split("/").pop()}.gitconfig`);
+    writeFileSync(config, "[user]\n\tname = Machine\n\temail = machine@example.com\n");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", config);
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+    for (const name of ["NAME", "EMAIL"]) {
+      vi.stubEnv(`GIT_COMMITTER_${name}`, undefined);
+      vi.stubEnv(`GIT_AUTHOR_${name}`, undefined);
+    }
+    vi.stubEnv("EMAIL", undefined);
+    const repo = new LocalRepository(root);
+    const publish = (content: string) =>
+      repo.commitFiles({
+        message: "content: update a",
+        author: editor,
+        files: [{ path: "a.json", content }],
+      });
+    await publish('{"round":1}');
+    expect(git("log", "-1", "--format=%cn")).toBe("Machine");
+
+    writeFileSync(config, "[user]\n\tuseConfigOnly = true\n");
+    await publish('{"round":2}');
+
+    expect(git("log", "-1", "--format=%an|%cn")).toBe("Editor|Editor");
+    expect(git("show", "HEAD:a.json")).toBe('{"round":2}');
+    rmSync(config);
   });
 });

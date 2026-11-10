@@ -156,7 +156,7 @@ anywhere in the value unless anchored with `^` and `$`. All of its syntax is
 accepted. Lookahead, lookbehind, backreferences and repeat counts above 16
 cannot be run in guaranteed linear time, so an authoring tool may stop such a
 check that takes too long and refuse the value (`pattern_timeout`); the studio
-does after a tenth of a second. Readers never run a pattern.
+and `greatcms check` do after a tenth of a second. Readers never run a pattern.
 
 `when` shows a field only while a sibling holds a value, so a hero's slides
 appear for the rotating style and its image for the others:
