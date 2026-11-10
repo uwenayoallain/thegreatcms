@@ -3,6 +3,9 @@
 #   cp .env.example .env     # then fill it in
 #   COMPOSE_BAKE=false docker compose up -d --build   # bake refuses to build on the host network
 #
+# After a reboot, or after stopping everything by hand, `docker compose up -d` here brings the
+# whole stack back in order; nothing else is needed.
+#
 # In Cloudflare, give the tunnel the public hostname STUDIO_HOST -> http://studio:8787 and one
 # wildcard, *.PREVIEW_DOMAIN -> http://caddy:80, listed last: every site connected in the studio
 # previews at <site>-preview.PREVIEW_DOMAIN with nothing more to add. No port is published, so the
@@ -10,19 +13,32 @@
 
 name: greatcms-studio
 
+# Every container: no writes outside its volumes, no capabilities, no way to gain any, a bounded
+# log, and an init that reaps what its children leave behind.
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  init: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: "3" }
+
 services:
   studio:
+    <<: *hardened
     build:
       context: ../../..
       dockerfile: apps/studio/Dockerfile
       # The host's resolver: Docker's build network has failed to reach the npm registry before.
       network: host
-    restart: unless-stopped
     environment:
       STUDIO_PASSWORD: "${STUDIO_PASSWORD:?set STUDIO_PASSWORD in .env}"
       STUDIO_SECRET: "${STUDIO_SECRET:?set STUDIO_SECRET in .env}"
       STUDIO_URL: https://${STUDIO_HOST:?set STUDIO_HOST in .env}
-      # Only cloudflared can reach the studio, so the visitor address it reports can be trusted.
+      # Only cloudflared and caddy share a network with the studio, so the visitor address it is
+      # told can be trusted.
       STUDIO_TRUST_PROXY: cloudflare
       # Signing in also opens the previews, which live on sibling names under this domain.
       STUDIO_COOKIE_DOMAIN: ${PREVIEW_DOMAIN:-}
@@ -32,7 +48,8 @@ services:
       # Each new site previews at its own name; the preview service reads the list written here.
       STUDIO_PREVIEW_URL: https://{site}-preview.${PREVIEW_DOMAIN}
       STUDIO_PREVIEWS_FILE: /previews/sites.json
-      STUDIO_PREVIEW_PROBE: http://previews:4321
+      # Through caddy, because the studio shares no network with the containers running site code.
+      STUDIO_PREVIEW_PROBE: http://caddy:4321
       GIT_AUTHOR_NAME: ${GIT_NAME:-Studio}
       GIT_AUTHOR_EMAIL: ${GIT_EMAIL:-studio@example.com}
       GIT_COMMITTER_NAME: ${GIT_NAME:-Studio}
@@ -49,9 +66,13 @@ services:
       - previews:/previews
       # The website's releases: the studio shows what is live and can ask for a rollback.
       - website:/srv/www
-    # The builder first, so its image, not this one, creates the shared folder and owns it.
-    depends_on:
-      - website
+      # Hosts git has met over SSH, kept across restarts.
+      - studio-home:/home/node
+    tmpfs:
+      - /tmp
+    networks: [edge]
+    mem_limit: ${STUDIO_MEMORY:-1g}
+    pids_limit: 512
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/sign-in"]
       interval: 30s
@@ -61,13 +82,14 @@ services:
   # Every connected site's dev server, so the editor frames the real site wherever the studio is
   # opened. Each starts on its first request and stops after a quiet spell; a site with no
   # node_modules has its dependencies installed first. This is the one service that runs a site's
-  # code, in a container of its own: the studio still runs none.
+  # code, in a container of its own and on a network of its own: the studio still runs none, and
+  # a site's code reaches neither the studio nor the tunnel except as any visitor would.
   previews:
+    <<: *hardened
     build:
       context: ../../..
       dockerfile: packages/deploy/Dockerfile
       network: host
-    restart: unless-stopped
     # The checkout's own user, so caches the dev servers write stay editable outside the container.
     user: "${PREVIEW_UID:-1000}:${PREVIEW_GID:-1000}"
     command: ["node", "bin/greatcms-preview.mjs"]
@@ -75,42 +97,75 @@ services:
       PREVIEW_SITES: /previews/sites.json
       PREVIEW_PORT: "4321"
       PREVIEW_IDLE: "${PREVIEW_IDLE:-900}"
+      # Dev servers running at once; one more stops the longest unused.
+      PREVIEW_MAX_RUNNING: "${PREVIEW_MAX_RUNNING:-6}"
       ASTRO_TELEMETRY_DISABLED: "1"
       NEXT_TELEMETRY_DISABLED: "1"
       NUXT_TELEMETRY_DISABLED: "1"
     volumes:
+      # Read-write: a dev server keeps its caches, and its node_modules, inside the site's folder.
       - ${SITES_DIR}:${SITES_DIR}
       - ${SITES_ROOT:-${SITES_DIR}}:${SITES_ROOT:-${SITES_DIR}}
       - previews:/previews:ro
-      # pnpm's store and corepack's downloads, so a restart does not fetch every package again.
+      # pnpm's store and corepack's downloads, shared by every site, so an install after the first
+      # copies from disk and a restart fetches nothing again.
       - previews-home:/home/node
-    # The studio first, so its image, not this one, creates the shared folder and owns it.
-    depends_on:
-      - studio
+    tmpfs:
+      - /tmp:exec,mode=1777
+    networks: [sites]
     mem_limit: ${PREVIEW_MEMORY:-3g}
+    pids_limit: 4096
+    healthcheck:
+      test: ["CMD", "node", "bin/greatcms-preview.mjs", "health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
 
   # The door to the previews, which asks the studio about each visitor, and the public website.
+  # It stands on both networks, and is the only thing the studio and the site code have in common.
   caddy:
-    image: caddy:2.10-alpine
-    restart: unless-stopped
+    <<: *hardened
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    # Not root: port 80 is opened to ordinary users inside this container instead.
+    user: "1000:1000"
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    # Caddy's binary is marked as wanting this one, and will not start where it is out of reach;
+    # as an ordinary user under no-new-privileges it is never actually granted.
+    cap_add: [NET_BIND_SERVICE]
     environment:
       PREVIEW_DOMAIN: ${PREVIEW_DOMAIN}
       WEBSITE_HOST: ${WEBSITE_HOST:-greatcms.${PREVIEW_DOMAIN}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - website:/srv/www:ro
+    tmpfs:
+      - /tmp
+      - /config:mode=1777
+      - /data:mode=1777
+    networks: [edge, sites]
+    mem_limit: 256m
+    pids_limit: 256
+    # Started after them for tidiness only: caddy answers 502 for a preview while they are down,
+    # and the website does not wait on either.
     depends_on:
       - studio
       - previews
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8081/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
 
   # Builds the public website from every commit in this checkout and swaps it live, so a publish
   # in the studio reaches WEBSITE_HOST a minute later. A failed build leaves the last one up.
+  # It runs the site's build, so it has a network to itself.
   website:
+    <<: *hardened
     build:
       context: ../../..
       dockerfile: packages/deploy/Dockerfile
       network: host
-    restart: unless-stopped
     environment:
       DEPLOY_SOURCE: ${SITES_DIR}
       DEPLOY_ROOT: /srv/www
@@ -122,22 +177,51 @@ services:
       # Read only: the builder clones from the checkout and never writes to it.
       - ${SITES_DIR}:${SITES_DIR}:ro
       - website:/srv/www
-      - website-pnpm:/home/node/.local/share/pnpm
+      # pnpm's store, so each build installs from disk.
+      - website-home:/home/node
+    tmpfs:
+      - /tmp:exec,mode=1777
+    networks: [build]
     mem_limit: ${WEBSITE_MEMORY:-2g}
+    pids_limit: 2048
+    healthcheck:
+      test: ["CMD", "node", "bin/greatcms-deploy.mjs", "health"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
 
   cloudflared:
-    image: cloudflare/cloudflared:2026.10.5
-    restart: unless-stopped
+    <<: *hardened
+    image: cloudflare/cloudflared:2026.10.5@sha256:1b1d34d0a9c0bfca9de72db8460d328db3f19edd2b96169114e3e893a97bbe53
+    # The studio answering first, so the tunnel never offers a name that is not there yet.
     depends_on:
       studio:
         condition: service_healthy
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
-    command: tunnel --no-autoupdate run
+    # The metrics address is this container's own loopback: it is what the healthcheck asks.
+    command: tunnel --no-autoupdate --metrics 127.0.0.1:2000 run
+    networks: [edge]
+    mem_limit: 256m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:2000", "ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+
+networks:
+  # The tunnel, the studio and caddy.
+  edge:
+  # Caddy and the dev servers, which run the sites' own code.
+  sites:
+  # The builder, which runs the website's build and needs only the registry.
+  build:
 
 volumes:
   studio-data:
+  studio-home:
   previews:
   previews-home:
   website:
-  website-pnpm:
+  website-home:

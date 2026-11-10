@@ -1,0 +1,19 @@
+# Actions and base images are pinned to exact commits and digests, so something has to move them.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directories:
+      - /apps/studio
+      - /packages/deploy
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker-compose
+    directories:
+      - /apps/studio/tunnel
+      - /examples/studio-astro/deploy
+    schedule:
+      interval: weekly

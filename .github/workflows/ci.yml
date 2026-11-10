@@ -5,15 +5,29 @@ on:
     branches: [main]
   pull_request:
 
+# Read the code and nothing else: no job here publishes, comments or uses a secret, so a pull
+# request from a fork runs exactly what a push does.
+permissions:
+  contents: read
+
+# A newer push to the same pull request replaces the run before it; main always finishes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      # Actions are pinned to a commit: a tag can be moved to other code, a commit cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -26,8 +40,25 @@ jobs:
       - name: Format check (oxfmt)
         run: pnpm oxfmt --check .
 
+      # Build outputs only, each keyed by the files that went into it. A pull request reads main's
+      # cache and writes one of its own that main never reads, so it cannot plant a build there.
+      - name: Restore built packages
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo/cache
+          key: turbo-build-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-build-${{ runner.os }}-
+
       - name: Build
         run: pnpm build
+
+      # Saved before anything is checked, so the cache never holds a passed test or typecheck:
+      # those run in full every time.
+      - name: Save built packages
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo/cache
+          key: turbo-build-${{ runner.os }}-${{ github.sha }}
 
       - name: Typecheck
         run: pnpm typecheck
@@ -36,6 +67,16 @@ jobs:
       # docs change that never regenerates them would quietly ship a stale copy.
       - name: Agent docs are current
         run: pnpm docs:check
+
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @greatcms/studio exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Chromium
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       # The browser tests (studio, website, contrast) skip themselves when no browser is present,
       # which is right for a fresh checkout and wrong for CI: a gate that skips

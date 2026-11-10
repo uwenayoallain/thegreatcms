@@ -5,9 +5,19 @@
 {
 	auto_https off
 	admin off
+	servers {
+		# A visitor who sends headers a byte at a time, or none at all, is let go.
+		timeouts {
+			read_header 20s
+			idle 3m
+		}
+		max_header_size 32KB
+	}
 }
 
-# The studio answers 204 for a signed-in browser and sends anyone else to sign in.
+# The studio answers 204 for a signed-in browser and sends anyone else to sign in. Caddy writes
+# the X-Forwarded-* headers itself and drops any a visitor sent, and nothing the studio answers
+# is copied onto the request, so a visitor cannot speak for the studio or for another host.
 (gate) {
 	forward_auth studio:8787 {
 		uri /auth/check
@@ -19,7 +29,11 @@
 # 404 for a name the studio has not connected. An exact name below, the website's, wins over this.
 http://*.{$PREVIEW_DOMAIN} {
 	import gate
-	reverse_proxy previews:4321
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy previews:4321 {
+		# TLS ends at Cloudflare, so every visitor came over https whatever this hop used.
+		header_up X-Forwarded-Proto https
+	}
 }
 
 # The public website: whatever release the builder last swapped live, open to everyone.
@@ -40,4 +54,20 @@ http://{$WEBSITE_HOST} {
 		rewrite * /404.html
 		file_server
 	}
+}
+
+# Where the studio asks whether the preview service is up and tells it to start a site. The studio
+# shares no network with the dev servers, so it asks here, and only these two things pass.
+http://:4321 {
+	@service path /__greatcms/warm /__greatcms/preview /__greatcms/health
+	handle @service {
+		reverse_proxy previews:4321
+	}
+	respond 404
+}
+
+# What the healthcheck asks, from inside this container only.
+http://:8081 {
+	bind 127.0.0.1
+	respond "ok" 200
 }

@@ -33,5 +33,7 @@
 	forward_auth studio:8787 {
 		uri /auth/check
 	}
+	# Unpublished pages are not for search engines, whoever a share link reaches.
+	header X-Robots-Tag "noindex, nofollow"
 	reverse_proxy preview:4321
 }

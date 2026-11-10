@@ -46,10 +46,26 @@ the symlink.
 one that failed with the tail of its build log. `greatcms-deploy status` prints
 it; `greatcms-deploy once` builds and exits, for a cron job or a CI step.
 
-The builder is the only part of the arrangement that runs the site's own code,
-and it does so in a container of its own with nothing but a clone in it. The
-studio still executes nothing from a repository it manages; see
-[Running the studio](/docs/running-the-studio/).
+## What runs a site's code
+
+The builder and the preview service run the site's build, its dev server and
+its packages' install scripts; the studio
+[runs none of it](/docs/running-the-studio/). Both compose files give each a
+container and a network of its own, out of reach of the studio and the tunnel,
+and every container a read-only root, no capabilities, and memory and process
+limits. `docker compose up -d` alone restores a stopped stack. What that costs:
+
+- Dev servers keep caches and `node_modules` in the site's folder, so previews
+  mount it read-write, and sites in one preview service can reach each other:
+  run one service per group of sites that trust each other.
+- A dev server sees `PATH`, `HOME`, public names such as `PUBLIC_*` and
+  `VITE_*`, and what `PREVIEW_ENV` lists: never the service's other variables,
+  nor the studio's cookies.
+- `PREVIEW_IGNORE_SCRIPTS=1` installs with `--ignore-scripts`; a package that
+  compiles on install then fails.
+- `PREVIEW_MAX_RUNNING` dev servers (six) run at once, the longest unused
+  stopping for one more, and a failing one waits longer before each retry.
+- A build whose output holds a link pointing outside it is not put live.
 
 ## Declaring sites up front
 
@@ -83,8 +99,8 @@ ghcr.io/uwenayoallain/greatcms-studio
 ghcr.io/uwenayoallain/greatcms-deploy      # also runs greatcms-preview
 ```
 
-Each is about 70 MB: Node on Alpine, git, and the program. The studio's server
-is one bundled file with no `node_modules`.
+The studio's is Alpine, Node, git and one bundled file. The builder's is
+Debian, for the native packages sites install.
 
 ## Sharing the preview
 
@@ -139,18 +155,7 @@ site's page, and over the editor's preview, instead of framing an error page.
 It checks by connecting to the dev server, so it needs an address it can reach
 itself. When browsers reach the preview somewhere else, through the proxy
 above, give the site a `probeUrl` in `STUDIO_SITES` naming the dev server
-directly:
-
-```json
-[
-  {
-    "id": "irona",
-    "path": "/srv/sites/irona",
-    "devUrl": "https://irona-preview.example.com",
-    "probeUrl": "http://preview:4321"
-  }
-]
-```
+directly, such as `"probeUrl":"http://preview:4321"`.
 
 ### Only while someone is editing
 
@@ -169,10 +174,8 @@ by itself.
 | `PREVIEW_IDLE`    | Seconds without a request before it is stopped.                       |
 
 `GET /__greatcms/preview` reports whether it is stopped, starting or running.
-Reloads reach the dev server over the same proxy, WebSockets included, so a
-draft still shows as you type. The example stack runs it this way, and a
-site that nobody edits all day costs a few megabytes of the proxy and nothing
-else.
+Reloads pass through the same proxy, WebSockets included, so a draft still
+shows as you type.
 
 ### Every site from one service
 
@@ -184,8 +187,7 @@ one `*.example.com` block proxying to it covers every site.
 `STUDIO_PREVIEW_PROBE` is where the studio checks the service is up.
 
 Each dev server comes from the site's `package.json` (Astro, Next.js, Nuxt,
-SvelteKit, Vite, or a `dev` script), installed first if needed. That runs the
-site's code, so the service has its own container.
+SvelteKit, Vite, or a `dev` script), installed first if needed.
 
 ## Behind a Cloudflare Tunnel
 
@@ -212,10 +214,9 @@ the server, so a `localhost` address works only on the machine running the dev
 server. The same compose file also runs the previews for editors anywhere:
 
 - `previews` is the preview service above, serving every connected site's dev
-  server inside the compose network only, each started when someone opens it.
-  It sets `GREATCMS_PREVIEW_SERVER=1`, so the Astro integration and the Nuxt
-  module leave the framework's dev toolbar out: nobody sees it inside the
-  studio, and over a remote link each of its modules is a round trip.
+  server inside the compose network only. It sets `GREATCMS_PREVIEW_SERVER=1`,
+  so the Astro integration and the Nuxt module leave out the framework's dev
+  toolbar, which costs round trips over a remote link.
 - `caddy` sits in front of it and asks the studio's `/auth/check` about each
   visitor, so a preview opens for someone signed in to the studio and for
   nobody else.
