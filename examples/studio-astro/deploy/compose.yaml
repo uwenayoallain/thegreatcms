@@ -5,6 +5,8 @@
 #   cp .env.example .env     # then fill it in
 #   COMPOSE_BAKE=false docker compose up -d --build
 #
+# After a reboot, or after stopping everything by hand, `docker compose up -d` brings it all back.
+#
 # One DOMAIN in .env gives four addresses, all pointed at this server:
 #   DOMAIN            the site (redirects to www)
 #   www.DOMAIN        the site
@@ -22,10 +24,24 @@ x-hosts: &hosts
   STUDIO_HOST: studio.${DOMAIN}
   PREVIEW_HOST: preview.${DOMAIN}
 
+# Every container: no writes outside its volumes, no capabilities, no way to gain any, a bounded
+# log, and an init that reaps what its children leave behind.
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  init: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: "3" }
+
 services:
   caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
+    <<: *hardened
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    # The one capability it keeps: ports 80 and 443.
+    cap_add: [NET_BIND_SERVICE]
     ports: ["80:80", "443:443"]
     environment: *hosts
     volumes:
@@ -33,17 +49,28 @@ services:
       - www:/srv/www:ro
       - caddy-data:/data
       - caddy-config:/config
+    tmpfs:
+      - /tmp
+    networks: [edge, sites]
+    mem_limit: 256m
+    pids_limit: 256
     depends_on: [studio, deploy]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
 
   studio:
+    <<: *hardened
     build:
       context: ../../..
       dockerfile: apps/studio/Dockerfile
       network: host
-    restart: unless-stopped
     environment:
       STUDIO_PASSWORD: "${STUDIO_PASSWORD:?set STUDIO_PASSWORD in .env}"
       STUDIO_SECRET: "${STUDIO_SECRET:?set STUDIO_SECRET in .env}"
+      # Only caddy shares a network with the studio, so the visitor address it is told can be trusted.
       STUDIO_TRUST_PROXY: "1"
       # Where browsers reach the studio, and the domain its sign-in is shared across, so the
       # preview can ask it whether a visitor is signed in.
@@ -63,16 +90,24 @@ services:
     volumes:
       - ${SITES_DIR:-/srv/sites}:/srv/sites
       - studio-data:/data
+      # What is live, and where a rollback is asked for.
+      - www:/srv/www
       # Only needed when pushing to GitHub: a deploy key with write access.
       - ${SSH_DIR:-./ssh}:/home/node/.ssh:ro
+    tmpfs:
+      - /tmp
+    networks: [edge]
+    mem_limit: ${STUDIO_MEMORY:-1g}
+    pids_limit: 512
 
-  # Builds every commit the studio makes into /srv/www/current, which Caddy serves.
+  # Builds every commit the studio makes into /srv/www/current, which Caddy serves. It runs the
+  # site's build, so it has a network to itself.
   deploy:
+    <<: *hardened
     build:
       context: ../../..
       dockerfile: packages/deploy/Dockerfile
       network: host
-    restart: unless-stopped
     environment:
       DEPLOY_SOURCE: /srv/sites/paraline
       DEPLOY_ROOT: /srv/www
@@ -85,16 +120,29 @@ services:
     volumes:
       - ${SITES_DIR:-/srv/sites}:/srv/sites:ro
       - www:/srv/www
+      # Corepack's downloads and pnpm's store, so a restart fetches nothing again.
+      - tool-home:/home/node
       - pnpm-store:/home/node/.pnpm
+    tmpfs:
+      - /tmp:exec,mode=1777
+    networks: [build]
+    mem_limit: ${DEPLOY_MEMORY:-2g}
+    pids_limit: 2048
+    healthcheck:
+      test: ["CMD", "node", "bin/greatcms-deploy.mjs", "health"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
 
-  # The site's dev server, so editors see their change rendered before publishing.
   # The site's dev server, started on the first request from an editor and stopped after a
-  # quiet spell, so it costs nothing while nobody is editing. Same image as the builder.
+  # quiet spell, so it costs nothing while nobody is editing. Same image as the builder. It runs
+  # the site's code, so it shares a network with caddy and nothing else.
   preview:
+    <<: *hardened
     build:
       context: ../../..
       dockerfile: packages/deploy/Dockerfile
-    restart: unless-stopped
+      network: host
     command: ["node", "bin/greatcms-preview.mjs"]
     environment:
       PREVIEW_SOURCE: /srv/sites/paraline
@@ -104,9 +152,31 @@ services:
       PREVIEW_HOST: preview.${DOMAIN}
       PUBLIC_CMS_URL: ${SCHEME:-https}://studio.${DOMAIN}
       PUBLIC_CMS_SITE_ID: paraline
+      ASTRO_TELEMETRY_DISABLED: "1"
     volumes:
+      # Read-write: the dev server keeps its caches, and node_modules, inside the working copy.
       - ${SITES_DIR:-/srv/sites}:/srv/sites
+      # Corepack's downloads and pnpm's store, so a restart fetches nothing again.
+      - tool-home:/home/node
       - pnpm-store:/home/node/.pnpm
+    tmpfs:
+      - /tmp:exec,mode=1777
+    networks: [sites]
+    mem_limit: ${PREVIEW_MEMORY:-2g}
+    pids_limit: 2048
+    healthcheck:
+      test: ["CMD", "node", "bin/greatcms-preview.mjs", "health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+
+networks:
+  # Caddy and the studio.
+  edge:
+  # Caddy and the dev server, which runs the site's own code.
+  sites:
+  # The builder, which runs the site's build and needs only the registry.
+  build:
 
 volumes:
   www:
@@ -114,3 +184,4 @@ volumes:
   caddy-data:
   caddy-config:
   pnpm-store:
+  tool-home:
