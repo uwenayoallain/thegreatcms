@@ -144,6 +144,9 @@ describe("the dev server to start", () => {
       "--ignore-lock",
     ]);
     expect(astro.recordsItself).toBe(false);
+    // Astro 7 backgrounds itself under a coding agent and then refuses --ignore-lock; this
+    // marker, the one Astro gives its own background child, keeps it a foreground child.
+    expect(astro.env).toEqual({ ASTRO_DEV_BACKGROUND: "1" });
   });
 
   it("keeps Next on this machine", () => {
@@ -151,6 +154,7 @@ describe("the dev server to start", () => {
     const next = devPlan(root);
     if ("problem" in next) throw new Error(next.problem);
     expect(next.port).toBe(3000);
+    expect(next.env).toBeUndefined();
     expect(next.command(3001).slice(1)).toEqual([
       "dev",
       "--hostname",
@@ -446,6 +450,7 @@ describe("the command", () => {
     ]);
     expect(devStarted[0]?.command.slice(1)).toEqual(["dev", "--port", "4321", "--ignore-lock"]);
     expect(devStarted[0]?.cwd).toBe(root);
+    expect(devStarted[0]?.env?.ASTRO_DEV_BACKGROUND).toBe("1");
     expect(opened).toEqual(["http://127.0.0.1:4983"]);
     expect(stopped.toSorted()).toEqual(["dev", "studio"]);
 

@@ -114,12 +114,26 @@ export interface DevPlan {
   command(port: number): string[];
   /** The framework records its running dev server on disk, so no record means none is running. */
   recordsItself: boolean;
+  /** Added to the dev command's environment, on top of the CLI's own. */
+  env?: Record<string, string>;
 }
 
 /** How each framework's dev server is told its port; the same table `greatcms-preview` uses. */
-const DEV_SERVERS: Record<string, { bin: string; port: number; args(port: string): string[] }> = {
-  // --ignore-lock: Astro 7 sends itself to the background when an agent runs it; this keeps it a child.
-  astro: { bin: "astro", port: 4321, args: (port) => ["dev", "--port", port, "--ignore-lock"] },
+const DEV_SERVERS: Record<
+  string,
+  { bin: string; port: number; args(port: string): string[]; env?: Record<string, string> }
+> = {
+  // The studio owns this dev server: --ignore-lock leaves the site's lock file to the developer's
+  // own `astro dev`. Run by a coding agent, Astro 7 sends itself to the background instead, and
+  // background refuses --ignore-lock, so the preview never starts. ASTRO_DEV_BACKGROUND is the
+  // marker Astro sets on its own background child; with it, Astro skips that detection and stays
+  // a foreground child of the CLI, as it does in a terminal. Older Astro ignores it.
+  astro: {
+    bin: "astro",
+    port: 4321,
+    args: (port) => ["dev", "--port", port, "--ignore-lock"],
+    env: { ASTRO_DEV_BACKGROUND: "1" },
+  },
   // Next listens on every interface unless told: the preview is for this machine.
   next: {
     bin: "next",
@@ -163,6 +177,7 @@ export function devPlan(root: string): DevPlan | { problem: string } {
     recordsItself:
       id === "astro" &&
       existsSync(join(dirname(dirname(bin)), "astro", "dist", "core", "dev", "lockfile.js")),
+    ...(server.env ? { env: server.env } : {}),
   };
 }
 
@@ -548,7 +563,12 @@ export async function studioCommand(
       const devPort = await choosePort(plan.port, deps.portFree, new Set([port]));
       devUrl = `http://localhost:${devPort}`;
       devNote = `${plan.label}, starting`;
-      dev = deps.startDev({ command: plan.command(devPort), cwd: root, url: devUrl });
+      dev = deps.startDev({
+        command: plan.command(devPort),
+        cwd: root,
+        url: devUrl,
+        ...(plan.env ? { env: { ...deps.env, ...plan.env } } : {}),
+      });
     }
   }
 
