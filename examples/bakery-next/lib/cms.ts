@@ -73,6 +73,15 @@ export const dietary = (values: string[] = []) => values.map((value) => DIETARY[
 export const categoryLabel = (value: string) =>
   CATEGORIES.find((category) => category.value === value)?.label ?? value;
 
+/** The address the site is published at: canonical links, the sitemap and share cards are built on it. */
+export const origin = process.env.SITE_URL ?? "https://hearth.example";
+
+/** A page's own address, for its canonical link and its share card; a page's `openGraph` replaces the layout's whole. */
+export const address = (path: string) => ({
+  alternates: { canonical: path },
+  openGraph: { type: "website" as const, url: path, images: ["/og.png"] },
+});
+
 /** Where the order form posts: the studio's inbox, not a form service. */
 export const studio = {
   url: process.env.PUBLIC_CMS_URL ?? "",

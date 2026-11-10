@@ -65,8 +65,55 @@ describe.each(PAGES)("$name", ({ file }) => {
   });
 });
 
+describe.each(PAGES)("$name, for search and sharing", ({ file }) => {
+  it("has a description, a share card with an image, and an address of its own where it should be found", () => {
+    const document = dom(file);
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content");
+    expect(meta('meta[name="description"]')?.length).toBeGreaterThan(0);
+    expect(meta('meta[property="og:title"]')).toBe(document.title);
+    expect(meta('meta[property="og:image"]')).toBe("https://hearth.example/og.png");
+    expect(meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+    // A page with no address worth indexing says so instead of naming one.
+    if (meta('meta[name="robots"]') === "noindex") expect(canonical).toBeUndefined();
+    else expect(canonical).toBe(`https://hearth.example/${file.replace(/index\.html$/, "")}`);
+  });
+
+  it("links only to pages that were built", () => {
+    for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
+      const path = link.getAttribute("href")!.split("#")[0]!;
+      expect(existsSync(join(DIST, path, "index.html")), `${file}: ${path}`).toBe(true);
+    }
+  });
+});
+
+describe("for search engines", () => {
+  it("lists the pages worth finding in the sitemap, points robots.txt at it, and publishes the share image", () => {
+    const listed = [
+      ...read("sitemap.xml").matchAll(/<loc>https:\/\/hearth\.example([^<]*)<\/loc>/g),
+    ];
+    expect(listed.map((match) => match[1]).toSorted()).toEqual(["/", "/menu/"]);
+    expect(read("robots.txt")).toContain("Sitemap: https://hearth.example/sitemap.xml");
+    expect(existsSync(join(DIST, "og.png"))).toBe(true);
+  });
+
+  it("describes the bakery, with its opening hours, as structured data on the home page", () => {
+    const data = JSON.parse(
+      dom("index.html").querySelector('script[type="application/ld+json"]')!.textContent!,
+    ) as { "@type": string; openingHours: string[] };
+    expect(data["@type"]).toBe("Bakery");
+    expect(data.openingHours.length).toBeGreaterThan(0);
+  });
+});
+
 describe("the bundle", () => {
   const assets = files(join(DIST, "_next"));
+
+  it("has no client component of its own: the only scripts are the ones Next.js brings", () => {
+    const sources = files(join(ROOT, "app")).filter((path) => /\.tsx?$/.test(path));
+    for (const path of sources)
+      expect(readFileSync(path, "utf8"), path).not.toMatch(/^"use client"/m);
+  });
 
   it("has one minified stylesheet", () => {
     const css = assets.filter((path) => path.endsWith(".css"));
