@@ -24,6 +24,7 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "json-schema",
     "README.md",
     "LICENSE"
