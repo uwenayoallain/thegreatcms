@@ -364,14 +364,14 @@ function githubSignInSection(github: GitHubView) {
     return html`<h3 id="github-sign-in">Signing in with GitHub</h3>
       <p>
         Anyone GitHub lets push to a connected site's repository can sign in with their GitHub
-        account and edit that site, and only that site. Take their access away on GitHub and it
-        ends here within two minutes, and at once for publishing.
+        account and edit that site, and only that site. Take their access away on GitHub and it ends
+        here within two minutes, and at once for publishing.
         ${
           signIn.owners.length > 0
             ? html`Owners of this studio:
-                ${signIn.owners.map(
-                  (login, index) => html`${index > 0 ? ", " : ""}<code>${login}</code>`,
-                )}.`
+              ${signIn.owners.map(
+                (login, index) => html`${index > 0 ? ", " : ""}<code>${login}</code>`,
+              )}.`
             : html`No GitHub account is an owner of this studio: set
                 <code>STUDIO_GITHUB_OWNERS</code> to name some.`
         }

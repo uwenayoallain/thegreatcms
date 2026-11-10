@@ -525,9 +525,7 @@ export class Store {
   }
 
   countUnread(among?: string[]): number {
-    const within = among
-      ? ` AND site_id IN (${among.map(() => "?").join(",") || "NULL"})`
-      : "";
+    const within = among ? ` AND site_id IN (${among.map(() => "?").join(",") || "NULL"})` : "";
     const row = this.db
       .prepare(
         `SELECT COUNT(*) AS n FROM submissions WHERE read_at IS NULL AND spam_score < 3${within}`,

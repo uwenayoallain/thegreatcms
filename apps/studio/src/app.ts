@@ -482,15 +482,17 @@ export function createApp(options: AppOptions) {
   /** The logins that are owners here, for the Git access page. */
   const githubOwners = () => {
     if (namedOwners.length > 0) return namedOwners;
-    const app = hub?.config();
-    return app?.ownerType === "User" && app.owner ? [app.owner] : [];
+    const made = hub?.config();
+    return made?.ownerType === "User" && made.owner ? [made.owner] : [];
   };
   const isGithubOwner = (person: GithubPerson) => {
     const login = person.login.toLowerCase();
     if (namedOwners.length > 0) return namedOwners.includes(login);
-    const app = hub?.config();
-    if (app?.ownerType !== "User") return false;
-    return app.ownerId === undefined ? app.owner.toLowerCase() === login : app.ownerId === person.id;
+    const made = hub?.config();
+    if (made?.ownerType !== "User") return false;
+    return made.ownerId === undefined
+      ? made.owner.toLowerCase() === login
+      : made.ownerId === person.id;
   };
   /** Ends with the app it was made through, and with the person being forgotten. */
   const githubStamp = (person: GithubPerson) =>
@@ -1041,7 +1043,13 @@ export function createApp(options: AppOptions) {
     if (!actor) {
       // Deliberately vague, and the same shape whether or not a password was supplied: there is nothing to learn from it.
       return c.html(
-        signInPage({ error: "That did not work.", next, email, editors: hasEditors() }),
+        signInPage({
+          error: "That did not work.",
+          next,
+          email,
+          editors: hasEditors(),
+          github: githubSignIn(),
+        }),
         401,
       );
     }
@@ -1083,14 +1091,6 @@ export function createApp(options: AppOptions) {
     );
   });
 
-  /** The inbox as it was filtered when a submission in it was acted on. */
-  const inboxView = (c: Context<{ Variables: Variables }>, form: FormData) => {
-    const query = new URLSearchParams();
-    const siteId = String(form.get("site") ?? "");
-    if (c.get("sites").some((site) => site.id === siteId)) query.set("site", siteId);
-    if (form.get("spam") === "1") query.set("spam", "1");
-    return query.size > 0 ? `/inbox?${query}` : "/inbox";
-  };
   /** Whether a submission is one this person may act on: any, or one from a site they can open. */
   const inInbox = (c: Context<{ Variables: Variables }>, id: number) => {
     const among = c.get("among");
@@ -1397,7 +1397,10 @@ export function createApp(options: AppOptions) {
       return { connected: true as const, error: describeError(error) };
     }
   };
-  const gitAccessView = async (c: Context, extra: Partial<Parameters<typeof gitAccessPage>[0]> = {}) =>
+  const gitAccessView = async (
+    c: Context,
+    extra: Partial<Parameters<typeof gitAccessPage>[0]> = {},
+  ) =>
     gitAccessPage({
       tokens: gitAccess?.tokens() ?? [],
       github: github ? await githubView(publicOrigin(c)) : undefined,
@@ -1405,9 +1408,9 @@ export function createApp(options: AppOptions) {
     });
   /** What the page is told about the app: its name and owner, never its key or secret. */
   const githubView = async (origin: string): Promise<GitHubView> => {
-    const app = (github as GitHub).config();
+    const made = (github as GitHub).config();
     return {
-      config: app ? { slug: app.slug, owner: app.owner, htmlUrl: app.htmlUrl } : null,
+      config: made ? { slug: made.slug, owner: made.owner, htmlUrl: made.htmlUrl } : null,
       installUrl: (github as GitHub).installUrl(),
       settingsUrl: (github as GitHub).settingsUrl(),
       state: await githubState(),
@@ -2600,7 +2603,7 @@ export function createApp(options: AppOptions) {
                 ? "The person who scheduled it can no longer sign in."
                 : response.status === 404
                   ? "The person who scheduled it can no longer open this site."
-                : `The publish failed (${response.status}).`;
+                  : `The publish failed (${response.status}).`;
       store.settleScheduled(job.id, outcome ? "failed" : "published", outcome ?? undefined);
     }
   };
@@ -2714,6 +2717,15 @@ function authorOf(who: Viewer): Author | undefined {
 function baseOf(entries: Array<[string, string]>): string | undefined {
   const sha = entries.find(([key]) => key === "headSha")?.[1];
   return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
+}
+
+/** The inbox as it was filtered when a submission in it was acted on. */
+function inboxView(c: Context<{ Variables: Variables }>, form: FormData): string {
+  const query = new URLSearchParams();
+  const siteId = String(form.get("site") ?? "");
+  if (c.get("sites").some((site) => site.id === siteId)) query.set("site", siteId);
+  if (form.get("spam") === "1") query.set("spam", "1");
+  return query.size > 0 ? `/inbox?${query}` : "/inbox";
 }
 
 /** The host a site's preview is served on, or null when it has none. */
