@@ -212,7 +212,7 @@ describe("editing live, before anything is published", () => {
     const editor = await (
       await app.request("/sites/local-1/regions/home.hero", { headers: signedIn })
     ).text();
-    expect(editor).toContain("Unsaved edits restored");
+    expect(editor).toContain("This form holds unsaved edits");
     expect(editor).not.toContain("Someone published this");
   });
 
@@ -691,7 +691,7 @@ describe("history", () => {
       await app.request("/sites/local-1/regions/home.hero", { headers: signedIn })
     ).text();
     expect(editor).toContain('value="First words"');
-    expect(editor).toContain("Unsaved edits restored");
+    expect(editor).toContain("This form holds unsaved edits");
   });
 
   it("refuses a commit name that is not one", async () => {

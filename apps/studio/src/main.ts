@@ -105,6 +105,7 @@ const app = createApp({
   // Beside the database, so a container keeps its GitHub App and tokens in the same volume.
   gitAccess: new GitAccess(join(dirname(databaseFile), "git")),
   githubOwners: process.env.STUDIO_GITHUB_OWNERS?.split(","),
+  ownerName: process.env.STUDIO_OWNER_NAME,
   github: new GitHub(
     join(dirname(databaseFile), "git", "github-app.json"),
     process.env.STUDIO_GITHUB_URL || undefined,

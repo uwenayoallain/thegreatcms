@@ -379,7 +379,7 @@ describe("what a publish is recorded as", () => {
     expect(log).not.toMatch(/generated|co-authored/i);
     expect(sent.at(-1)).toMatchObject({
       kind: "publish",
-      subject: "Example: studio published home.hero",
+      subject: "Example: Owner published home.hero",
     });
   });
 });

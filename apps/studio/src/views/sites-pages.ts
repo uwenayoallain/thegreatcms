@@ -142,6 +142,7 @@ export function newSitePage(
           devUrl: editing.devUrl,
           deployRoot: editing.deployRoot,
           branch: options.branch?.branch ?? "",
+          pushAfterPublish: editing.pushAfterPublish ? "on" : "",
         }
       : {});
   const onDefault = Boolean(
@@ -336,7 +337,7 @@ export function newSitePage(
                       id="pushAfterPublish"
                       name="pushAfterPublish"
                       aria-describedby="push-hint"
-                      ${editing.pushAfterPublish ? html`checked` : ""}
+                      ${values.pushAfterPublish === "on" ? html`checked` : ""}
                     />
                     <label for="pushAfterPublish">Push after every publish</label>
                   </div>

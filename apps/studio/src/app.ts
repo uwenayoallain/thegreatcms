@@ -149,6 +149,8 @@ export interface AppOptions {
   /** The zone "publish later" times are typed in; defaults to STUDIO_TIMEZONE or the server's. */
   timeZone?: string;
   password: string;
+  /** `STUDIO_OWNER_NAME`: what the person who signs in with the studio's password is called. */
+  ownerName?: string;
   secret: string;
   /** Injected in tests so routes can be driven without touching the network. */
   fetch?: typeof globalThis.fetch;
@@ -279,6 +281,8 @@ export function createApp(options: AppOptions) {
   // Ten guesses per quarter hour: no bother to a person who mistyped, a wall to a script.
   const signInLimiter = options.signInLimiter ?? new RateLimiter(10, 15 * 60_000);
   const signingKey = sessionKey(secret, password);
+  const ownerName = options.ownerName?.trim().slice(0, 80) || "Owner";
+  const timeZone = options.timeZone ?? studioTimeZone();
 
   /** Who is asking, for rate limiting. */
   const addressOf = (c: { req: { header(name: string): string | undefined }; env: unknown }) => {
@@ -517,7 +521,7 @@ export function createApp(options: AppOptions) {
   /** Who a signed session belongs to now: null once an editor is removed or their password changes. */
   const viewerOf = (session: Session | null): Viewer | null => {
     if (!session || store.isSessionRevoked(session.id)) return null;
-    if (session.actor === "studio") return { name: "studio", owner: true };
+    if (session.actor === "studio") return { name: ownerName, owner: true };
     if (session.actor.startsWith("github:")) {
       if (!githubSignIn()) return null;
       const person = store.getGithubPerson(Number(session.actor.slice("github:".length)));
@@ -641,6 +645,7 @@ export function createApp(options: AppOptions) {
       ...panesOf(c.req.header("cookie")),
       unread: () => store.countUnread(mine.among),
       local: options.local,
+      timeZone,
       flash: () => {
         shown = true;
         return waiting ?? undefined;
@@ -1632,6 +1637,7 @@ export function createApp(options: AppOptions) {
       devUrl: String(form.get("devUrl") ?? "").trim(),
       deployRoot: String(form.get("deployRoot") ?? "").trim(),
       branch: String(form.get("branch") ?? "").trim(),
+      pushAfterPublish: form.get("pushAfterPublish") === "on" ? "on" : "",
     };
     const client = new SiteClient(site);
     const branch = await client.branchState().catch(() => null);
@@ -1685,7 +1691,7 @@ export function createApp(options: AppOptions) {
     store.updateSite(site.id, {
       name: values.name,
       devUrl: values.devUrl,
-      pushAfterPublish: form.get("pushAfterPublish") === "on",
+      pushAfterPublish: values.pushAfterPublish === "on",
       deployRoot: values.deployRoot,
     });
     sitesChanged();
@@ -1696,7 +1702,6 @@ export function createApp(options: AppOptions) {
    * "Publish later": the form is kept as submitted, and replayed through the ordinary publish
    * when it falls due, so validation, the conflict check and authorship are the same as now.
    */
-  const timeZone = options.timeZone ?? studioTimeZone();
   for (const base of ["/sites/:id/regions/:regionId", "/sites/:id/collections/:name/:slug"]) {
     app.post(base, async (c, next) => {
       const form = await c.req.formData();
@@ -1863,7 +1868,7 @@ export function createApp(options: AppOptions) {
       branch,
       reviewUrl: branch ? reviewUrl(branch, options.github?.web) : undefined,
       live,
-      scheduled: { jobs: store.listScheduled(site.id), timeZone },
+      scheduled: { jobs: store.listScheduled(site.id), timeZone, owner: ownerName },
       running,
       activity,
       counts: Object.fromEntries(names.map((name, index) => [name, counts[index] ?? 0])),
@@ -2242,13 +2247,23 @@ export function createApp(options: AppOptions) {
         lines: [`commit ${result.commitSha.slice(0, 7)}`],
       });
 
+      const flash = await publishedFlash(site, client, result.commitSha);
+      // A new entry has an address of its own now: reloading or sharing `/new` would start another.
+      if (requested === "new") {
+        return done(
+          c,
+          `/sites/${site.id}/collections/${name}/${encodeURIComponent(slug)}`,
+          flash.message,
+          flash.kind,
+        );
+      }
       return c.html(
         renderEntry({
           slug,
           document,
           errors: new Map(),
           headSha: result.commitSha,
-          flash: await publishedFlash(site, client, result.commitSha),
+          flash,
         }),
       );
     } catch (error) {
@@ -2385,7 +2400,11 @@ export function createApp(options: AppOptions) {
         sha: c.req.param("sha") ?? "",
       });
       if (!restored) return c.html(errorPage(site.name, "That version could not be read."), 404);
-      return c.redirect(`/sites/${site.id}/${target.back}`, 303);
+      return done(
+        c,
+        `/sites/${site.id}/${target.back}`,
+        `Version ${(c.req.param("sha") ?? "").slice(0, 7)} is in the form as unsaved edits. Publish to bring it back, or discard them to keep what is published.`,
+      );
     });
   }
 

@@ -98,7 +98,7 @@ describe("publishing an MDX entry", () => {
     });
 
   it("writes an .mdx file with frontmatter above the body", async () => {
-    expect((await publish()).status).toBe(200);
+    expect((await publish()).status).toBe(303);
 
     expect(site.exists("src/content/guides/latency.mdx")).toBe(true);
     expect(site.read("src/content/guides/latency.mdx")).toMatch(/^---\ntitle: Latency\n---\n/);

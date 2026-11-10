@@ -45,6 +45,8 @@ services:
       STUDIO_SITES: ${STUDIO_SITES:-}
       # GitHub accounts, by login, that are owners here besides the one that owns the app.
       STUDIO_GITHUB_OWNERS: ${STUDIO_GITHUB_OWNERS:-}
+      # What whoever signs in with the password is called, where other people see them.
+      STUDIO_OWNER_NAME: ${STUDIO_OWNER_NAME:-}
       # The connect page lists this folder's sites, and copies from Git land in it.
       STUDIO_SITES_ROOT: ${SITES_ROOT:-${SITES_DIR}}
       # Each new site previews at its own name; the preview service reads the list written here.

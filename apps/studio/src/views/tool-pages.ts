@@ -122,7 +122,7 @@ export function historyPage(options: {
                   <div>
                     <strong>${entry.subject}</strong>
                     <span class="muted"
-                      >${entry.author} · <time datetime="${entry.date}">${when(entry.date)}</time> ·
+                      >${entry.author} · ${when(entry.date)} ·
                       <code>${entry.sha.slice(0, 7)}</code></span
                     >
                   </div>

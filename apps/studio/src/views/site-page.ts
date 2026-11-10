@@ -19,7 +19,7 @@ import { plural } from "./collection-pages.js";
 import { viewer } from "./viewer.js";
 
 /** Publishes waiting for their time, and how the last week's went. */
-function scheduledPanel(site: Site, jobs: Scheduled[], timeZone: string) {
+function scheduledPanel(site: Site, jobs: Scheduled[], timeZone: string, owner = "Owner") {
   const STATE = {
     waiting: "Waiting",
     running: "Publishing",
@@ -40,7 +40,7 @@ function scheduledPanel(site: Site, jobs: Scheduled[], timeZone: string) {
               <a href="/sites/${site.id}/${job.target}"><strong>${job.label}</strong></a>
               <span class="muted"
                 >${STATE[job.status]} · ${formatInZone(job.dueAt, timeZone)} ·
-                ${job.author?.name ?? job.actor}</span
+                ${job.author?.name ?? owner}</span
               >
               ${job.detail && job.status === "failed" ? html`<span class="error-text">${job.detail}</span>` : ""}
             </div>
@@ -191,7 +191,7 @@ export function sitePage(options: {
   branch?: BranchState | null;
   reviewUrl?: string;
   live?: LiveSite | null;
-  scheduled?: { jobs: Scheduled[]; timeZone: string };
+  scheduled?: { jobs: Scheduled[]; timeZone: string; owner?: string };
   running?: boolean | null;
   activity?: Activity;
   /** Entries per collection, by collection name. */
@@ -390,7 +390,7 @@ export function sitePage(options: {
           : ""
       }
       ${live ? livePanelFor(site, live) : ""}
-      ${scheduled && scheduled.jobs.length > 0 ? scheduledPanel(site, scheduled.jobs, scheduled.timeZone) : ""}
+      ${scheduled && scheduled.jobs.length > 0 ? scheduledPanel(site, scheduled.jobs, scheduled.timeZone, scheduled.owner) : ""}
       ${options.activity && options.activity.recent.length > 0 ? recentPanel(options.activity.recent) : ""}
       ${
         formsEndpoint
