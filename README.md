@@ -27,6 +27,7 @@ In your site's repository:
 ```sh
 npx greatcms init     # writes .cms/schema.yaml and .cms/config.yaml
 npx greatcms check    # validates every content file; exits non-zero for CI
+npx greatcms studio   # the visual editor for this folder, on this machine
 ```
 
 Read a region at build time. A region nobody has edited yet renders its schema
