@@ -52,6 +52,18 @@ const check = (uri: string, headers: Record<string, string> = {}) =>
   });
 
 describe("the page that makes a preview link", () => {
+  it("is reached from the editor's preview, by a button that has a form to send", async () => {
+    const document = await page(
+      await app.request(`/sites/${SITE_ID}/regions/home.hero`, { headers: signedIn }),
+    );
+    const button = document.querySelector('button[title="Share a preview link"]')!;
+    const form = document.getElementById(button.getAttribute("form")!) as HTMLFormElement;
+    expect(form.getAttribute("action")).toBe(`/sites/${SITE_ID}/share`);
+    expect(form.method).toBe("post");
+    expect(form.closest("#editor-form")).toBeNull();
+    expect(form.querySelector<HTMLInputElement>('input[name="path"]')?.value).toBe("/");
+  });
+
   it("says what the link shows, how long it lasts and how it is taken back", async () => {
     const response = await app.request(`/sites/${SITE_ID}/share`, {
       method: "POST",
