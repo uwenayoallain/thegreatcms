@@ -117,8 +117,9 @@ import {
   hasSchema,
   isBranchName,
   isFolderName,
-  reachesPrivateNetwork,
+  cloneRoute,
   type ResolveHost,
+  type SshLookup,
   isInside,
   listFolders,
   nameFromFolder,
@@ -208,6 +209,8 @@ export interface AppOptions {
   clonePrivate?: boolean;
   /** Replaces DNS for the check above, in tests. */
   resolveHost?: ResolveHost;
+  /** What ssh would connect to for a host; `ssh -G` unless a test says otherwise. */
+  sshLookup?: SshLookup;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
@@ -1478,24 +1481,28 @@ export function createApp(options: AppOptions) {
     }
     const busy = clones.busy(folder);
     if (busy) return again(busy);
-    if (
-      !options.clonePrivate &&
-      (await reachesPrivateNetwork(cloneValues.url, options.resolveHost))
-    ) {
-      return again(
-        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
-      );
-    }
     let config: Array<[string, string]> = [];
     try {
       config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
     } catch (error) {
       return again(describeError(error));
     }
+    // Looked up once: git is then held to the addresses that were checked.
+    const route = options.clonePrivate
+      ? undefined
+      : await cloneRoute(cloneValues.url, config, options.resolveHost, options.sshLookup);
+    if (route?.private) {
+      return again(
+        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
+      );
+    }
     // Asked again: another copy may have started while the address was being looked up.
     const taken = clones.busy(folder);
     if (taken) return again(taken);
-    void clones.start(cloneValues.url, folder, cloneValues.branch, config);
+    void clones.start(cloneValues.url, folder, cloneValues.branch, [
+      ...config,
+      ...(route?.pin ?? []),
+    ]);
     return c.redirect("/sites/new", 303);
   });
 

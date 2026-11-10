@@ -11,7 +11,7 @@ import { request as httpRequest } from "node:http";
 import { mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { lstat, readdir } from "node:fs/promises";
 import { isIP } from "node:net";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { Site } from "./db.js";
 import { originFromConfig } from "./git-guard.js";
@@ -218,6 +218,123 @@ export async function reachesPrivateNetwork(
   if (host === "localhost" || host.endsWith(".localhost") || !host.includes(".")) return true;
   const addresses = await resolveHost(host).catch(() => [] as string[]);
   return addresses.some(isPrivateAddress);
+}
+
+/** The address git will really ask for, after the rewrites this one clone is given. */
+function rewritten(url: string, config: Array<[string, string]>): string {
+  let best: { base: string; prefix: string } | undefined;
+  for (const [key, prefix] of config) {
+    const base = /^url\.(.+)\.insteadof$/i.exec(key)?.[1];
+    if (base && url.startsWith(prefix) && prefix.length > (best?.prefix.length ?? 0)) {
+      best = { base, prefix };
+    }
+  }
+  return best ? best.base + url.slice(best.prefix.length) : url;
+}
+
+export interface SshRoute {
+  hostname: string;
+  port: number;
+  /** Reached through another host or program, which does its own looking up. */
+  proxied: boolean;
+  /** The name the host's key is already filed under, when the ssh config gives one. */
+  hostKeyAlias?: string;
+}
+
+export type SshLookup = (host: string, port?: number) => Promise<SshRoute | null>;
+
+/** What ssh would connect to for a host, from its own config; `ssh -G` prints it and connects to nothing. */
+const sshRoute: SshLookup = (host, port) =>
+  new Promise((resolvePromise) =>
+    execFile(
+      "ssh",
+      ["-G", ...(port ? ["-p", String(port)] : []), "--", host],
+      { timeout: 5000 },
+      (error, stdout) => {
+        if (error) return resolvePromise(null);
+        const setting = (name: string) =>
+          new RegExp(`^${name} (.+)$`, "m").exec(stdout)?.[1]?.trim() ?? "";
+        const hostname = setting("hostname");
+        if (!hostname) return resolvePromise(null);
+        resolvePromise({
+          hostname,
+          port: Number(setting("port")) || 22,
+          proxied: [setting("proxyjump"), setting("proxycommand")].some(
+            (value) => value !== "" && value !== "none",
+          ),
+          hostKeyAlias: setting("hostkeyalias") || undefined,
+        });
+      },
+    ),
+  );
+
+/** The ssh command this machine's operator set for git, or plain ssh. */
+function operatorSsh(): Promise<string> {
+  if (process.env.GIT_SSH_COMMAND) return Promise.resolve(process.env.GIT_SSH_COMMAND);
+  return new Promise((resolvePromise) =>
+    // Asked from a folder in no repository, so only the machine's own config answers.
+    execFile(
+      "git",
+      ["config", "--get", "core.sshCommand"],
+      { timeout: 5000, cwd: tmpdir(), env: { ...process.env, GIT_DIR: "/dev/null" } },
+      (_error, stdout) => resolvePromise(stdout.trim() || "ssh"),
+    ),
+  );
+}
+
+export interface CloneRoute {
+  /** Whether the address leads inside this machine or its network. */
+  private: boolean;
+  /** Config that holds git to the addresses that were checked, so a second lookup cannot differ. */
+  pin: Array<[string, string]>;
+}
+
+/**
+ * Looks up where a clone would connect once, says whether that is private, and pins git to what
+ * was found: a name that answers with a public address here and a private one a moment later
+ * (DNS rebinding) is still only ever reached at the address that was checked.
+ */
+export async function cloneRoute(
+  value: string,
+  config: Array<[string, string]> = [],
+  resolveHost: ResolveHost = resolveWithDns,
+  ssh: SshLookup = sshRoute,
+): Promise<CloneRoute> {
+  const url = rewritten(value, config);
+  const typed = cloneHost(url);
+  if (!typed) return { private: true, pin: [] };
+  const web = /^https?:/i.test(url);
+  let host = typed;
+  let port = web ? Number(new URL(url).port) || (/^https:/i.test(url) ? 443 : 80) : undefined;
+  let alias: string | undefined;
+  if (!web) {
+    const typedPort = /^ssh:/i.test(url) ? Number(new URL(url).port) || undefined : undefined;
+    const route = isIP(typed) ? null : await ssh(typed, typedPort);
+    // Through a jump host the name is looked up there, out of this machine's hands.
+    if (route?.proxied) return { private: await reachesPrivateNetwork(url, resolveHost), pin: [] };
+    host = route?.hostname ?? typed;
+    port = route?.port ?? typedPort ?? 22;
+    alias = route?.hostKeyAlias;
+  }
+  if (isIP(host)) return { private: isPrivateAddress(host), pin: [] };
+  if (host === "localhost" || host.endsWith(".localhost") || !host.includes(".")) {
+    return { private: true, pin: [] };
+  }
+  const addresses = await resolveHost(host).catch(() => [] as string[]);
+  if (addresses.some(isPrivateAddress)) return { private: true, pin: [] };
+  // A name that does not resolve is left for git to report.
+  if (addresses.length === 0) return { private: false, pin: [] };
+  if (web) {
+    const listed = addresses.map((address) => (isIP(address) === 6 ? `[${address}]` : address));
+    return {
+      private: false,
+      pin: [["http.curloptResolve", `${host}:${port}:${listed.join(",")}`]],
+    };
+  }
+  // The key stays filed under the name, as ssh would have filed it, though the address is given.
+  const filed = alias ?? (port === 22 ? host : `[${host}]:${port}`);
+  const command = `${await operatorSsh()} -o HostName=${addresses[0]} -o HostKeyAlias=${filed}`;
+  return { private: false, pin: [["core.sshCommand", command]] };
 }
 
 /** The folder a clone lands in by default: the repository's own name. */
@@ -454,6 +571,7 @@ function runGit(
   config: Array<[string, string]>,
   signal?: AbortSignal,
 ): Promise<void> {
+  const pinnedSsh = config.find(([key]) => key === "core.sshCommand")?.[1];
   return new Promise((resolvePromise, reject) => {
     execFile(
       "git",
@@ -464,8 +582,15 @@ function runGit(
         signal,
         // A missing credential fails at once instead of waiting for someone to type a password.
         env: withGitConfig(
-          { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
-          config,
+          {
+            ...process.env,
+            GIT_TERMINAL_PROMPT: "0",
+            GIT_ASKPASS: "",
+            SSH_ASKPASS: "",
+            // In the environment, where it wins over an ssh command set there or in any config.
+            ...(pinnedSsh ? { GIT_SSH_COMMAND: pinnedSsh } : {}),
+          },
+          config.filter(([key]) => key !== "core.sshCommand"),
         ),
       },
       (error, _stdout, stderr) => {
