@@ -474,7 +474,8 @@ describe.skipIf(!browser)("layout stability", () => {
     report[width] = Object.fromEntries(results);
 
     const shifted = [...results]
-      .filter(([, result]) => result.cls > 0)
+      // Below this a shift is a fraction of a pixel of font rounding, which differs by machine.
+      .filter(([, result]) => result.cls > 0.0005)
       .map(([name, result]) => `${name}: ${result.cls.toFixed(4)}`);
     expect.soft(shifted).toEqual([]);
     expect.soft(mismatches(results)).toEqual([]);
