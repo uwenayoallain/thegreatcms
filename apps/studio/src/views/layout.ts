@@ -471,7 +471,7 @@ body {
 .handle { position: relative; width: .6rem; cursor: col-resize; z-index: 5; touch-action: none; }
 .handle::before { content: ""; position: absolute; inset: 0 auto 0 50%; width: 1px; background: transparent; transition: background .15s, width .15s; }
 .handle:hover::before, .handle:focus-visible::before, .is-resizing .handle::before { width: 3px; margin-left: -1px; background: var(--accent); }
-.handle:focus-visible { outline: none; }
+.handle:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; border-radius: 3px; }
 .sidebar-handle { position: absolute; top: 0; bottom: 0; right: -.3rem; margin: 0; }
 .split-handle { align-self: stretch; }
 .is-resizing { cursor: col-resize; user-select: none; }

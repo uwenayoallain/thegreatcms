@@ -2874,6 +2874,7 @@ function entryPreview(
 function errorPage(title: string, message: string): string {
   return page(
     { title, flash: { kind: "error", message } },
-    html`<p><a class="button secondary" href="/">Back to sites</a></p>`,
+    html`<div class="page-head"><h1>${title}</h1></div>
+      <p><a class="button secondary" href="/">Back to sites</a></p>`,
   );
 }
