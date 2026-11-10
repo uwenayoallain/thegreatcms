@@ -625,4 +625,37 @@ describe.skipIf(!browser)("layout stability", () => {
       await context.close();
     }
   });
+
+  it("puts everything on the sign-in screen in the same place with the web font and without it", async () => {
+    const boxes = async (width: number, blocked: boolean) => {
+      const context = await newContext(width, { signedOut: true, js: false });
+      if (blocked) await context.route(/\.woff2/, (route) => route.abort());
+      try {
+        const page = await context.newPage();
+        await page.goto(`${origin}/sign-in`, { waitUntil: "load" });
+        await page.evaluate(() => document.fonts.ready);
+        return await page.evaluate(() =>
+          [...document.querySelectorAll("body *")].map((element) => {
+            const box = element.getBoundingClientRect();
+            return [element.tagName, box.x, box.y, box.width, box.height] as const;
+          }),
+        );
+      } finally {
+        await context.close();
+      }
+    };
+    for (const width of [320, 375, 1024, 1600]) {
+      // oxlint-disable-next-line no-await-in-loop -- one width at a time keeps the browser light
+      const [drawn, standIn] = await Promise.all([boxes(width, false), boxes(width, true)]);
+      const moved = drawn.flatMap((box, index) => {
+        const other = standIn[index];
+        const apart = other
+          ? Math.max(...[1, 2, 3, 4].map((at) => Math.abs(+box[at]! - +other[at]!)))
+          : 99;
+        // Two pixels is what text rounding differs by between machines' font renderers.
+        return apart > 2 ? [`${box[0]} at ${width}px moves ${apart.toFixed(1)}px`] : [];
+      });
+      expect(moved).toEqual([]);
+    }
+  });
 });

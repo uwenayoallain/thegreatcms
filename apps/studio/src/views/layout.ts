@@ -509,6 +509,8 @@ body.plain { display: block; }
   text-decoration: none; color: inherit; padding: .4rem .55rem .95rem;
   border-bottom: 1px solid var(--line);
 }
+/* As wide as it is in Space Grotesk, so nothing beside it moves when the stand-in face is drawn. */
+.brand > span { flex: none; width: 5.28em; white-space: nowrap; }
 .brand small { display: block; margin-top: .3rem; color: var(--ink-3); font-size: .58rem; font-weight: 650; letter-spacing: .18em; }
 .brand .mark { width: 1.75rem; height: 1.75rem; flex: none; border-radius: 7px; }
 .sidebar nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
