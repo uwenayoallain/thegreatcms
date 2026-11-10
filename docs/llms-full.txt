@@ -1483,9 +1483,6 @@ search and inbox.
 - The person who owns the GitHub App is an owner; `STUDIO_GITHUB_OWNERS` names
   others instead. Disconnecting GitHub signs all of them out.
 
-An app made before sign-in existed needs a callback URL and a client secret:
-**Git access** gives the steps.
-
 Search, history, scheduled publishes and the rest of a day's editing are in
 [Managing content](/docs/managing-content/).
 

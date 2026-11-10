@@ -537,6 +537,46 @@ describe("the pages", () => {
     expect((await post(target, "/sites/github/", { repo: "acme/site-0" })).status).not.toBe(308);
   });
 
+  it("keeps the other ways to add a site behind one closed section once GitHub is connected", async () => {
+    mkdirSync(join(root, "unrelated"));
+    const target = app(await connected());
+    const read = async (path: string, init: RequestInit = { headers: signedIn }) =>
+      new JSDOM(await (await target.request(path, init)).text()).window.document;
+    const page = await read("/sites/new");
+    const more = page.querySelector("details.more-ways") as HTMLDetailsElement;
+    expect(more.open).toBe(false);
+    expect(more.querySelector("summary")?.textContent).toBe("Other ways to add a site");
+    // A folder that did not come from GitHub, copying by address, and connecting by path wait inside.
+    expect(more.querySelector("#found-all ~ .folders")?.textContent).toContain("unrelated");
+    expect(more.querySelector("form[action='/sites/clone']")).toBeTruthy();
+    expect(more.querySelector("form[action='/sites'] input[name=path]")).toBeTruthy();
+    expect(more.querySelector("a[href='/git-access']")).toBeTruthy();
+    expect(page.querySelector("#found")).toBeNull();
+    expect(page.querySelector("form[action='/sites/github']")?.closest("details")).toBeNull();
+
+    // Something tried in there and refused opens it, so the reason is in view.
+    const refused = new JSDOM(
+      await (await post(target, "/sites/clone", { url: "not an address" })).text(),
+    ).window.document;
+    expect(refused.querySelector<HTMLDetailsElement>("details.more-ways")?.open).toBe(true);
+
+    const report = await new HtmlValidate({
+      extends: ["html-validate:standard"],
+      rules: {
+        "void-style": "off",
+        "doctype-style": "off",
+        "attribute-boolean-style": "off",
+        "attribute-empty-style": "off",
+        "no-trailing-whitespace": "off",
+        "no-inline-style": "off",
+        "no-redundant-role": "off",
+      },
+    }).validateString(await (await target.request("/sites/new", { headers: signedIn })).text());
+    expect(
+      report.results.flatMap((r) => r.messages.map((m) => `${m.ruleId}: ${m.message}`)),
+    ).toEqual([]);
+  });
+
   it("leaves two repositories unsearched and unpaged", async () => {
     const target = app(await connected());
     const body = await (await target.request("/sites/new", { headers: signedIn })).text();

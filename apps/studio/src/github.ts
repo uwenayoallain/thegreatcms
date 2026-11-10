@@ -225,15 +225,6 @@ export class GitHub {
     return Boolean(this.config()?.clientSecret);
   }
 
-  /** Adds the client secret to an app made before sign-in existed; says what is wrong, or nothing. */
-  saveClientSecret(secret: string): string | null {
-    const config = this.config();
-    if (!config) return "Connect GitHub first.";
-    if (!SECRET.test(secret)) return "That is not a client secret as GitHub shows it.";
-    this.write({ ...config, clientSecret: secret });
-    return null;
-  }
-
   /** GitHub's page asking a person to sign in to this studio. */
   authorizeUrl(redirectUri: string, state: string, challenge: string): string | null {
     const config = this.config();

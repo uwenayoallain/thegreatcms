@@ -288,44 +288,6 @@ describe("an app made before sign-in existed", () => {
     expect((await app.request("/sign-in/github")).status).toBe(404);
     expect((await app.request("/sign-in/github/callback?code=code-ada&state=x")).status).toBe(404);
   });
-
-  it("says exactly what to add on GitHub, and turns sign-in on once the secret is saved", async () => {
-    const page = new JSDOM(await text(get("/git-access", signedIn))).window.document;
-    const steps = page.querySelector("#github-sign-in ~ ol")?.textContent ?? "";
-    expect(steps).toContain(`${ORIGIN}/sign-in/github/callback`);
-    expect(steps).toContain("generate a new client secret");
-    expect(page.querySelector("#github-sign-in ~ ol a")?.getAttribute("href")).toBe(
-      "https://github.com/settings/apps/greatcms-studio",
-    );
-
-    const refused = await post("/git-access/github/secret", signedIn, { secret: "short" });
-    expect(refused.status).toBe(422);
-    expect(github.signIn()).toBe(false);
-
-    const saved = await post("/git-access/github/secret", signedIn, { secret: CLIENT_SECRET });
-    expect(saved.status).toBe(200);
-    expect(await saved.text()).not.toContain(CLIENT_SECRET);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
-    expect(await text(app.request("/sign-in"))).toContain('href="/sign-in/github"');
-    expect((await signInAs("ada")).cookie).toBeTruthy();
-  });
-
-  it("takes the secret from the owner alone", async () => {
-    alpha.store.addEditor({
-      name: "Ed",
-      email: "ed@example.com",
-      passwordHash: hashPassword("a long enough password"),
-    });
-    const signIn = await app.request("/sign-in", {
-      method: "POST",
-      headers: form,
-      body: new URLSearchParams({ email: "ed@example.com", password: "a long enough password" }),
-    });
-    const editor = { cookie: cookieOf(signIn, "greatcms_session") as string };
-    const tried = await post("/git-access/github/secret", editor, { secret: CLIENT_SECRET });
-    expect(tried.status).toBe(403);
-    expect(github.signIn()).toBe(false);
-  });
 });
 
 describe("the sign-in page", () => {

@@ -559,6 +559,10 @@ body.plain { display: block; }
 .editor-sites { flex: 1 1 100%; margin: 0; }
 .folders li > form { margin: 0; }
 .folders li > input { flex: none; margin: 0; }
+.more-ways { margin: 2rem 0 0; border-top: 1px solid var(--line); padding-top: 1rem; }
+.more-ways > summary { cursor: pointer; font-weight: 600; width: fit-content; padding: .35rem 0; }
+.more-ways[open] > summary { margin-bottom: 1.25rem; }
+.more-ways > .hint { margin-top: 1.25rem; }
 .repo-search { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: 0 0 .75rem; }
 .repo-search input { flex: 1 1 14rem; max-width: 24rem; }
 .repo-actions { flex-wrap: wrap; justify-content: space-between; gap: .75rem 1.5rem; }

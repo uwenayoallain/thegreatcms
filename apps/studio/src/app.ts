@@ -1336,6 +1336,10 @@ export function createApp(options: AppOptions) {
       return {
         connected: true,
         installUrl,
+        copies: repositories.flatMap((repo) => {
+          const copy = copyOf.get(sameRepository(repo.cloneUrl));
+          return copy ? [copy.path] : [];
+        }),
         repositories: repositories
           .map((repo) => {
             const copy = copyOf.get(sameRepository(repo.cloneUrl));
@@ -1708,11 +1712,11 @@ export function createApp(options: AppOptions) {
   ) =>
     gitAccessPage({
       tokens: gitAccess?.tokens() ?? [],
-      github: github ? await githubView(publicOrigin(c)) : undefined,
+      github: github ? await githubView() : undefined,
       ...extra,
     });
   /** What the page is told about the app: its name and owner, never its key or secret. */
-  const githubView = async (origin: string): Promise<GitHubView> => {
+  const githubView = async (): Promise<GitHubView> => {
     const made = (github as GitHub).config();
     return {
       config: made ? { slug: made.slug, owner: made.owner, htmlUrl: made.htmlUrl } : null,
@@ -1721,7 +1725,6 @@ export function createApp(options: AppOptions) {
       state: await githubState(),
       signIn: {
         ready: githubSignIn(),
-        callback: `${origin}${SIGN_IN_CALLBACK}`,
         owners: githubOwners(),
       },
     };
@@ -1784,21 +1787,6 @@ export function createApp(options: AppOptions) {
       return c.redirect(`/sign-in/github?next=${encodeURIComponent("/sites/new")}`, 303);
     }
     return done(c, "/sites/new#github", "GitHub is connected. Tick the repositories to add.");
-  });
-
-  /** For an app made before sign-in existed: the client secret its owner generated on GitHub. */
-  app.post("/git-access/github/secret", async (c) => {
-    if (!github || options.local) return c.notFound();
-    const form = await c.req.formData();
-    const problem = github.saveClientSecret(String(form.get("secret") ?? "").trim());
-    return c.html(
-      await gitAccessView(c, {
-        flash: problem
-          ? { kind: "error", message: `Nothing was saved. ${problem}` }
-          : { kind: "success", message: "People can now sign in with GitHub." },
-      }),
-      problem ? 422 : 200,
-    );
   });
 
   app.post("/git-access/github/refresh", (c) => {

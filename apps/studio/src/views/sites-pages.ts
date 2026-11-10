@@ -1,6 +1,6 @@
 /** The list of sites and the form that adds one. */
 
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import type { Site } from "../db.js";
 import type { CmsSchema } from "@greatcms/spec";
 import type { CloneState, Folder } from "../connect.js";
@@ -143,6 +143,11 @@ export function newSitePage(
   } = {},
 ): string {
   const { editing, fieldErrors = {} } = options;
+  // With GitHub connected the repository list is the way in; the rest waits behind one click.
+  const collapsed = !editing && Boolean(options.github?.connected);
+  const tried = Boolean(
+    options.cloneError || options.cloneValues || options.values || Object.keys(fieldErrors).length,
+  );
   const values: Record<string, string> =
     options.values ??
     (editing
@@ -195,6 +200,14 @@ export function newSitePage(
       </div>
 
       ${editing ? "" : connectSources(options)}
+      ${
+        collapsed
+          ? raw(
+              `<details class="more-ways"${tried ? " open" : ""}><summary>Other ways to add a site</summary>`,
+            )
+          : ""
+      }
+      ${editing ? "" : otherFolders(options)} ${editing ? "" : cloneSection(options)}
       ${
         !editing && options.sitesRoot
           ? html`<h2 class="connect-heading" id="other">Another folder</h2>
@@ -376,6 +389,15 @@ export function newSitePage(
         </div>
       </form>
       ${
+        collapsed
+          ? html`<p class="hint">
+                Tokens for other Git hosts, and the GitHub App itself, are under
+                <a href="/git-access">Git access</a>.
+              </p>
+              ${raw("</details>")}`
+          : ""
+      }
+      ${
         editing?.devUrl
           ? html`<section class="danger-zone" aria-labelledby="sharing">
               <h2 id="sharing">Preview links</h2>
@@ -412,27 +434,57 @@ export function newSitePage(
   );
 }
 
-/** The sites folder's contents and the Git form, above the path form, when a sites folder is set. */
+/**
+ * The repository list, then the sites folder. With GitHub connected the folder list is cut down to
+ * what is on its way in from GitHub; everything else in the folder waits under "Other ways".
+ */
 function connectSources(options: Parameters<typeof newSitePage>[0]) {
-  const {
-    sitesRoot,
-    folders = [],
-    clones = [],
-    cloneValues = {},
-    cloneError,
-    gitAccess,
-    github,
-  } = options ?? {};
+  const { sitesRoot, folders = [], github } = options ?? {};
   if (!sitesRoot) return "";
+  if (!github?.connected) return html`${github ? githubList(github) : ""} ${foundSection(options)}`;
+  const copies = new Set(github.copies ?? []);
+  const arriving = folders.filter(
+    (folder) => folder.state !== "connected" && copies.has(folder.path),
+  );
+  return html`${githubList(github)} ${foundSection(options, arriving)}`;
+}
+
+/** The rest of the sites folder, shown under "Other ways" when GitHub is connected. */
+function otherFolders(options: Parameters<typeof newSitePage>[0]) {
+  const { sitesRoot, folders = [], github } = options ?? {};
+  if (!sitesRoot || !github?.connected) return "";
+  const copies = new Set(github.copies ?? []);
+  const rest = folders.filter((folder) => folder.state === "connected" || !copies.has(folder.path));
+  return rest.length
+    ? html`<section class="connect-section" aria-labelledby="found-all">
+        <h2 id="found-all">In the sites folder</h2>
+        <p>
+          Folders in <code>${sitesRoot}</code>. Connect one, or set it up if it has no schema yet.
+        </p>
+        <ul class="folders" role="list">
+          ${rest.map((folder) => folderRow(folder))}
+        </ul>
+      </section>`
+    : "";
+}
+
+/** Copies in flight or failed, and folders: every one, or only those `arriving` from GitHub. */
+function foundSection(options: Parameters<typeof newSitePage>[0], arriving?: Folder[]) {
+  const { sitesRoot, clones = [], gitAccess } = options ?? {};
+  const folders = arriving ?? options?.folders ?? [];
   const working = clones.filter((clone) => clone.state === "cloning");
   const failed = clones.filter((clone) => clone.state === "failed");
+  if (arriving && !working.length && !failed.length && !folders.length) return "";
   return html`
-    ${github ? githubList(github) : ""}
-
     <section class="connect-section" aria-labelledby="found">
-      <h2 id="found">In the sites folder</h2>
+      <h2 id="found">${arriving ? "Being added" : "In the sites folder"}</h2>
       <p>
-        Folders in <code>${sitesRoot}</code>. Connect one, or set it up if it has no schema yet.
+        ${
+          arriving
+            ? html`Copied from GitHub. One with a schema connects by itself; set up any other.`
+            : html`Folders in <code>${sitesRoot}</code>. Connect one, or set it up if it has no
+                schema yet.`
+        }
       </p>
       ${
         working.length || failed.length
@@ -472,10 +524,19 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
           ? html`<ul class="folders" role="list">
               ${folders.map((folder) => folderRow(folder))}
             </ul>`
-          : html`<p class="muted">Nothing here yet. Copy a site from Git below.</p>`
+          : arriving
+            ? ""
+            : html`<p class="muted">Nothing here yet. Copy a site from Git below.</p>`
       }
     </section>
+  `;
+}
 
+/** Copying any repository by its address, for one that is not on GitHub. */
+function cloneSection(options: Parameters<typeof newSitePage>[0]) {
+  const { sitesRoot, cloneValues = {}, cloneError, gitAccess } = options ?? {};
+  if (!sitesRoot) return "";
+  return html`
     <section class="connect-section" aria-labelledby="clone">
       <h2 id="clone">Copy from Git</h2>
       <p>
@@ -560,6 +621,8 @@ export interface GitHubRepositories {
     state: Folder["state"] | null;
     siteId?: string;
   }>;
+  /** The folders that are copies of a listed repository, by path. */
+  copies?: string[];
   /** The search these were found by, the page shown, and how many there are in all. */
   query?: string;
   page?: number;
@@ -593,7 +656,6 @@ function githubList(github: GitHubRepositories) {
           ? html`Missing one? <a href="${github.installUrl}">Choose repositories on GitHub</a>.`
           : ""
       }
-      <a href="/git-access">Manage the GitHub connection</a>.
     </p>
     ${
       !github.error && total > 10
