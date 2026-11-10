@@ -168,7 +168,7 @@ npx greatcms studio
 
 Opens the visual editor for the site in this folder, or the nearest folder
 above it with a `.cms/schema.yaml`: the studio on `127.0.0.1:4983`, your
-browser signed in through a link that works once, and the site's dev server
+browser opened on it with no sign-in, and the site's dev server
 as the live preview. `--port`, `--dev-url`, `--no-dev` and `--no-open` change
 the defaults; [Running the studio](/docs/running-the-studio/#on-your-own-machine)
 has the details. The dev server is started by this command, as your own dev

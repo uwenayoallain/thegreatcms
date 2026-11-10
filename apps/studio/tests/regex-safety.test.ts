@@ -111,11 +111,10 @@ describe("a pattern that backtracks without end", () => {
       [CLI, "studio", "--no-open", "--no-dev", "--port", String(port)],
       join(site.root, ".cms"),
     );
-    const [link] = await seen(/http:\/\/127\.0\.0\.1:\d+\/local\/sign-in\?token=[\w-]+/);
-    const signIn = await fetch(link as string, { redirect: "manual" });
-    const cookie = (signIn.headers.get("set-cookie") ?? "").split(";")[0] as string;
+    await seen(/http:\/\/127\.0\.0\.1:\d+/);
 
-    const answer = await publish(`http://127.0.0.1:${port}`, "pattern-site", cookie);
+    // Nobody signs in to this one: there is no cookie to send.
+    const answer = await publish(`http://127.0.0.1:${port}`, "pattern-site", "");
     expect(answer.status).toBe(422);
     expect(answer.body).toContain("Does not match required pattern");
     expect(answer.took).toBeLessThan(PROMPT_MS);

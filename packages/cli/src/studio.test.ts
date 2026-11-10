@@ -381,9 +381,6 @@ describe("the command", () => {
       return {
         port: options.port,
         url: `http://127.0.0.1:${options.port}/sites/my-site`,
-        signInUrl: options.password
-          ? undefined
-          : `http://127.0.0.1:${options.port}/local/sign-in?token=abc`,
         close: async () => void stopped.push("studio"),
       };
     },
@@ -449,13 +446,13 @@ describe("the command", () => {
     ]);
     expect(devStarted[0]?.command.slice(1)).toEqual(["dev", "--port", "4321", "--ignore-lock"]);
     expect(devStarted[0]?.cwd).toBe(root);
-    expect(opened).toEqual(["http://127.0.0.1:4983/local/sign-in?token=abc"]);
+    expect(opened).toEqual(["http://127.0.0.1:4983"]);
     expect(stopped.toSorted()).toEqual(["dev", "studio"]);
 
     const text = out.join("");
     expect(text).toContain("http://127.0.0.1:4983");
     expect(text).toContain("http://localhost:4321");
-    expect(text).toContain("/local/sign-in?token=abc");
+    expect(text).not.toMatch(/sign.in|token|works once|password/i);
     expect(text).toContain(root);
     expect(text.split("\n").length).toBeLessThan(16);
     expect(text).not.toContain("\u2014");
@@ -482,11 +479,11 @@ describe("the command", () => {
     );
   });
 
-  it("does not open a browser with --no-open, and still prints the link", async () => {
+  it("does not open a browser with --no-open, and still prints the address", async () => {
     site("astro");
     await studio(["--no-open"]);
     expect(opened).toEqual([]);
-    expect(out.join("")).toContain("/local/sign-in?token=abc");
+    expect(out.join("")).toContain("http://127.0.0.1:4983");
   });
 
   it("uses --port exactly, and refuses one that is taken", async () => {
@@ -575,7 +572,7 @@ describe("the command", () => {
     expect(devStarted).toEqual([]);
   });
 
-  it("with a password, listens there and offers no link", async () => {
+  it("with a password, listens there and opens nothing", async () => {
     site("astro");
     await studio(["--host", "0.0.0.0"], { env: { STUDIO_PASSWORD: "long and random" } });
     expect(started[0]?.host).toBe("0.0.0.0");
@@ -585,7 +582,7 @@ describe("the command", () => {
     expect(out.join("")).not.toContain("long and random");
   });
 
-  it("never hands the password to a loopback studio, which signs in by link", async () => {
+  it("never hands the password to a loopback studio, which asks for none", async () => {
     site("astro");
     await studio(["--host", "localhost"], { env: { STUDIO_PASSWORD: "long and random" } });
     expect(started[0]?.password).toBeUndefined();

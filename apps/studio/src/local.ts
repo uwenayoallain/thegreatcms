@@ -1,11 +1,9 @@
-/** Local mode: the studio on loopback for the person who started it, signed in by a one-time link. */
+/** Local mode: the studio on loopback, where whoever can reach it is the owner and nobody signs in. */
 
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createSessionCookie, readSession } from "./auth.js";
-
-export const LOCAL_SIGN_IN = "/local/sign-in";
+import { createSessionCookie } from "./auth.js";
 
 type Fetch = (request: Request, ...rest: unknown[]) => Response | Promise<Response>;
 
@@ -24,7 +22,7 @@ export function loopbackAddress(host: string): { bind: string; urlHost: string }
     : { bind: name, urlHost: name };
 }
 
-/** The session secret, kept beside the database so a restart does not sign the browser out. */
+/** The signing secret, kept beside the database so notices and preview links outlive a restart. */
 export function localSecret(stateDir: string): string {
   const file = join(stateDir, "secret");
   try {
@@ -45,107 +43,79 @@ export function localPassword(secret: string): string {
   return createHmac("sha256", secret).update("greatcms local password").digest("hex");
 }
 
-export function oneTimeToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
 export interface LocalGuardOptions {
   port: number;
   /** How the studio's own URL spells its host: `127.0.0.1` or `[::1]`. */
   urlHost: string;
-  token: string;
   /** What the app signs sessions with: `sessionKey(secret, password)`. */
   signingKey: string;
-  /** Where a fresh sign-in lands. */
+  /** The site's own page, where the sign-in addresses lead. */
   landing: string;
-  /** Told when a link that was already used is presented by someone without a session. */
-  onRefused?: () => void;
 }
 
-const page = (title: string, body: string, status: number) =>
-  new Response(
-    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:15vh auto;padding:0 1rem"><h1 style="font-size:1.25rem">${title}</h1><p>${body}</p></body></html>`,
-    {
-      status,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
-        "referrer-policy": "no-referrer",
-        "x-content-type-options": "nosniff",
-      },
-    },
-  );
+/** Addresses for signing in or out, which nobody does here: they lead to the site. */
+const NOTHING_TO_DO = new Set(["/sign-in", "/local/sign-in", "/sign-out"]);
 
-const sameToken = (a: string, b: string) =>
-  timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
+const refused = (message: string) =>
+  new Response(`${message}\n`, {
+    status: 403,
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+  });
 
 /**
  * Wraps the app for local mode. A request must name this machine and this port in `Host`, which is
- * what stops a web page reaching the studio through a hostname it controls (DNS rebinding); the
- * link from the terminal signs a browser in once; and the password form is not offered at all.
+ * what stops a web page reaching the studio through a hostname it controls (DNS rebinding), and
+ * anything but a page load must come from the studio's own pages. What passes is the owner: the app
+ * is handed a session signed with its own key, so its sign-in code is the same as on a server.
  */
 export function localGuard(app: Fetch, options: LocalGuardOptions): Fetch {
   const canonical = `${options.urlHost}:${options.port}`;
   const aliases = new Set(
     ["127.0.0.1", "localhost", "[::1]"].map((host) => `${host}:${options.port}`),
   );
-  let used = false;
 
   return (request, ...rest) => {
     const host = (request.headers.get("host") ?? "").toLowerCase();
+    const url = new URL(request.url);
+    const reads = request.method === "GET" || request.method === "HEAD";
     if (host !== canonical) {
-      if (!aliases.has(host)) {
-        return new Response(`This studio only answers at http://${canonical}.\n`, {
-          status: 403,
-          headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
-        });
-      }
-      const url = new URL(request.url);
-      // One spelling of the address, so the session cookie has one home; nothing but a page load follows.
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        return new Response(`Use http://${canonical}.\n`, { status: 403 });
-      }
+      if (!aliases.has(host)) return refused(`This studio only answers at http://${canonical}.`);
+      // One spelling of the address, so the studio has one origin; nothing but a page load follows.
+      if (!reads) return refused(`Use http://${canonical}.`);
       return new Response(null, {
         status: 307,
         headers: { location: `http://${canonical}${url.pathname}${url.search}` },
       });
     }
 
-    const url = new URL(request.url);
-    if (url.pathname === LOCAL_SIGN_IN) {
-      if (request.method !== "GET") return new Response(null, { status: 405 });
-      const supplied = url.searchParams.get("token") ?? "";
-      if (!used && sameToken(supplied, options.token)) {
-        used = true;
-        return new Response(null, {
-          status: 303,
-          headers: {
-            location: options.landing,
-            "set-cookie": createSessionCookie(options.signingKey),
-            "cache-control": "no-store",
-            "referrer-policy": "no-referrer",
-          },
-        });
-      }
-      // The link reopened from history by the browser it signed in: nothing to refuse.
-      if (readSession(request.headers.get("cookie") ?? undefined, options.signingKey)) {
-        return new Response(null, { status: 303, headers: { location: options.landing } });
-      }
-      if (used && sameToken(supplied, options.token)) options.onRefused?.();
-      return page(
-        "This sign-in link no longer works",
-        "Each link signs one browser in, once. Stop <code>greatcms studio</code> in the terminal and run it again for a new one.",
-        403,
-      );
+    // A site's own forms post here from the site's address: public, and never the owner's doing.
+    if (url.pathname.startsWith("/f/")) return app(request, ...rest);
+
+    if (!reads) {
+      // No cookie stands between a web page and the owner here, so the browser must vouch for the sender.
+      const origin = request.headers.get("origin");
+      const site = request.headers.get("sec-fetch-site");
+      const own = origin
+        ? origin === `http://${canonical}` && (!site || site === "same-origin")
+        : site === "same-origin";
+      if (!own) return refused("Only the studio's own pages can change anything here.");
     }
-    if (url.pathname === "/sign-in") {
-      return page(
-        "Open the link from the terminal",
-        "This studio runs on your machine and has no password. <code>greatcms studio</code> printed a one-time sign-in link when it started: open that, or run the command again for a new one.",
-        request.method === "GET" ? 401 : 403,
-      );
+
+    if (NOTHING_TO_DO.has(url.pathname)) {
+      return new Response(null, {
+        status: 303,
+        headers: { location: options.landing, "cache-control": "no-store" },
+      });
     }
+
+    const [session = ""] = createSessionCookie(options.signingKey).split(";");
+    const name = session.slice(0, session.indexOf("="));
+    // Whatever session the browser sent is dropped: the only one the app sees is this one.
+    const others = (request.headers.get("cookie") ?? "")
+      .split(";")
+      .map((part) => part.trim())
+      .filter((part) => part && part.split("=")[0] !== name);
+    request.headers.set("cookie", [...others, session].join("; "));
     return app(request, ...rest);
   };
 }

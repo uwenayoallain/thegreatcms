@@ -328,7 +328,7 @@ export interface StudioModule {
     host?: string;
     devUrl?: string;
     password?: string;
-  }): Promise<{ url: string; signInUrl?: string; port: number; close(): Promise<void> }>;
+  }): Promise<{ url: string; port: number; close(): Promise<void> }>;
 }
 
 /** The studio's entry file: the site's own copy, then one beside this CLI, then a checkout's. */
@@ -380,7 +380,7 @@ function runInherit(command: string[], cwd: string): Promise<number> {
   });
 }
 
-/** Opens the default browser; failing to is not an error, the link is in the terminal. */
+/** Opens the default browser; failing to is not an error, the address is in the terminal. */
 function openBrowser(url: string): void {
   const [file, args] =
     process.platform === "darwin"
@@ -471,7 +471,7 @@ export async function studioCommand(
   const password = deps.env.STUDIO_PASSWORD || undefined;
   if (!isLoopback(host) && !password) {
     throw new UsageError(
-      `--host ${host} would put the studio on the network with no password: the one-time sign-in link is only safe on this machine.`,
+      `--host ${host} would put the studio on the network with no password: opening with no sign-in is only safe on this machine.`,
       "Drop --host to stay on 127.0.0.1, or set STUDIO_PASSWORD to a long random value and sign in with that.",
     );
   }
@@ -576,12 +576,8 @@ export async function studioCommand(
       ["preview", devUrl ? `${devUrl}  ${u.muted(`(${devNote})`)}` : u.muted(devNote)],
     ])}\n\n`,
   );
-  if (running.signInUrl) {
-    stdout(`  Sign in (this link works once):\n  ${u.accent(running.signInUrl)}\n\n`);
-    if (!flags.boolean("no-open")) deps.open(running.signInUrl);
-  } else {
-    stdout(`  Sign in at ${origin} with STUDIO_PASSWORD.\n\n`);
-  }
+  if (!isLoopback(host)) stdout(`  Sign in at ${origin} with STUDIO_PASSWORD.\n\n`);
+  else if (!flags.boolean("no-open")) deps.open(origin);
   stdout(`${u.note(`Ctrl+C stops ${dev ? "the studio and the dev server" : "it"}.`)}\n`);
 
   if (dev) {

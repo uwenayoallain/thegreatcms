@@ -171,7 +171,7 @@ export const COMMANDS: CommandSpec[] = [
     maxArgs: 0,
     summary: "open the visual editor for this site, on this machine",
     description:
-      "Starts the GreatCMS studio on 127.0.0.1 with this folder as its one site, signs your browser in through a one-time link, and shows the site's dev server as the live preview: the one already running, or the site's own dev command started here and stopped with it. Publishing commits to this working copy as you; nothing is pushed. Needs Node.js 22.13 or newer and the @greatcms/studio package, which it offers to install.",
+      "Starts the GreatCMS studio on 127.0.0.1 with this folder as its one site, opens it in your browser with no sign-in, and shows the site's dev server as the live preview: the one already running, or the site's own dev command started here and stopped with it. It trusts whoever can reach it on this machine, other users of a shared one included, which is why it only listens on loopback. Publishing commits to this working copy as you; nothing is pushed. Needs Node.js 22.13 or newer and the @greatcms/studio package, which it offers to install.",
     options: [
       {
         name: "port",
@@ -189,7 +189,7 @@ export const COMMANDS: CommandSpec[] = [
         help: "the site's dev server, when it is already running",
       },
       { name: "no-dev", help: "do not look for or start a dev server: edit without the preview" },
-      { name: "no-open", help: "print the sign-in link without opening a browser" },
+      { name: "no-open", help: "print the studio's address without opening a browser" },
     ],
     examples: [
       "greatcms studio",

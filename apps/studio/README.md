@@ -18,9 +18,10 @@ npx greatcms studio
 
 That is the `greatcms` command from [`@greatcms/cli`](https://www.npmjs.com/package/@greatcms/cli),
 which loads this package. It starts the studio on `127.0.0.1:4983` for the
-project in the current folder and nothing else, signs your browser in through
-a link that works once, and shows the site's dev server as the live preview.
-There is no password: the studio answers only this machine, at its own address.
+project in the current folder and nothing else, opens it in your browser with
+no sign-in, and shows the site's dev server as the live preview. It trusts
+whoever can reach it on this machine, other users of a shared one included,
+which is why it only listens on loopback.
 
 ## On a server
 
@@ -51,7 +52,7 @@ const studio = await startLocal({
   port: 4983,
   devUrl: "http://localhost:4321",
 });
-console.log(studio.signInUrl); // signs one browser in, once
+console.log(studio.url); // opens the site, with no sign-in
 await studio.close();
 ```
 

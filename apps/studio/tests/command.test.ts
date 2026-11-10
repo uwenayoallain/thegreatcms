@@ -83,27 +83,31 @@ function start(args: string[]): {
 }
 
 describe("greatcms studio", () => {
-  it("opens the editor for this folder through the one-time link, and stops cleanly", async () => {
+  it("opens the editor for this folder with no sign-in, and stops cleanly", async () => {
     expect(existsSync(join(STUDIO, "dist/start.js")), "run `pnpm build` first").toBe(true);
     const port = await freePort();
     const run = start(["--no-open", "--no-dev", "--port", String(port)]);
 
-    const [link] = await run.seen(/http:\/\/127\.0\.0\.1:\d+\/local\/sign-in\?token=[\w-]+/);
-    expect(link).toContain(`:${port}/`);
+    const [address] = await run.seen(/http:\/\/127\.0\.0\.1:\d+/);
+    expect(address).toBe(`http://127.0.0.1:${port}`);
+    // The whole banner, not just its first line.
+    await run.seen(/Ctrl\+C/);
     expect(run.output()).toContain(site.root);
     expect(run.output()).not.toContain("ExperimentalWarning");
+    expect(run.output()).not.toMatch(/sign.in|token|works once/i);
 
-    const signIn = await fetch(link as string, { redirect: "manual" });
-    expect(signIn.status).toBe(303);
-    const cookie = (signIn.headers.get("set-cookie") ?? "").split(";")[0] as string;
-    const landing = new URL(signIn.headers.get("location") as string, link).href;
+    // The address it printed is the site, for a browser that has never been here.
+    const home = await fetch(address as string, { redirect: "manual" });
+    expect(home.status).toBe(303);
+    expect(home.headers.get("set-cookie")).toBeNull();
+    const landing = new URL(home.headers.get("location") as string, address).href;
     expect(landing).toBe(`http://127.0.0.1:${port}/sites/command-site`);
 
-    const overview = await fetch(landing, { headers: { cookie } });
+    const overview = await fetch(landing, { redirect: "manual" });
     expect(overview.status).toBe(200);
     expect(await overview.text()).toContain("Hero");
 
-    const editor = await fetch(`${landing}/regions/home.hero`, { headers: { cookie } });
+    const editor = await fetch(`${landing}/regions/home.hero`, { redirect: "manual" });
     expect(editor.status).toBe(200);
     expect(await editor.text()).toContain('name="f[heading]"');
 
@@ -111,16 +115,12 @@ describe("greatcms studio", () => {
     const css = await fetch(`http://127.0.0.1:${port}/assets/studio.css`, { redirect: "manual" });
     expect(css.status).toBeLessThan(400);
 
-    expect((await fetch(link as string, { redirect: "manual" })).status).toBe(403);
-    expect((await fetch(landing, { redirect: "manual" })).status).toBe(303);
-
     // Publishing is a plain form post, and one commit in this working copy as the developer.
     const before = site.head();
     const saved = await fetch(`${landing}/regions/home.hero`, {
       method: "POST",
       redirect: "manual",
       headers: {
-        cookie,
         origin: `http://127.0.0.1:${port}`,
         "content-type": "application/x-www-form-urlencoded",
       },

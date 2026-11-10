@@ -9,15 +9,7 @@ import { Store } from "./db.js";
 import { GitAccess } from "./git-access.js";
 import { trustFolderGitConfig } from "./git-guard.js";
 import { GitHub } from "./github.js";
-import {
-  isLoopback,
-  LOCAL_SIGN_IN,
-  localGuard,
-  localPassword,
-  localSecret,
-  loopbackAddress,
-  oneTimeToken,
-} from "./local.js";
+import { isLoopback, localGuard, localPassword, localSecret, loopbackAddress } from "./local.js";
 
 export { isLoopback } from "./local.js";
 
@@ -106,22 +98,20 @@ export interface LocalOptions {
   /** The site's folder: the one holding `.cms/schema.yaml`. */
   root: string;
   name: string;
-  /** Where the database and the session secret go; outside anything Git tracks. */
+  /** Where the database and the signing secret go; outside anything Git tracks. */
   stateDir: string;
   port: number;
   /** `127.0.0.1` unless told otherwise. Anything that is not loopback needs `password`. */
   host?: string;
   /** Where the site's dev server answers, for the live preview. */
   devUrl?: string;
-  /** Required to listen anywhere but loopback, and then the one-time link is not offered. */
+  /** Required to listen anywhere but loopback, and then it is what signs people in. */
   password?: string;
 }
 
 export interface RunningLocalStudio extends RunningStudio {
   /** The address to open in a browser. */
   url: string;
-  /** Signs one browser in, once; absent when a password guards the studio instead. */
-  signInUrl?: string;
   siteId: string;
 }
 
@@ -132,13 +122,13 @@ const slug = (name: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 48) || "site";
 
-/** One folder, one person, no password to type: what `greatcms studio` runs. */
+/** One folder, one person, nothing to sign in to: what `greatcms studio` runs. */
 export async function startLocal(options: LocalOptions): Promise<RunningLocalStudio> {
   const host = options.host ?? "127.0.0.1";
   const loopback = isLoopback(host);
   if (!loopback && !options.password) {
     throw new Error(
-      `Refusing to listen on ${host} without a password: the one-time sign-in link is only safe on this machine.\n  fix: drop --host, or set STUDIO_PASSWORD to a long random value.`,
+      `Refusing to listen on ${host} without a password: the local studio trusts whoever can reach it, which is only safe on this machine.\n  fix: drop --host, or set STUDIO_PASSWORD to a long random value.`,
     );
   }
   const { bind, urlHost } = loopback ? loopbackAddress(host) : { bind: host, urlHost: host };
@@ -161,7 +151,6 @@ export async function startLocal(options: LocalOptions): Promise<RunningLocalStu
 
   // The folder is the developer's own checkout, and so is what its git config says.
   trustFolderGitConfig(true);
-  const token = loopback ? oneTimeToken() : undefined;
   const landing = `/sites/${siteId}`;
   const running = await start({
     password,
@@ -182,26 +171,20 @@ export async function startLocal(options: LocalOptions): Promise<RunningLocalStu
         deployRoot: "",
       },
     ],
-    wrap: token
+    // Only on loopback is everyone who can ask the owner; anywhere else the password form decides.
+    wrap: loopback
       ? (handler) =>
           localGuard(handler, {
             port: options.port,
             urlHost,
-            token,
             signingKey: sessionKey(secret, password),
             landing,
-            onRefused: () =>
-              process.stderr.write(
-                "A sign-in link that was already used was opened again. If that was not you, stop the studio.\n",
-              ),
           })
       : undefined,
   });
-  const origin = `http://${urlHost}:${running.port}`;
   return {
     ...running,
     siteId,
-    url: `${origin}${landing}`,
-    signInUrl: token ? `${origin}${LOCAL_SIGN_IN}?token=${token}` : undefined,
+    url: `http://${urlHost}:${running.port}${landing}`,
   };
 }

@@ -46,7 +46,7 @@ export interface LocalOptions {
   /** The site's folder: the one holding `.cms/schema.yaml`. */
   root: string;
   name: string;
-  /** Where the database and the session secret go. */
+  /** Where the database and the signing secret go. */
   stateDir: string;
   port: number;
   /** `127.0.0.1` unless told otherwise. Anything that is not loopback needs `password`. */
@@ -56,11 +56,10 @@ export interface LocalOptions {
 }
 
 export interface RunningLocalStudio extends RunningStudio {
+  /** The site's page: on loopback it opens with no sign-in, anywhere else it asks for the password. */
   url: string;
-  /** Signs one browser in, once; absent when a password guards the studio instead. */
-  signInUrl?: string;
   siteId: string;
 }
 
-/** One folder on loopback, signed in by a one-time link: what `greatcms studio` runs. */
+/** One folder on loopback, where whoever can reach it is the owner: what `greatcms studio` runs. */
 export declare function startLocal(options: LocalOptions): Promise<RunningLocalStudio>;
