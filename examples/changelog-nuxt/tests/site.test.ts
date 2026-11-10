@@ -49,10 +49,32 @@ describe.each(PAGES)("$name", ({ file }) => {
     expect(html).not.toMatch(/modulepreload/i);
     expect(html).not.toContain("data-greatcms");
     expect(html).not.toContain("greatcms:");
+    // Speculation rules and structured data are read by the browser and by crawlers; neither runs.
     const scripts = [...dom(file).querySelectorAll("script")].filter(
-      (s) => s.getAttribute("type") !== "speculationrules",
+      (s) => !["speculationrules", "application/ld+json"].includes(s.getAttribute("type") ?? ""),
     );
     expect(scripts).toHaveLength(0);
+  });
+
+  it("can be found and shared: a description, an address of its own, and a card with an image", () => {
+    const document = dom(file);
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content");
+    expect(meta('meta[name="description"]')?.length).toBeGreaterThan(0);
+    expect(meta('meta[property="og:description"]')).toBe(meta('meta[name="description"]'));
+    expect(meta('meta[property="og:title"]')).toBe(document.title);
+    expect(meta('meta[property="og:image"]')).toBe("https://sundial.example/og.png");
+    expect(meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+    // A page with no address worth indexing says so instead of naming one.
+    if (meta('meta[name="robots"]') === "noindex") expect(canonical).toBeUndefined();
+    else expect(canonical).toBe(`https://sundial.example/${file.replace(/index\.html$/, "")}`);
+  });
+
+  it("links only to pages that were built", () => {
+    for (const link of dom(file).querySelectorAll('a[href^="/"]')) {
+      const path = link.getAttribute("href")!.split("#")[0]!;
+      expect(existsSync(join(DIST, path, "index.html")), `${file}: ${path}`).toBe(true);
+    }
   });
 
   it("has a language, a title, one h1 and a skip link", () => {
@@ -92,5 +114,33 @@ describe("the waitlist form", () => {
     expect(form?.getAttribute("action")).toMatch(/\/f\/[\w-]+\/waitlist$/);
     const email = form?.querySelector('input[type="email"]');
     expect(document.querySelector(`label[for="${email?.id}"]`)).toBeTruthy();
+  });
+});
+
+describe("for search engines", () => {
+  it("lists every page worth finding in the sitemap, points robots.txt at it, and publishes the share image", () => {
+    const listed = [
+      ...read("sitemap.xml").matchAll(/<loc>https:\/\/sundial\.example([^<]*)<\/loc>/g),
+    ]
+      .map((match) => match[1]!)
+      .toSorted();
+    const expected = ["/", "/changelog/", ...RELEASES.map((slug) => `/changelog/${slug}/`)];
+    expect(listed).toEqual(expected.toSorted());
+    for (const path of listed) expect(existsSync(join(DIST, path, "index.html")), path).toBe(true);
+    expect(read("robots.txt")).toContain("Sitemap: https://sundial.example/sitemap.xml");
+    expect(existsSync(join(DIST, "og.png"))).toBe(true);
+  });
+
+  it("describes the product on the home page and each release as an article with its date", () => {
+    const data = (file: string) =>
+      JSON.parse(
+        dom(file).querySelector('script[type="application/ld+json"]')!.textContent!,
+      ) as Record<string, string>;
+    expect(data("index.html")["@type"]).toBe("SoftwareApplication");
+    for (const slug of RELEASES) {
+      const release = data(`changelog/${slug}/index.html`);
+      expect(release["@type"]).toBe("Article");
+      expect(release.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
   });
 });

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ noindex: true });
 useHead({ title: "That hour is not on the dial" });
 </script>
 

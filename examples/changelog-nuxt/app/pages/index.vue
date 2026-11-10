@@ -3,6 +3,22 @@ const cms = await useCms();
 const { hero, features, pricing, faq } = cms;
 const latest = cms.releases.slice(0, 3);
 const config = useRuntimeConfig();
+useHead({
+  script: [
+    {
+      type: "application/ld+json",
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: cms.identity.name,
+        description: cms.identity.tagline,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "macOS, iOS, Web",
+        url: config.public.siteUrl,
+      }).replaceAll("<", "\\u003c"),
+    },
+  ],
+});
 </script>
 
 <template>

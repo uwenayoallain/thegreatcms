@@ -12,12 +12,14 @@ export default defineEventHandler(() => {
       const data = entry.data as { version: string; title: string; date: string; kind?: string };
       // A studio edit stores the body as sanitized HTML; one written by hand is Markdown, which may hold HTML.
       return Object.assign({ slug: entry.slug }, data, {
-        html: marked.parse(entry.body, { async: false }),
+        // A code block scrolls sideways on a narrow screen, so the keyboard has to be able to reach it.
+        html: marked.parse(entry.body, { async: false }).replaceAll("<pre>", '<pre tabindex="0">'),
       });
     })
     .toSorted((a, b) => b.date.localeCompare(a.date));
   return {
-    identity: cms.region("site.identity"),
+    // Before anyone has named the product in the studio, the site still has the name it was built for.
+    identity: { name: "Sundial", ...cms.region("site.identity") },
     hero: cms.region("home.hero"),
     features: cms.region("home.features"),
     pricing: cms.region("home.pricing"),

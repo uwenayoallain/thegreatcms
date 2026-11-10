@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ noindex: true });
 useHead({ title: "You are on the list" });
 </script>
 
