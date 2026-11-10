@@ -1,4 +1,4 @@
-/** Nothing shared moves: every page puts the masthead, main column and footer in one place, and none shifts as it loads. */
+/** Nothing shared moves: every page puts the masthead, main column and footer in one place, and none shifts as it loads. All of it in a browser, where the pages run no script. */
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -267,6 +267,127 @@ describe.skipIf(!browser)("whichever face is drawn", () => {
         // oxlint-disable-next-line no-await-in-loop
         await page.setViewportSize({ width: 320, height: 900 });
       }
+      await page.context().close();
+    },
+    BUDGET,
+  );
+});
+
+describe.skipIf(!browser)("with no script on the page", () => {
+  it(
+    "loads every page without asking for a script, or for anything that is missing",
+    async () => {
+      const page = await open(1280);
+      const asked: string[] = [];
+      page.on("response", (response) => {
+        const kind = response.request().resourceType();
+        if (kind === "script" || response.status() >= 400)
+          asked.push(`${kind} ${response.status()} ${response.url()}`);
+      });
+      for (const path of PAGES) {
+        // oxlint-disable-next-line no-await-in-loop -- one tab, one page after another
+        await page.goto(origins.onTime + path, { waitUntil: "load" });
+        // oxlint-disable-next-line no-await-in-loop
+        expect(await page.locator("script:not([type='application/ld+json'])").count()).toBe(0);
+      }
+      await page.context().close();
+      expect(asked).toEqual([]);
+    },
+    BUDGET,
+  );
+
+  it(
+    "still runs its motion from the stylesheet: scroll-driven effects, and a transition between pages",
+    async () => {
+      const page = await open(1280);
+      await page.addInitScript(() => {
+        addEventListener("pagereveal", (event) => {
+          const reveal = event as Event & { viewTransition: unknown };
+          (globalThis as unknown as { crossed: boolean }).crossed = reveal.viewTransition !== null;
+        });
+      });
+      await page.goto(origins.onTime + "/");
+      const motion = await page.evaluate(() => ({
+        scrollDriven: CSS.supports("animation-timeline: view()"),
+        card: getComputedStyle(document.querySelector(".card")!).animationTimeline,
+        stamp: getComputedStyle(document.querySelector(".stamp text")!).animationTimeline,
+        masthead: getComputedStyle(document.querySelector("body > header")!).viewTransitionName,
+      }));
+      expect(motion.masthead).toBe("masthead");
+      // A browser without scroll timelines shows the page still, which the stylesheet allows for.
+      if (motion.scrollDriven) {
+        expect(motion.card).toContain("view(");
+        expect(motion.stamp).toContain("scroll(");
+      }
+      await page.click('header nav a[href="/menu/"]');
+      await page.waitForURL(origins.onTime + "/menu/");
+      await page.waitForFunction(() => "crossed" in globalThis);
+      const crossed = await page.evaluate(
+        () => (globalThis as unknown as { crossed: boolean }).crossed,
+      );
+      expect(crossed).toBe(true);
+      await page.context().close();
+    },
+    BUDGET,
+  );
+
+  it(
+    "holds an order back until the browser is satisfied, then posts it as a form and lands on the thank-you page",
+    async () => {
+      const page = await open(1280);
+      // Smooth scrolling to each field is motion this test has no use for.
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const posted: { method: string; type?: string; body: string }[] = [];
+      await page.route(/\/f\/[\w-]+\/order$/, async (route) => {
+        const request = route.request();
+        posted.push({
+          method: request.method(),
+          type: request.headers()["content-type"],
+          body: request.postData() ?? "",
+        });
+        await route.fulfill({ status: 303, headers: { location: `${origins.onTime}/thanks/` } });
+      });
+      await page.goto(origins.onTime + "/");
+      await page.click("form.form button[type=submit]");
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe("name");
+      expect(await page.locator("form.form :invalid").count()).toBe(3);
+
+      await page.fill("#name", "Ada");
+      await page.fill("#email", "not an address");
+      await page.fill("#pickup", "2030-01-02");
+      await page.click("form.form button[type=submit]");
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe("email");
+      expect(posted).toEqual([]);
+
+      await page.fill("#email", "ada@example.com");
+      const boxes = page.locator('form.form input[name="items"]');
+      await boxes.nth(0).check();
+      await boxes.nth(1).check();
+      await page.click("form.form button[type=submit]");
+      await page.waitForURL(origins.onTime + "/thanks/");
+
+      expect(posted).toHaveLength(1);
+      expect(posted[0]!.method).toBe("POST");
+      expect(posted[0]!.type).toBe("application/x-www-form-urlencoded");
+      const fields = new URLSearchParams(posted[0]!.body);
+      expect(fields.get("name")).toBe("Ada");
+      expect(fields.getAll("items")).toHaveLength(2);
+      expect(fields.get("_redirect")).toBe("/thanks/");
+      expect(await page.locator("h1").textContent()).toMatch(/Thank you/);
+      await page.context().close();
+    },
+    BUDGET,
+  );
+
+  it(
+    "shows the 404 page, whose way back to the menu works",
+    async () => {
+      const page = await open(1280);
+      await page.goto(origins.onTime + "/404.html");
+      expect(await page.locator("h1").textContent()).toMatch(/sold out/);
+      await page.click("main a.button");
+      await page.waitForURL(origins.onTime + "/menu/");
+      expect(await page.locator(".item").count()).toBeGreaterThan(0);
       await page.context().close();
     },
     BUDGET,
