@@ -59,6 +59,21 @@ export function appName(origin: string): string {
   return !local && named.length <= 34 ? named : `GreatCMS Studio ${randomBytes(2).toString("hex")}`;
 }
 
+/** What GitHub shows on the app's page and when someone installs it; GitHub renders it as Markdown. */
+export function appDescription(origin: string): string {
+  return [
+    `The visual editor at **${new URL(origin).host}** for sites whose content lives in Git.`,
+    "",
+    "- Signs you in with your GitHub account",
+    "- Adds the repositories you choose as sites",
+    "- Publishes each edit as one commit",
+    "",
+    "It reads and writes files in those repositories and nothing else: no issues, settings, secrets or webhooks. It never runs their code.",
+    "",
+    "Open source: github.com/uwenayoallain/thegreatcms",
+  ].join("\n");
+}
+
 function encode(value: object): string {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
@@ -132,7 +147,7 @@ export class GitHub {
     const manifest = {
       name: appName(origin),
       url: origin,
-      description: `Lets the GreatCMS studio at ${new URL(origin).host} copy the repositories you choose and publish your team's edits to them as commits. It reads and writes file contents only: no issues, no settings, no webhooks.`,
+      description: appDescription(origin),
       request_oauth_on_install: false,
       redirect_url: `${origin}/git-access/github/created`,
       callback_urls: [`${origin}${SIGN_IN_CALLBACK}`],

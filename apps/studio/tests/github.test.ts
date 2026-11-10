@@ -116,6 +116,9 @@ describe("making the app", () => {
     expect(parsed.setup_url).toBe("https://studio.example.com/git-access/github/installed");
     expect(parsed.name).toBe("GreatCMS studio.example.com");
     expect(parsed.description).toContain("studio.example.com");
+    expect(parsed.description).toContain("Signs you in with your GitHub account");
+    expect(parsed.description).toContain("never runs their code");
+    expect(parsed.url).toBe("https://studio.example.com");
     expect(parsed.description.length).toBeLessThanOrEqual(400);
   });
 
