@@ -4,7 +4,10 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { randomSecret } from "./auth.js";
 import { applySites, parseSites } from "./config.js";
-import { PreviewAddresses } from "./connect.js";
+import { warmAssets } from "./assets.js";
+import { PreviewAddresses, sweepStaleClones } from "./connect.js";
+import { publishesSettled } from "./repo.js";
+import { describeFailure, shutDown } from "./shutdown.js";
 import { GitAccess } from "./git-access.js";
 import { GitHub } from "./github.js";
 import { dirname, join } from "node:path";
@@ -64,6 +67,10 @@ try {
 }
 
 const store = new Store(databaseFile);
+// A publish the last run had taken but not finished is tried again rather than left hanging.
+const recovered = store.recoverScheduled();
+// Copies a stopped studio left half-made would block the same name from being copied again.
+const swept = process.env.STUDIO_SITES_ROOT ? sweepStaleClones(process.env.STUDIO_SITES_ROOT) : [];
 
 // An inbox is not an archive: with STUDIO_SUBMISSION_DAYS set, older submissions are deleted.
 const retentionDays = Number(process.env.STUDIO_SUBMISSION_DAYS ?? 0);
@@ -88,6 +95,7 @@ const app = createApp({
   previewUrl: process.env.STUDIO_PREVIEW_URL || undefined,
   previewsFile: process.env.STUDIO_PREVIEWS_FILE || undefined,
   previewProbe: process.env.STUDIO_PREVIEW_PROBE || undefined,
+  clonePrivate: process.env.STUDIO_CLONE_PRIVATE === "1",
   // Beside the database, so a container keeps its GitHub App and tokens in the same volume.
   gitAccess: new GitAccess(join(dirname(databaseFile), "git")),
   github: new GitHub(
@@ -96,10 +104,20 @@ const app = createApp({
   ),
 });
 
-// Publishes scheduled for later go out within half a minute of their time.
-setInterval(() => void app.runDueSchedules(), 30_000).unref();
+// Publishes scheduled for later go out within half a minute of their time, one run at a time.
+let publishingDue = false;
+setInterval(() => {
+  if (publishingDue) return;
+  publishingDue = true;
+  app
+    .runDueSchedules()
+    .catch((error: unknown) =>
+      process.stderr.write(`scheduled publishes: ${describeFailure(error)}\n`),
+    )
+    .finally(() => (publishingDue = false));
+}, 30_000).unref();
 
-serve({ fetch: app.fetch, port }, (info) => {
+const server = serve({ fetch: app.fetch, port }, (info) => {
   process.stdout.write(`GreatCMS studio on http://localhost:${info.port}\n`);
   process.stdout.write(`  database: ${databaseFile}\n`);
   for (const line of declared) process.stdout.write(`  site ${line}\n`);
@@ -117,14 +135,41 @@ serve({ fetch: app.fetch, port }, (info) => {
   if (process.env.STUDIO_WEBHOOK_URL)
     process.stdout.write("  webhook: submissions and publishes\n");
   if (retentionDays) process.stdout.write(`  submissions kept ${retentionDays} days\n`);
+  if (recovered) process.stdout.write(`  scheduled publishes picked up again: ${recovered}\n`);
+  for (const name of swept) process.stdout.write(`  removed an unfinished copy: ${name}\n`);
   if (!process.env.STUDIO_SECRET) {
     process.stdout.write("  sessions reset on restart (set STUDIO_SECRET to persist them)\n");
   }
 });
 
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => {
-    store.close();
-    process.exit(0);
-  });
-}
+// A proxy keeps connections open for about a minute; closing them sooner races its next request.
+const http = server as unknown as { keepAliveTimeout: number; headersTimeout: number };
+http.keepAliveTimeout = 65_000;
+http.headersTimeout = 66_000;
+
+// The first editor page should not wait behind compressing the bundles.
+void warmAssets().catch(() => undefined);
+
+let stopping = false;
+const stop = (code?: number) => {
+  // Asked twice, it stops at once.
+  if (stopping) process.exit(code ?? 1);
+  stopping = true;
+  void shutDown({
+    server,
+    settled: publishesSettled,
+    close: () => store.close(),
+    log: (line) => process.stderr.write(`${line}\n`),
+  }).then((result) => process.exit(code ?? result));
+};
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => stop());
+
+// One request's stray failure is logged, not allowed to take every editor's session down with it.
+process.on("unhandledRejection", (reason) => {
+  process.stderr.write(`unhandled rejection: ${describeFailure(reason)}\n`);
+});
+// After this nothing can be trusted to be in a known state: finish publishes, then stop.
+process.on("uncaughtException", (error) => {
+  process.stderr.write(`uncaught exception: ${describeFailure(error)}\n`);
+  stop(1);
+});
