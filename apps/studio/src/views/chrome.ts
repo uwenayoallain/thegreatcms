@@ -8,6 +8,8 @@ export interface Chrome {
   /** The width the live preview was dragged to, in pixels. */
   live?: number;
   unread?: () => number;
+  /** One project, on the machine of whoever started it: nothing about other sites or other people is offered. */
+  local?: boolean;
 }
 
 const current = new AsyncLocalStorage<Chrome>();

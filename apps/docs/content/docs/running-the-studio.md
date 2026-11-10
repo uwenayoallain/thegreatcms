@@ -6,7 +6,8 @@ order: 35
 
 The studio is a single Node process. It keeps its own state, the list of sites
 and the submissions inbox, in one SQLite file, and reads and writes the sites it
-manages as folders on the same machine.
+manages as folders on the same machine. Hosted or local, it is open source
+under the MIT licence, and anyone may run their own.
 
 ## On your own machine
 
@@ -20,7 +21,9 @@ It starts the studio on `127.0.0.1:4983`, or the next free port, with this
 folder as its one site, and opens your browser through a sign-in link that
 works once. The live preview is the site's dev server: the one already
 running, or your own dev command, started here and stopped with it.
-Publishing commits to the working copy as you; nothing is pushed.
+Publishing commits to the working copy as you; nothing is pushed. This
+studio is for that one project: it has no list of sites, nothing to connect
+or disconnect, and no editors to add.
 
 There is no password to type. The studio answers only this machine, at its
 own address, and each start prints a new link. `--host` with anything but a

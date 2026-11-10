@@ -71,7 +71,10 @@ export function page(
   const unread = options.unread ?? shell().unread?.() ?? 0;
   const sidebar = chrome ? shell().sidebar : undefined;
   // Top-level screens name themselves, so the bar is there on every screen and nothing below it moves.
-  const trail = crumbs.length > 0 ? crumbs : [{ href: "", label: title }];
+  const local = shell().local === true;
+  // The local studio has one site: a trail that begins at a list of them begins at the site instead.
+  const shown = local ? crumbs.filter((crumb) => crumb.href !== "/") : crumbs;
+  const trail = shown.length > 0 ? shown : [{ href: "", label: title }];
 
   return compact(
     `<!doctype html>${html`
@@ -243,7 +246,9 @@ function navigation(
       <nav aria-label="Sections">
         <ul>
           <li>
-            <a href="/" aria-current="${current("sites")}">${icon("sites")} Sites</a>
+            <a href="/" aria-current="${current("sites")}"
+              >${icon("sites")} ${shell().local ? "Site" : "Sites"}</a
+            >
           </li>
           <li>
             <a href="/inbox" aria-current="${current("inbox")}">
@@ -346,7 +351,7 @@ function navigation(
       }
       <form method="POST" action="/sign-out" class="sign-out">
         ${
-          viewer()?.owner
+          viewer()?.owner && !shell().local
             ? html`<a href="/editors" aria-current="${current("editors")}"
                 >${icon("users")} <span class="label">Editors</span></a
               >`

@@ -148,9 +148,12 @@ export async function startLocal(options: LocalOptions): Promise<RunningLocalStu
 
   // The cache can outlive a renamed or copied folder; the site is whichever folder this run is in.
   const store = new Store(databaseFile);
+  let kept: { name: string; devUrl: string; pushAfterPublish: boolean } | undefined;
   try {
-    const known = store.getSite(siteId);
-    if (known && known.path !== options.root) store.removeSite(siteId);
+    for (const site of store.listSites()) {
+      if (site.id === siteId && site.path === options.root) kept = site;
+      else store.removeSite(site.id);
+    }
   } finally {
     store.close();
   }
@@ -163,14 +166,16 @@ export async function startLocal(options: LocalOptions): Promise<RunningLocalStu
     databaseFile,
     port: options.port,
     hostname: bind,
+    local: true,
     sites: [
       {
         id: siteId,
         path: options.root,
-        name: options.name,
-        devUrl: options.devUrl ?? "",
+        // What was changed in the site's settings on an earlier run stays changed.
+        name: kept?.name ?? options.name,
+        devUrl: options.devUrl ?? kept?.devUrl ?? "",
         probeUrl: "",
-        pushAfterPublish: false,
+        pushAfterPublish: kept?.pushAfterPublish ?? false,
         deployRoot: "",
       },
     ],

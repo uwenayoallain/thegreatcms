@@ -97,4 +97,5 @@ versions.
 
 ## Licence
 
-[MIT](./LICENSE).
+[MIT](./LICENSE). That covers the studio as much as the packages, hosted or local:
+anyone may run their own.

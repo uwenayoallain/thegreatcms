@@ -357,6 +357,43 @@ describe("state", () => {
     site.git(["diff", "--cached", "--quiet"]);
   });
 
+  it("is one project: home is the site, and the screens for other sites and people are not there", async () => {
+    await open();
+    const cookie = cookieOf(await send(port, linkPath()));
+    const home = await send(port, "/", { headers: { cookie } });
+    expect(home.headers.location).toBe("/sites/my-site");
+    for (const path of ["/sites/new", "/editors", "/git-access", "/sites/clone"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one request at a time, in order
+      expect((await send(port, path, { headers: { cookie } })).status, path).toBe(404);
+    }
+  });
+
+  it("keeps what was changed in the site's settings, and takes a new dev URL from the command", async () => {
+    await open({ devUrl: "http://localhost:4321" });
+    const cookie = cookieOf(await send(port, linkPath()));
+    const saved = await send(port, "/sites/my-site/settings", {
+      method: "POST",
+      headers: {
+        cookie,
+        origin: `http://127.0.0.1:${port}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: "name=Renamed&devUrl=http%3A%2F%2Flocalhost%3A4400",
+    });
+    expect(saved.status).toBeLessThan(400);
+
+    await studio!.close();
+    await open();
+    let page = await send(port, "/sites/my-site/settings", { headers: { cookie } });
+    expect(page.body).toContain('value="Renamed"');
+    expect(page.body).toContain("http://localhost:4400");
+
+    await studio!.close();
+    await open({ devUrl: "http://localhost:4322" });
+    page = await send(port, "/sites/my-site/settings", { headers: { cookie } });
+    expect(page.body).toContain("http://localhost:4322");
+  });
+
   it("follows the folder when the cache remembers another one", async () => {
     await open();
     await studio!.close();

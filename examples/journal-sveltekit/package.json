@@ -2,6 +2,7 @@
   "name": "@greatcms/example-journal-sveltekit",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "imports": {
     "#lib/*": "./src/lib/*"
