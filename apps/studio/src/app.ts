@@ -51,6 +51,7 @@ import {
   readFlash,
   clearPreviewCookie,
   clearSessionCookie,
+  clearUnprefixedSession,
   readGithubTrip,
   sameText,
   startGithubTrip,
@@ -578,6 +579,7 @@ export function createApp(options: AppOptions) {
     const secure = isSecure(c);
     const stamp = stampFor(actor);
     c.header("Set-Cookie", createSessionCookie(signingKey, { actor, stamp, secure }));
+    if (secure) c.header("Set-Cookie", clearUnprefixedSession(), { append: true });
     if (options.cookieDomain) {
       c.header(
         "Set-Cookie",
@@ -590,7 +592,7 @@ export function createApp(options: AppOptions) {
   const retire = (c: Context) => {
     const cookies = c.req.header("cookie");
     for (const session of [
-      readSession(cookies, signingKey),
+      readSession(cookies, signingKey, isSecure(c)),
       readPreviewSession(cookies, signingKey),
     ]) {
       if (session) store.revokeSession(session.id, session.expiresAt);
@@ -635,7 +637,7 @@ export function createApp(options: AppOptions) {
       return next();
     }
 
-    const session = readSession(c.req.header("cookie"), signingKey);
+    const session = readSession(c.req.header("cookie"), signingKey, isSecure(c));
     if (!session) {
       if (c.req.method !== "GET")
         return c.text("Your session expired. Sign in and try again.", 401);
@@ -656,7 +658,9 @@ export function createApp(options: AppOptions) {
     c.set("among", mine.among);
     // A notice an action left behind: shown by the first page drawn after it, then forgotten.
     const waiting =
-      c.req.method === "GET" ? readFlash(c.req.header("cookie"), signingKey, session.actor) : null;
+      c.req.method === "GET"
+        ? readFlash(c.req.header("cookie"), signingKey, session.actor, Date.now(), isSecure(c))
+        : null;
     let shown = false;
     const shell = {
       ...panesOf(c.req.header("cookie")),
@@ -670,7 +674,8 @@ export function createApp(options: AppOptions) {
       },
     };
     await withViewer(who, () => withChrome(shell, next));
-    const stale = c.req.method === "GET" && !waiting && hasFlash(c.req.header("cookie"));
+    const stale =
+      c.req.method === "GET" && !waiting && hasFlash(c.req.header("cookie"), isSecure(c));
     if ((shown && waiting) || (stale && c.res.status === 200)) {
       c.header("Set-Cookie", clearFlash(isSecure(c)), { append: true });
     }
@@ -833,7 +838,7 @@ export function createApp(options: AppOptions) {
     const host = c.req.header("x-forwarded-host");
     const who =
       viewerOf(readPreviewSession(cookies, signingKey)) ??
-      viewerOf(readSession(cookies, signingKey));
+      viewerOf(readSession(cookies, signingKey, isSecure(c)));
     // Anyone but an owner opens the previews of the sites they open, and no one else's.
     const theirs = async (person: Viewer) =>
       (await sitesFor(person)).sites.some((site) => previewHost(site.devUrl) === host);
@@ -960,7 +965,7 @@ export function createApp(options: AppOptions) {
   app.get("/sign-in", (c) => {
     const next = allowedNext(c.req.query("next")) ?? undefined;
     // Signed in here already, sent from the preview: renew its cookie rather than ask again.
-    const session = readSession(c.req.header("cookie"), signingKey);
+    const session = readSession(c.req.header("cookie"), signingKey, isSecure(c));
     if (viewerOf(session)) {
       if (next) signIn(c, session!.actor);
       return c.redirect(next ?? "/", 303);
@@ -987,7 +992,7 @@ export function createApp(options: AppOptions) {
   app.get(SIGN_IN_CALLBACK, async (c) => {
     if (!hub || !githubSignIn()) return c.notFound();
     const address = addressOf(c);
-    const trip = readGithubTrip(c.req.header("cookie"), signingKey);
+    const trip = readGithubTrip(c.req.header("cookie"), signingKey, Date.now(), isSecure(c));
     const next = allowedNext(trip?.next) ?? undefined;
     const refuse = (error: string, status: 400 | 429 = 400) => {
       c.header("Set-Cookie", clearGithubTrip(isSecure(c)));

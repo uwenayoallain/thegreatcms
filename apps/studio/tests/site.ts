@@ -16,6 +16,13 @@ export const signedIn = {
   cookie: createSessionCookie(sessionKey(SECRET, PASSWORD)).split(";")[0] as string,
 };
 
+/** The same session as a browser holds it over HTTPS. */
+export const signedInSecure = {
+  cookie: createSessionCookie(sessionKey(SECRET, PASSWORD), { secure: true }).split(
+    ";",
+  )[0] as string,
+};
+
 export interface Fixture {
   root: string;
   store: Store;

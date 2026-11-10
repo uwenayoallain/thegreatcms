@@ -139,7 +139,8 @@ preview.example.com {
 ```
 
 The studio's own session cookie never leaves the studio's host, because the
-preview runs the site's code and would otherwise receive it. Signing in also
+preview runs the site's code and would otherwise receive it; over HTTPS it is
+named `__Host-greatcms_session`, a name a preview cannot set. Signing in also
 sets a second cookie for the parent domain that opens the preview and nothing
 else. For that, the studio has to know the domain and its own address:
 
