@@ -11,6 +11,7 @@ interface Props {
 const { section, index } = Astro.props;
 const headingId = `section-${index}`;
 const words = (text: string) => text.trim().split(/\s+/);
+const featured = section._type === 'selected-work' ? projects().filter((project) => project.data.featured) : [];
 ---
 
 {
@@ -31,18 +32,16 @@ const words = (text: string) => text.trim().split(/\s+/);
 }
 
 {
-  section._type === 'selected-work' && (
+  section._type === 'selected-work' && featured.length > 0 && (
     <section class:list={['work', `work--${section._variant}`]} aria-labelledby={headingId}>
       <div class="section-head">
         <h2 id={headingId} class="reveal-title">{section.heading}</h2>
         {section.introduction && <p class="section-head__intro">{section.introduction}</p>}
       </div>
       <div class="work__grid">
-        {projects()
-          .filter((project) => project.data.featured)
-          .map((project, i) => (
-            <WorkCard project={project} index={i} size={section._variant} />
-          ))}
+        {featured.map((project, i) => (
+          <WorkCard project={project} index={i} size={section._variant} />
+        ))}
       </div>
       {section.link?.href && (
         <p class="work__more">

@@ -8,11 +8,16 @@ import { cms } from '../lib/cms';
 interface Props {
   title?: string;
   description?: string;
+  /** A page nobody should land on from a search. */
+  noindex?: boolean;
+  /** Structured data for the page, as schema.org JSON-LD. */
+  schema?: Record<string, unknown>;
 }
 
 const identity = cms.region('site.identity');
-const { title, description = identity.tagline } = Astro.props;
-const fullTitle = title ? `${title}: ${identity.name}` : `${identity.name}: ${identity.tagline}`;
+const { title, noindex, schema } = Astro.props;
+const description = Astro.props.description ?? identity.tagline ?? `${identity.name}, a design and motion studio.`;
+const fullTitle = title ? `${title}: ${identity.name}` : [identity.name, identity.tagline].filter(Boolean).join(': ');
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const path = Astro.url.pathname;
 const nav = [
@@ -33,10 +38,16 @@ const speculation = JSON.stringify({
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
-    {description && <meta name="description" content={description} />}
-    <link rel="canonical" href={canonical} />
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
     <meta property="og:title" content={fullTitle} />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={identity.name} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/og.png', Astro.site).href} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {schema && <script type="application/ld+json" is:inline set:html={JSON.stringify({ '@context': 'https://schema.org', ...schema }).replaceAll('<', '\\u003c')} />}
     <meta name="theme-color" content="#0b0b0e" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href={display} as="font" type="font/woff2" crossorigin />

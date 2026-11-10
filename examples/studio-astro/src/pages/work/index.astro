@@ -11,9 +11,17 @@ const all = projects();
     <p class="eyebrow">Work</p>
     <h1 class="page-hero__title">Things we made, <em>and why</em> they move the way they do.</h1>
   </section>
-  <section class="work work--stacked" aria-label="All projects">
-    <div class="work__grid">
-      {all.map((project, i) => <WorkCard project={project} index={i} size="stacked" heading="h2" />)}
-    </div>
-  </section>
+  {
+    all.length > 0 ? (
+      <section class="work work--stacked" aria-label="All projects">
+        <div class="work__grid">
+          {all.map((project, i) => <WorkCard project={project} index={i} size="stacked" heading="h2" />)}
+        </div>
+      </section>
+    ) : (
+      <section class="work work--stacked">
+        <p class="section-head__intro">The first case study is being written.</p>
+      </section>
+    )
+  }
 </Base>

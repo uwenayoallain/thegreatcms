@@ -13,10 +13,21 @@ const at = all.findIndex((entry) => entry.slug === Astro.params.slug);
 const project = all[at];
 if (!project) return Astro.redirect('/404/');
 const { data, slug } = project;
-const next = all[(at + 1) % all.length]!;
+// The only project there is has nothing to come after it.
+const next = all.length > 1 ? all[(at + 1) % all.length]! : undefined;
 ---
 
-<Base title={data.title} description={data.summary}>
+<Base
+  title={data.title}
+  description={data.summary}
+  schema={{
+    '@type': 'CreativeWork',
+    name: data.title,
+    description: data.summary,
+    dateCreated: data.year ? String(data.year) : undefined,
+    creator: { '@type': 'Organization', name: cms.region('site.identity').name },
+  }}
+>
   <article class="case">
     <header class="case__head">
       <p class="eyebrow">{data.client}{data.year ? ` · ${data.year}` : ''}</p>
@@ -67,11 +78,15 @@ const next = all[(at + 1) % all.length]!;
       )}
     </div>
 
-    <a class="next" href={`/work/${next.slug}/`} data-cursor="Next">
-      <span class="eyebrow">Next project</span>
-      <span class="next__title">{next.data.title}</span>
-      <span class="next__arrow" aria-hidden="true">→</span>
-      <Art palette={next.data.palette} motif={next.data.motif} class="next__art" />
-    </a>
+    {
+      next && (
+        <a class="next" href={`/work/${next.slug}/`} data-cursor="Next">
+          <span class="eyebrow">Next project</span>
+          <span class="next__title">{next.data.title}</span>
+          <span class="next__arrow" aria-hidden="true">→</span>
+          <Art palette={next.data.palette} motif={next.data.motif} class="next__art" />
+        </a>
+      )
+    }
   </article>
 </Base>

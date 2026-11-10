@@ -158,6 +158,8 @@ body {
   font: 400 1.0625rem/1.55 var(--sans);
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
+  /* A word longer than its column breaks instead of widening the page. */
+  overflow-wrap: anywhere;
   overflow-x: clip;
 }
 
@@ -1034,6 +1036,8 @@ em {
 .step h3 {
   align-self: end;
   font-size: clamp(1.8rem, 3vw, 2.6rem);
+  /* A step's one-word title keeps its column wide enough to hold it. */
+  overflow-wrap: break-word;
 }
 
 .step p {
@@ -1430,7 +1434,7 @@ em {
 
 .contact .contact__mail {
   font-size: clamp(1.6rem, 3.4vw, 3.2rem);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .contact__body {
@@ -1640,7 +1644,7 @@ em {
   font-weight: 650;
   line-height: 1.1;
   letter-spacing: -0.045em;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   text-decoration: none;
   background: linear-gradient(var(--accent), var(--accent)) 0 100% / 0 2px no-repeat;
 }

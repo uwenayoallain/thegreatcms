@@ -54,15 +54,32 @@ describe.each(PAGES)("%s", (file) => {
     expect(document.querySelector("a.skip")?.getAttribute("href")).toBe("#main");
   });
 
-  it("runs only its own bundled script, beside speculation rules that the browser reads as data", () => {
+  it("runs only its own bundled script, beside speculation rules and structured data that the browser reads as data", () => {
     const scripts = [...dom(file).querySelectorAll("script")];
-    expect(scripts.map((script) => script.type).toSorted()).toEqual(["module", "speculationrules"]);
+    const types = scripts
+      .map((script) => script.type)
+      .filter((type) => type !== "application/ld+json");
+    expect(types.toSorted()).toEqual(["module", "speculationrules"]);
     const motion = scripts.find((script) => script.type === "module")!;
     expect(motion.getAttribute("src")).toMatch(/^\/_astro\/.+\.js$/);
     expect(motion.textContent).toBe("");
     const rules = scripts.find((script) => script.type === "speculationrules")!;
     const parsed = JSON.parse(rules.textContent ?? "") as { prerender: unknown[] };
     expect(parsed.prerender.length).toBeGreaterThan(0);
+  });
+
+  it("can be found and shared: a description, an address of its own, and a card with an image", () => {
+    const document = dom(file);
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content");
+    expect(meta('meta[name="description"]')?.length).toBeGreaterThan(0);
+    expect(meta('meta[property="og:description"]')).toBe(meta('meta[name="description"]'));
+    expect(meta('meta[property="og:title"]')).toBe(document.title);
+    expect(meta('meta[property="og:image"]')).toBe("https://paraline.example/og.png");
+    expect(meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+    const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+    // The not-found page has no address worth indexing, and says so instead of naming one.
+    if (file === "404.html") expect(meta('meta[name="robots"]')).toBe("noindex");
+    else expect(canonical).toBe(`https://paraline.example/${file.replace(/index\.html$/, "")}`);
   });
 
   it("links every page at the address it is built at, so no click waits on a redirect", () => {
@@ -126,6 +143,30 @@ describe("content", () => {
         expect(existsSync(target), `${file} → ${path}`).toBe(true);
       }
     }
+  });
+});
+
+describe("for search engines", () => {
+  it("lists every page in the sitemap, points robots.txt at it, and publishes the share image", () => {
+    const sitemap = read("sitemap.xml");
+    const listed = [...sitemap.matchAll(/<loc>https:\/\/paraline\.example([^<]*)<\/loc>/g)].map(
+      (match) => match[1]!,
+    );
+    const built = PAGES.filter((file) => file !== "404.html").map(
+      (file) => `/${file.replace(/index\.html$/, "")}`,
+    );
+    expect(listed.toSorted()).toEqual(built.toSorted());
+    expect(read("robots.txt")).toContain("Sitemap: https://paraline.example/sitemap.xml");
+    expect(existsSync(join(DIST, "og.png"))).toBe(true);
+  });
+
+  it("describes the studio on the home page and each project on its own", () => {
+    const data = (file: string) =>
+      JSON.parse(
+        dom(file).querySelector('script[type="application/ld+json"]')!.textContent!,
+      ) as Record<string, string>;
+    expect(data("index.html")["@type"]).toBe("Organization");
+    for (const slug of WORK) expect(data(`work/${slug}/index.html`)["@type"]).toBe("CreativeWork");
   });
 });
 
