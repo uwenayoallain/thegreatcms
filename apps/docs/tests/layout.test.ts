@@ -76,14 +76,26 @@ afterAll(async () => {
 });
 
 describe.skipIf(!browser)("on a phone", () => {
+  // 320px is the narrowest phone still in use, and what a 1280px window zoomed to 400% lays out as.
   it.each(pages())("%s fits the screen", async (path) => {
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 } });
     try {
-      await page.goto(origin + path, { waitUntil: "load" });
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow, `${path} scrolls sideways by ${overflow}px`).toBe(0);
+      for (const width of [390, 320]) {
+        // oxlint-disable-next-line no-await-in-loop -- one tab, resized
+        await page.setViewportSize({ width, height: 844 });
+        // oxlint-disable-next-line no-await-in-loop
+        await page.goto(origin + path, { waitUntil: "load" });
+        // A phone draws its scrollbar over the page; this browser takes room for it, so give that room back.
+        // oxlint-disable-next-line no-await-in-loop
+        const bar = await page.evaluate(() => innerWidth - document.documentElement.clientWidth);
+        // oxlint-disable-next-line no-await-in-loop
+        await page.setViewportSize({ width: width + bar, height: 844 });
+        // oxlint-disable-next-line no-await-in-loop
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} scrolls sideways by ${overflow}px at ${width}px`).toBe(0);
+      }
     } finally {
       await page.close();
     }
@@ -197,4 +209,60 @@ describe.skipIf(!browser)("between pages", () => {
       await context.close();
     }
   });
+
+  // The face is optional, so any visit may be drawn in the stand-in: the frame must not depend on which.
+  it.each([375, 1280])(
+    "at %ipx the chrome sits in the same place with the web font and without it",
+    async (width) => {
+      const frame = async (blocked: boolean) => {
+        const context = await browser!.newContext({ viewport: { width, height: 1200 } });
+        const page = await context.newPage();
+        await page.addInitScript(recordShifts);
+        if (blocked) await page.route("**/*.woff2", (route) => route.abort());
+        const results = new Map<string, Measured & { links: number[][] }>();
+        try {
+          for (const path of pages()) {
+            // oxlint-disable-next-line no-await-in-loop -- one tab, one page after another
+            const measured = await settle(page, path, 0);
+            // oxlint-disable-next-line no-await-in-loop
+            const links = await page.evaluate(() =>
+              [...document.querySelectorAll(".masthead a")].map((link) => {
+                const box = link.getBoundingClientRect();
+                return [box.x, box.width];
+              }),
+            );
+            results.set(path, { ...measured, links });
+          }
+        } finally {
+          await context.close();
+        }
+        return results;
+      };
+      const loaded = await frame(false);
+      const standIn = await frame(true);
+      for (const [path, withFont] of loaded) {
+        const without = standIn.get(path)!;
+        const pairs: [string, number[] | undefined, number[] | undefined][] = [
+          ["header", withFont.header, without.header],
+          ["nav", withFont.nav, without.nav],
+          ["footer", withFont.footer, without.footer],
+          ["docs sidebar", withFont.docsNav, without.docsNav],
+          ["article column", withFont.content, without.content],
+          ["header links", withFont.links.flat(), without.links.flat()],
+        ];
+        for (const [name, a, b] of pairs) {
+          expect(b?.length, `${name} on ${path}`).toBe(a?.length);
+          // A box is the same either way; a word inside the nav may be a pixel or two wider in the stand-in.
+          const slack = name === "header links" ? 2 : 1;
+          a?.forEach((value, at) =>
+            expect(
+              Math.abs(value - b![at]!),
+              `${name} on ${path} at ${width}px moves without the font`,
+            ).toBeLessThanOrEqual(slack),
+          );
+        }
+      }
+    },
+    120_000,
+  );
 });

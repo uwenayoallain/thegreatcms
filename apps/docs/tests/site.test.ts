@@ -86,6 +86,12 @@ describe.each(PAGES)("$name", ({ file }) => {
     expect(document.querySelector('meta[property="og:title"]')?.getAttribute("content")).toBe(
       document.title,
     );
+    expect(document.querySelector('meta[property="og:image"]')?.getAttribute("content")).toBe(
+      "https://greatcms.uwe.rw/og.png",
+    );
+    expect(document.querySelector('meta[name="twitter:card"]')?.getAttribute("content")).toBe(
+      "summary_large_image",
+    );
     const icons = [...document.querySelectorAll('link[rel="icon"]')].map((l) =>
       l.getAttribute("href"),
     );
@@ -93,6 +99,7 @@ describe.each(PAGES)("$name", ({ file }) => {
     for (const asset of [
       "favicon.ico",
       "favicon.svg",
+      "og.png",
       "apple-touch-icon.png",
       "site.webmanifest",
     ]) {
