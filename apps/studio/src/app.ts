@@ -38,7 +38,7 @@ import {
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { html } from "hono/html";
 import { bodyLimit } from "hono/body-limit";
-import { compress } from "hono/compress";
+import { pack } from "./pack.js";
 import { setFlagsFromString } from "node:v8";
 import {
   checkPassword,
@@ -92,13 +92,17 @@ import { editRegionPage } from "./views/region-page.js";
 import { sitePage } from "./views/site-page.js";
 import { newSitePage, setupPage, sitesPage } from "./views/sites-pages.js";
 import {
+  type CloneGit,
+  type CloneLimits,
   Clones,
+  cloneUrlProblem,
   folderFromUrl,
   folderPath,
   hasSchema,
   isBranchName,
-  isCloneUrl,
   isFolderName,
+  reachesPrivateNetwork,
+  type ResolveHost,
   isInside,
   listFolders,
   nameFromFolder,
@@ -169,7 +173,16 @@ export interface AppOptions {
   /** The GitHub App this studio connects GitHub through. */
   github?: GitHub;
   /** Replaces git for clones, in tests. */
-  cloneGit?: (args: string[], config: Array<[string, string]>) => Promise<void>;
+  cloneGit?: CloneGit;
+  /** How many copies run at once and how large one may grow. */
+  cloneLimits?: Partial<CloneLimits>;
+  /**
+   * `STUDIO_CLONE_PRIVATE=1`: lets Copy from Git reach this machine and its private network,
+   * for a Git server that lives there. Off by default, so the form cannot be pointed inward.
+   */
+  clonePrivate?: boolean;
+  /** Replaces DNS for the check above, in tests. */
+  resolveHost?: ResolveHost;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
@@ -212,7 +225,9 @@ export function createApp(options: AppOptions) {
     const probe = managed(site);
     if (probe) warmPreview(probe, site.devUrl);
   });
-  const clones = options.sitesRoot ? new Clones(options.sitesRoot, options.cloneGit) : undefined;
+  const clones = options.sitesRoot
+    ? new Clones(options.sitesRoot, options.cloneGit, options.cloneLimits)
+    : undefined;
   // Pushes to a repository the GitHub App reaches sign in with a token minted for that push.
   useRemoteAuth(
     options.github
@@ -284,7 +299,18 @@ export function createApp(options: AppOptions) {
     : "form-action 'self'";
 
   app.use("*", async (c, next) => {
+    const started = performance.now();
     await next();
+
+    // On everything, a CSV or an image included: never guessed at, never sent on, never over plain HTTP again.
+    c.res.headers.set("x-content-type-options", "nosniff");
+    c.res.headers.set("referrer-policy", "same-origin");
+    c.res.headers.set("permissions-policy", PERMISSIONS_POLICY);
+    if (isSecure(c)) c.res.headers.set("strict-transport-security", "max-age=31536000");
+    // How long the studio took, for whoever is signed in and looking at the network panel.
+    if (c.get("viewer")) {
+      c.res.headers.set("server-timing", `app;dur=${(performance.now() - started).toFixed(1)}`);
+    }
 
     // Only documents: the asset route sets its own, and 304s must stay small.
     const type = c.res.headers.get("content-type") ?? "";
@@ -307,23 +333,13 @@ export function createApp(options: AppOptions) {
         "object-src 'none'",
       ].join("; "),
     );
-    c.res.headers.set("x-content-type-options", "nosniff");
     // A tab the studio opens, such as the site itself, gets no handle back on the signed-in window.
     c.res.headers.set("cross-origin-opener-policy", "same-origin");
-    // `same-origin`, not `no-referrer`. With no-referrer Chrome sends
-    // `Origin: null` on a same-origin form post, which the CSRF check above
-    // refuses: every form in this app would break for anyone without
-    // JavaScript. This keeps the referrer inside the studio and sends none to
-    // anywhere else, which is the part that was actually worth having.
-    c.res.headers.set("referrer-policy", "same-origin");
     // A studio is never a search result, and never a shared browser's history.
     c.res.headers.set("cache-control", "no-store");
-    // Once a browser has reached the studio over TLS, it never sends a password over plain HTTP.
-    if (isSecure(c)) c.res.headers.set("strict-transport-security", "max-age=31536000");
   });
-  // After the headers above: registered before them, compress drops them on the Node server.
-  // Pages are small; the editor bundle is not, and a remote studio is often on a slow link.
-  app.use("*", compress());
+  // After the headers above: registered before them, compressing drops them on the Node server.
+  app.use("*", pack);
 
   // No body is read whole into memory unbounded: the editors take uploads, every other form is small.
   const small = bodyLimit({
@@ -809,7 +825,7 @@ export function createApp(options: AppOptions) {
     if (email) {
       const editor = store.findEditor(email);
       // Hash even for an unknown address, so the answer takes as long either way.
-      const ok = verifyPassword(supplied, editor?.passwordHash ?? DUMMY_HASH);
+      const ok = verifyPassword(supplied, editor?.passwordHash ?? dummyHash());
       if (editor && ok) actor = `editor:${editor.id}`;
     } else if (checkPassword(supplied, password)) {
       actor = "studio";
@@ -1015,8 +1031,9 @@ export function createApp(options: AppOptions) {
   });
 
   app.get("/sites/setup", async (c) => {
-    const path = c.req.query("path") ?? "";
-    if (!path.startsWith("/") || !(await isDirectory(path))) return c.redirect("/sites/new", 303);
+    const typed = folderPath(c.req.query("path") ?? "");
+    if ("error" in typed || !(await isDirectory(typed.path))) return c.redirect("/sites/new", 303);
+    const path = typed.path;
     if (hasSchema(path)) return c.redirect("/sites/new", 303);
     return c.html(
       setupPage({ path, values: { name: nameFromFolder(basename(path)) }, templates: TEMPLATES }),
@@ -1032,9 +1049,10 @@ export function createApp(options: AppOptions) {
       devUrl: String(form.get("devUrl") ?? "").trim(),
       template: String(form.get("template") ?? ""),
     };
-    if (!values.path.startsWith("/") || !(await isDirectory(values.path))) {
-      return c.redirect("/sites/new", 303);
-    }
+    const typed = folderPath(values.path);
+    if ("error" in typed || !(await isDirectory(typed.path))) return c.redirect("/sites/new", 303);
+    // One spelling of the folder, so the site is recognised as the folder it is listed under.
+    values.path = typed.path;
     const again = (error: string) =>
       c.html(setupPage({ path: values.path, values, templates: TEMPLATES, error }), 422);
     if (values.devUrl && !isHttpUrl(values.devUrl)) return again(DEV_URL_ERROR);
@@ -1083,9 +1101,8 @@ export function createApp(options: AppOptions) {
     };
     const again = async (cloneError: string) =>
       c.html(await connectPage({ error: "Nothing was copied.", cloneError, cloneValues }), 422);
-    if (!isCloneUrl(cloneValues.url)) {
-      return again("Use an https:// or SSH address, such as git@github.com:you/site.git.");
-    }
+    const urlProblem = cloneUrlProblem(cloneValues.url);
+    if (urlProblem) return again(urlProblem);
     if (cloneValues.branch && !isBranchName(cloneValues.branch)) {
       return again("That branch name is not one Git accepts.");
     }
@@ -1097,12 +1114,25 @@ export function createApp(options: AppOptions) {
     if (!isInside(options.sitesRoot, target) || existsSync(target)) {
       return again(`${target} already exists: choose another folder name.`);
     }
+    const busy = clones.busy(folder);
+    if (busy) return again(busy);
+    if (
+      !options.clonePrivate &&
+      (await reachesPrivateNetwork(cloneValues.url, options.resolveHost))
+    ) {
+      return again(
+        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
+      );
+    }
     let config: Array<[string, string]> = [];
     try {
       config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
     } catch (error) {
       return again(describeError(error));
     }
+    // Asked again: another copy may have started while the address was being looked up.
+    const taken = clones.busy(folder);
+    if (taken) return again(taken);
     void clones.start(cloneValues.url, folder, cloneValues.branch, config);
     return c.redirect("/sites/new", 303);
   });
@@ -2250,10 +2280,16 @@ export function createApp(options: AppOptions) {
         stamp: stampFor(job.actor),
       }).split(";")[0] as string;
       // oxlint-disable-next-line no-await-in-loop -- one publish at a time, in the order they fell due
-      const response = await app.request(`/sites/${job.siteId}/${job.target}`, {
-        method: "POST",
-        headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-        body,
+      const response = await Promise.resolve(
+        app.request(`/sites/${job.siteId}/${job.target}`, {
+          method: "POST",
+          headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+          body,
+        }),
+      ).catch((error: unknown) => {
+        // Settled whatever happens: a publish left "running" would never be tried or shown again.
+        process.stderr.write(`scheduled publish ${job.id} failed: ${describeError(error)}\n`);
+        return new Response(null, { status: 500 });
       });
       const outcome =
         response.status === 200
@@ -2269,7 +2305,10 @@ export function createApp(options: AppOptions) {
     }
   };
 
-  return Object.assign(app, { runDueSchedules });
+  /** Ends background work that would outlive the process: copies from Git still running. */
+  const stop = () => clones?.stop();
+
+  return Object.assign(app, { runDueSchedules, stop });
 }
 
 /** The field an MDX entry keeps as source: its JSX is not HTML, and sanitizing would delete it. */
@@ -2342,7 +2381,12 @@ function contentOf(c: { req: { param(name: string): string | undefined } }) {
 }
 
 /** Compared against when an unknown email signs in, so the reply takes the same time. */
-const DUMMY_HASH = hashPassword(randomSecret());
+let dummy: string | undefined;
+const dummyHash = () => (dummy ??= hashPassword(randomSecret()));
+
+/** The studio asks a browser for none of these, and nothing it frames inherits them. */
+const PERMISSIONS_POLICY =
+  "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()";
 
 /**
  * Where a branch's publishes can be read and merged on GitHub: its comparison with the main

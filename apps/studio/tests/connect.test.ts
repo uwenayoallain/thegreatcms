@@ -47,6 +47,7 @@ function app() {
     previewUrl: "https://{site}-preview.example.com",
     previewsFile,
     previewProbe: "http://previews:4321",
+    resolveHost: async () => ["93.184.215.14"],
     cloneGit: (args) => {
       gitCalls.push(args);
       return cloneResult().then(() => {
@@ -384,7 +385,7 @@ describe("copying from Git", () => {
     const settle: { fail?: (error: Error) => void } = {};
     cloneResult = () => new Promise((_, reject) => (settle.fail = reject));
     const target = app();
-    await post(target, "/sites/clone", { url: "https://token:secret@example.com/private.git" });
+    await post(target, "/sites/clone", { url: "https://example.com/private.git" });
 
     let { document } = await page(target, "/sites/new");
     expect(document.querySelector("meta[http-equiv=refresh]")).toBeTruthy();

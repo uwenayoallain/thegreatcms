@@ -1307,6 +1307,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 | `STUDIO_SITES_ROOT`      | The folder of sites the connect page lists, and where copies go.                                                 |
+| `STUDIO_CLONE_PRIVATE`   | `1` lets Copy from Git reach this machine and its private network, for a Git server that lives there.            |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -1325,9 +1326,10 @@ one three ways:
 - **From GitHub.** Connect GitHub once on **Git access**: the studio makes
   its own GitHub App, you choose the repositories it may use, and each copies
   with a click, signing in with a token that lasts an hour.
-- **Copy from Git.** Paste any https or SSH address. Only files are fetched:
-  no hooks or submodules. For a private repository elsewhere, save a token
-  on **Git access**.
+- **Copy from Git.** Paste any https or SSH address, without a token in it:
+  for a private repository, save one on **Git access**. Only files are
+  fetched: no hooks, submodules or redirects. Two copies run at a time, each
+  up to 2 GB.
 - **By path.** Any other folder; `~` is the studio user's home.
 
 The studio reads `.cms/schema.yaml` from that working copy and builds the

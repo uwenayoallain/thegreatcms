@@ -17,6 +17,14 @@ export interface DeclaredSite {
 
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+/** What the studio is started with that nothing it starts, git included, has any use for. */
+const SECRETS = ["STUDIO_PASSWORD", "STUDIO_SECRET", "RESEND_API_KEY", "STUDIO_WEBHOOK_URL"];
+
+/** Takes the studio's own secrets out of the environment its child processes inherit. */
+export function withoutSecrets(env: NodeJS.ProcessEnv): void {
+  for (const name of SECRETS) delete env[name];
+}
+
 export function parseSites(source: string): DeclaredSite[] {
   let raw: unknown;
   try {
