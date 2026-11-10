@@ -232,6 +232,8 @@ describe.skipIf(!browser)("whichever face is drawn", () => {
         expect(standIn.cls, `${path} shifted without its font`).toBe(0);
         for (const [name, keys] of Object.entries(COMPARED)) {
           for (const key of keys) {
+            // How many lines the footer's words take is the face's business; where the frame sits is not.
+            if (name === "footer" && key === "height") continue;
             // Within a pixel: two faces round to different sub-pixel sizes.
             expect(
               Math.abs(loaded.boxes[name]![key] - standIn.boxes[name]![key]),

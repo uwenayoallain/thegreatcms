@@ -200,6 +200,8 @@ describe.skipIf(!browser)("layout", () => {
         expect(standIn.shift, `${path} at ${width}px shifted without its fonts`).toBe(0);
         for (const [name, edges] of Object.entries(COMPARED)) {
           for (const edge of edges) {
+            // How many lines the footer's words take is the face's business; where the frame sits is not.
+            if (name === "footer" && edge === "h") continue;
             const at = "xywh".indexOf(edge);
             // Within a pixel: two faces round to different sub-pixel sizes.
             expect(

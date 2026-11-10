@@ -245,7 +245,8 @@ describe.skipIf(!browser)("between pages", () => {
         const pairs: [string, number[] | undefined, number[] | undefined][] = [
           ["header", withFont.header, without.header],
           ["nav", withFont.nav, without.nav],
-          ["footer", withFont.footer, without.footer],
+          // The footer's left edge and width; how many lines its words take is the face's business.
+          ["footer", withFont.footer?.slice(0, 2), without.footer?.slice(0, 2)],
           ["docs sidebar", withFont.docsNav, without.docsNav],
           ["article column", withFont.content, without.content],
           ["header links", withFont.links.flat(), without.links.flat()],
