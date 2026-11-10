@@ -4,7 +4,8 @@
  * so cloning and pushing after a publish use them alike.
  */
 
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface SavedToken {
@@ -106,11 +107,15 @@ export class GitAccess {
   }
 
   private write(lines: string[]): void {
-    mkdirSync(this.dir, { recursive: true });
-    writeFileSync(this.credentialsFile, lines.length ? `${lines.join("\n")}\n` : "", {
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    chmodSync(this.dir, 0o700);
+    // Replaced whole: a stop halfway through must not leave half the tokens, or a readable file.
+    const temporary = `${this.credentialsFile}.${randomBytes(6).toString("hex")}.tmp`;
+    writeFileSync(temporary, lines.length ? `${lines.join("\n")}\n` : "", {
       mode: 0o600,
+      flag: "wx",
     });
-    chmodSync(this.credentialsFile, 0o600);
+    renameSync(temporary, this.credentialsFile);
     this.apply();
   }
 }

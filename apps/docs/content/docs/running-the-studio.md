@@ -6,7 +6,44 @@ order: 35
 
 The studio is a single Node process. It keeps its own state, the list of sites
 and the submissions inbox, in one SQLite file, and reads and writes the sites it
-manages as folders on the same machine.
+manages as folders on the same machine. Hosted or local, it is open source
+under the MIT licence, and anyone may run their own.
+
+## On your own machine
+
+In a site's folder, one command opens the editor for it:
+
+```sh
+npx greatcms studio
+```
+
+It starts the studio on `127.0.0.1:4983`, or the next free port, with this
+folder as its one site, and opens your browser through a sign-in link that
+works once. The live preview is the site's dev server: the one already
+running, or your own dev command, started here and stopped with it.
+Publishing commits to the working copy as you; nothing is pushed. This
+studio is for that one project: it has no list of sites, nothing to connect
+or disconnect, and no editors to add.
+
+There is no password to type. The studio answers only this machine, at its
+own address, and each start prints a new link. `--host` with anything but a
+loopback address is refused unless `STUDIO_PASSWORD` is set, and then you
+sign in with that instead.
+
+| Option            | Meaning                                              |
+| ----------------- | ---------------------------------------------------- |
+| `--port <number>` | The studio's port, exactly; an error if it is taken. |
+| `--dev-url <url>` | Use this dev server and start none.                  |
+| `--no-dev`        | Edit without a preview.                              |
+| `--no-open`       | Print the link without opening a browser.            |
+
+It needs Node.js 22.13 or newer and the `@greatcms/studio` package, which the
+command offers to add to the site the first time, showing the exact install
+command and asking before it runs. Its database and session secret go in
+`node_modules/.cache/greatcms`, or your user cache folder when the site has no
+`node_modules`: never in a file Git tracks. Ctrl+C stops everything.
+
+## On a server
 
 ```sh
 STUDIO_PASSWORD='something long' pnpm --filter @greatcms/studio start
@@ -45,6 +82,7 @@ For a server that also builds and serves the site, see
 | `STUDIO_SUBMISSION_DAYS` | Deletes submissions older than this many days. Unset: they are kept.                                             |
 | `STUDIO_TIMEZONE`        | The zone "Publish later" times are typed and shown in, e.g. `Africa/Kigali`. Defaults to the server's.           |
 | `STUDIO_SITES_ROOT`      | The folder of sites the connect page lists, and where copies go.                                                 |
+| `STUDIO_CLONE_PRIVATE`   | `1` lets Copy from Git reach this machine and its private network, for a Git server that lives there.            |
 
 Behind a proxy, `STUDIO_TRUST_PROXY` lets rate limiting see the visitor's
 address rather than the proxy's, and marks the session cookie `Secure`. The
@@ -63,9 +101,10 @@ one three ways:
 - **From GitHub.** Connect GitHub once on **Git access**: the studio makes
   its own GitHub App, you choose the repositories it may use, and each copies
   with a click, signing in with a token that lasts an hour.
-- **Copy from Git.** Paste any https or SSH address. Only files are fetched:
-  no hooks or submodules. For a private repository elsewhere, save a token
-  on **Git access**.
+- **Copy from Git.** Paste any https or SSH address, without a token in it:
+  for a private repository, save one on **Git access**. Only files are
+  fetched: no hooks, submodules or redirects. Two copies run at a time, each
+  up to 2 GB.
 - **By path.** Any other folder; `~` is the studio user's home.
 
 The studio reads `.cms/schema.yaml` from that working copy and builds the
@@ -96,25 +135,8 @@ next request. When two people have the same content open, each sees the
 other's name; if both publish, the second is refused rather than overwriting
 the first.
 
-## Working on content
-
-- **Search.** The box at the top of a site's sidebar finds words in every
-  region and entry, unpublished drafts included, and opens the field that holds
-  them. Press `/` to jump to it.
-- **History.** Every region and entry has a History link listing the commits
-  that changed it. Restoring a version opens it in the editor as an unsaved
-  edit, so you see it in the preview and publish it back as one new commit.
-- **Publish later.** Beside Publish, pick a time and Schedule. The form is
-  kept as submitted and published at that time through the ordinary publish,
-  as the person who scheduled it. If the content was changed by someone else
-  in the meantime it is not overwritten; the site page lists what is waiting,
-  what went out and what did not, and anything waiting can be cancelled.
-- **Unsaved edits that went stale.** A draft remembers the commit it began
-  from. If the same content was published since, the editor says so and a
-  publish of the old draft is refused.
-- **Images already on the site** are offered in every image field, so one
-  upload can be used again. Reference fields offer the entries they can point at.
-- **Ctrl or Cmd with Enter** publishes.
+Search, history, scheduled publishes and the rest of a day's editing are in
+[Managing content](/docs/managing-content/).
 
 ## What it will not do
 

@@ -41,6 +41,7 @@ STUDIO_PASSWORD='something long' pnpm studio     # the studio alone
 pnpm --filter @greatcms/docs dev
 pnpm --filter @greatcms/example-studio-astro dev
 pnpm greatcms check                              # any CLI command, from this checkout
+(cd examples/site-astro && pnpm exec greatcms studio)   # one site's editor and dev server, no password
 ```
 
 Browser tests (ProseMirror, live preview, colour contrast) need Chromium once:

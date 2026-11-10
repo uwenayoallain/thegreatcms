@@ -199,21 +199,13 @@ export class SiteClient {
   /** Entries in a collection, newest-looking first. */
   async listEntries(context: SiteContext, name: string): Promise<CollectionEntry[]> {
     const collection = this.collection(context, name);
-    const paths = await this.repo.listDirectory(collection.path);
-    const extension = `.${entryExtension(collection.format)}`;
-
-    const entries = await Promise.all(
-      paths
-        .filter((path) => path.endsWith(extension))
-        .map(async (path) => {
-          const file = await this.repo.getFile(path);
-          if (!file) return null;
-          return this.parseEntry(collection, path, file.content);
-        }),
+    const files = await this.repo.readDirectory(
+      collection.path,
+      `.${entryExtension(collection.format)}`,
     );
 
-    return entries
-      .filter((entry): entry is CollectionEntry => entry !== null)
+    return files
+      .map((file) => this.parseEntry(collection, file.path, file.content))
       .toSorted(
         (a, b) =>
           String(b.data.date ?? "").localeCompare(String(a.data.date ?? "")) ||
@@ -626,7 +618,17 @@ function stripExtension(name: string, format: CollectionFormat): string {
   return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
 }
 
+/** Rendered Markdown by its exact text: a list of entries renders each body once, not on every visit. */
+const rendered = new Map<string, string>();
+const MAX_RENDERED = 2000;
+
 /** Markdown the way the sites render it, so the editor opens on what a visitor reads. */
 function markdownToHtml(text: string): string {
-  return text === "" ? "" : marked.parse(text, { async: false, gfm: true }).trim();
+  if (text === "") return "";
+  const known = rendered.get(text);
+  if (known !== undefined) return known;
+  const html = marked.parse(text, { async: false, gfm: true }).trim();
+  if (rendered.size >= MAX_RENDERED) rendered.clear();
+  rendered.set(text, html);
+  return html;
 }

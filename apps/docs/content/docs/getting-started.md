@@ -87,9 +87,15 @@ The same reader infers types when you run `greatcms types`.
 
 ## Connect it
 
-Run the studio and add the site. Point it at **a folder on this machine** and it
-reads and writes that working copy directly: no token, no network. Give it your
-dev server's URL and the editor shows your real components beside the form.
+```sh
+npx greatcms studio
+```
+
+That opens the editor for this folder in your browser, signed in, with your
+dev server as the live preview beside the form: no password, no settings. It
+reads and writes the working copy directly, and publishing is a commit as you.
+[Running the studio](/docs/running-the-studio/) covers its options, and a
+studio on a server that several people and sites share.
 
 The studio reads your schema and builds the editor from it. It never runs any
 code from your repository.

@@ -2,7 +2,9 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { brotliCompressSync, constants, gzipSync } from "node:zlib";
+import { promisify } from "node:util";
+import { brotliCompress, brotliCompressSync, constants, gzip, gzipSync } from "node:zlib";
+import { preferredEncoding } from "./pack.js";
 import { STYLESHEET } from "./views/layout.js";
 
 export interface Asset {
@@ -95,15 +97,7 @@ export function compressed(
   accept: string | undefined,
 ): { body: Buffer; encoding: "br" | "gzip" } | null {
   if (found.type.startsWith("font/")) return null;
-  const accepted = new Map(
-    (accept ?? "").split(",").map((part) => {
-      const [name = "", ...params] = part.trim().toLowerCase().split(";");
-      const q = params.find((param) => param.trim().startsWith("q="));
-      return [name.trim(), q ? Number(q.trim().slice(2)) : 1] as const;
-    }),
-  );
-  const wants = (encoding: string) => (accepted.get(encoding) ?? accepted.get("*") ?? 0) > 0;
-  const encoding = wants("br") ? "br" : wants("gzip") ? "gzip" : null;
+  const encoding = preferredEncoding(accept);
   if (!encoding) return null;
   const key = `${file}@${found.version}`;
   let both = encoded.get(key);
@@ -111,15 +105,37 @@ export function compressed(
     const bytes =
       typeof found.body === "string" ? Buffer.from(found.body) : Buffer.from(found.body);
     both = {
-      br: brotliCompressSync(bytes, {
-        params: {
-          [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
-          [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-        },
-      }),
+      br: brotliCompressSync(bytes, brotliMax(bytes.length)),
       gzip: gzipSync(bytes, { level: constants.Z_BEST_COMPRESSION }),
     };
     encoded.set(key, both);
   }
   return { body: both[encoding], encoding };
+}
+
+const brotliMax = (size: number) => ({
+  params: {
+    [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
+    [constants.BROTLI_PARAM_SIZE_HINT]: size,
+  },
+});
+
+/**
+ * Compresses the stylesheet and bundles ahead of the first request, on other threads: squeezing
+ * the editor at the highest level takes a few hundred milliseconds nobody should wait behind.
+ */
+export async function warmAssets(): Promise<void> {
+  await Promise.all(
+    ["studio.css", ...CLIENT_BUNDLES].map(async (file) => {
+      const found = asset(file);
+      const key = `${file}@${found?.version}`;
+      if (!found || encoded.has(key)) return;
+      const bytes = Buffer.from(found.body);
+      const [br, zipped] = await Promise.all([
+        promisify(brotliCompress)(bytes, brotliMax(bytes.length)),
+        promisify(gzip)(bytes, { level: constants.Z_BEST_COMPRESSION }),
+      ]);
+      encoded.set(key, { br, gzip: zipped });
+    }),
+  );
 }

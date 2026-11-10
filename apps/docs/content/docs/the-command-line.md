@@ -5,7 +5,8 @@ order: 15
 ---
 
 Everything the CLI does runs on your machine with your toolchain. It edits the
-two files in `.cms/`, reads your content, and never talks to the studio.
+two files in `.cms/`, reads your content, and never talks to a studio. One
+command, `greatcms studio`, runs one: on this machine, for this folder.
 
 `greatcms help <command>` (or `greatcms <command> --help`) shows a command's
 options and examples, and `greatcms --version` prints the version. Short flags
@@ -155,6 +156,20 @@ and `check` says so.
 Prints every region, the file it resolves to, which ones are still rendering
 schema defaults, and any unsaved edit left in `.cms/draft/`: the one thing that
 shows in your dev server and nowhere else.
+
+## `greatcms studio`
+
+```sh
+npx greatcms studio
+```
+
+Opens the visual editor for the site in this folder, or the nearest folder
+above it with a `.cms/schema.yaml`: the studio on `127.0.0.1:4983`, your
+browser signed in through a link that works once, and the site's dev server
+as the live preview. `--port`, `--dev-url`, `--no-dev` and `--no-open` change
+the defaults; [Running the studio](/docs/running-the-studio/#on-your-own-machine)
+has the details. The dev server is started by this command, as your own dev
+script would be; the studio still runs nothing from the repository.
 
 ## `greatcms describe`
 

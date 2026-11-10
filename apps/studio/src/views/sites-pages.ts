@@ -6,6 +6,7 @@ import type { CmsSchema } from "@greatcms/spec";
 import type { CloneState, Folder } from "../connect.js";
 import type { BranchState } from "../repo.js";
 import { siteNav } from "./editor-parts.js";
+import { chrome } from "./chrome.js";
 import { page, type PageOptions, withRemedy } from "./layout.js";
 import { icon } from "./icons.js";
 import { siteAvatar } from "./pixel.js";
@@ -340,9 +341,13 @@ export function newSitePage(
                   </div>
                   <span class="hint" id="push-hint">
                     Sends each publish to the branch's upstream, so your host deploys it without
-                    anyone running Git. Signs in with this machine's Git credentials, or the
-                    studio's own
-                    <a href="/git-access">Git access</a>; hooks never run.
+                    anyone running Git. Signs in with this machine's Git
+                    credentials${
+                      chrome().local
+                        ? ""
+                        : html`, or the studio's own <a href="/git-access">Git access</a>`
+                    };
+                    hooks never run.
                   </span>
                 </div>
               `
@@ -355,7 +360,7 @@ export function newSitePage(
         </div>
       </form>
       ${
-        editing
+        editing && !chrome().local
           ? html`<section class="danger-zone" aria-labelledby="danger">
               <h2 id="danger">Disconnect</h2>
               <p>
