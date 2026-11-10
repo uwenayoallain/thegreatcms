@@ -368,9 +368,13 @@ function navigation(
             ? html`<p class="signed-in">${personAvatar(viewer()?.name ?? "")} ${viewer()?.name}</p>`
             : ""
         }
-        <button class="link" type="submit">
-          ${icon("signOut")} <span class="label">Sign out</span>
-        </button>
+        ${
+          shell().local
+            ? ""
+            : html`<button class="link" type="submit">
+                ${icon("signOut")} <span class="label">Sign out</span>
+              </button>`
+        }
       </form>
       ${themeSwitch()}
     </header>

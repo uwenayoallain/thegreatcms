@@ -117,6 +117,7 @@ describe("what the local studio shows", () => {
         "Disconnect",
         "/delete",
         "Copy from Git",
+        "Sign out",
         "> Sites<",
       ]) {
         expect(html, `${path} has ${gone}`).not.toContain(gone);
