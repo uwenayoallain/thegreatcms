@@ -140,6 +140,68 @@ describe("greatcms types --check", () => {
   });
 });
 
+describe("greatcms doctor and fonts from another site", () => {
+  it("says nothing when the site serves its own fonts", async () => {
+    expect(await cli(["doctor"])).toBe(0);
+    expect(out.join("")).not.toContain("Fonts are fetched");
+    out.length = 0;
+    expect(await cli(["doctor", "--json"])).toBe(0);
+    expect(JSON.parse(out.join("")).remoteFonts).toEqual([]);
+  });
+
+  it("names the files that pull fonts in at page load, and how to stop, without failing", async () => {
+    mkdirSync(join(repo, "src/styles"), { recursive: true });
+    mkdirSync(join(repo, "node_modules/some-theme"), { recursive: true });
+    mkdirSync(join(repo, "dist"), { recursive: true });
+    const remote = "@import url('https://fonts.googleapis.com/css2?family=Archivo&display=swap');";
+    writeFileSync(join(repo, "src/styles/global.css"), `${remote}\nbody { margin: 0; }\n`);
+    writeFileSync(
+      join(repo, "src/Layout.astro"),
+      '<link rel="preconnect" href="https://fonts.gstatic.com" />',
+    );
+    writeFileSync(
+      join(repo, "src/styles/local.css"),
+      "@font-face { font-family: Mine; src: url(/mine.woff2); }",
+    );
+    // Someone else's code and the built site are not the site's source.
+    writeFileSync(join(repo, "node_modules/some-theme/theme.css"), remote);
+    writeFileSync(join(repo, "dist/index.html"), remote);
+    writeFileSync(
+      join(repo, "package.json"),
+      JSON.stringify({ dependencies: { astro: "^7.0.0" } }),
+    );
+    try {
+      expect(await cli(["doctor"])).toBe(0);
+      const text = out.join("");
+      expect(text).toContain("Fonts are fetched from another site while the page loads");
+      expect(text).toMatch(/src\/Layout\.astro\s+src\/styles\/global\.css\s/);
+      expect(text).not.toContain("local.css");
+      expect(text).not.toContain("some-theme");
+      expect(text).not.toContain("dist/index.html");
+      expect(text).toContain("under `fonts` in astro.config");
+      out.length = 0;
+      expect(await cli(["doctor", "--json"])).toBe(0);
+      expect(JSON.parse(out.join("")).remoteFonts).toEqual([
+        "src/Layout.astro",
+        "src/styles/global.css",
+      ]);
+
+      writeFileSync(
+        join(repo, "package.json"),
+        JSON.stringify({ dependencies: { next: "^16.0.0" } }),
+      );
+      out.length = 0;
+      expect(await cli(["doctor"])).toBe(0);
+      expect(out.join("")).toContain("serve the font files from the site");
+      expect(out.join("")).not.toContain("astro.config");
+    } finally {
+      for (const path of ["src", "node_modules", "dist", "package.json"]) {
+        rmSync(join(repo, path), { recursive: true, force: true });
+      }
+    }
+  });
+});
+
 describe("greatcms doctor and unsaved drafts", () => {
   it("says nothing about drafts when there are none", async () => {
     expect(await cli(["doctor"])).toBe(0);

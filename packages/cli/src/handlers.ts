@@ -49,6 +49,7 @@ import {
   type TemplateId,
   mergeAgentsNote,
 } from "./init.js";
+import { fontRemedy, remoteFonts } from "./fonts.js";
 import { packageManager, wirePreview, withReader } from "./wire.js";
 import { defaultsOnlyPrompt, terminalPrompt, type PromptPort } from "./prompt.js";
 import { CliError, UsageError, type FilePort, type GitPort } from "./ports.js";
@@ -768,6 +769,7 @@ export async function doctorCommand(options: RunOptions & { flags: Flags }): Pro
   // An unsaved draft only shows in dev, so the only way to notice a forgotten
   // one is to be told.
   const drafts = await listDrafts(root);
+  const fonts = await remoteFonts(root);
   if (flags.boolean("json")) {
     stdout(
       `${JSON.stringify(
@@ -786,6 +788,7 @@ export async function doctorCommand(options: RunOptions & { flags: Flags }): Pro
             format: collection.format,
           })),
           drafts,
+          remoteFonts: fonts,
         },
         null,
         2,
@@ -802,6 +805,30 @@ export async function doctorCommand(options: RunOptions & { flags: Flags }): Pro
     );
   } else {
     lines.push("", u.ok("No drafts waiting: the dev server shows what is committed."));
+  }
+
+  if (fonts.length > 0) {
+    let dependencies: Record<string, unknown> = {};
+    try {
+      const pkg = JSON.parse((await files.read("package.json")) ?? "{}") as {
+        dependencies?: Record<string, unknown>;
+        devDependencies?: Record<string, unknown>;
+      };
+      dependencies = { ...pkg.dependencies, ...pkg.devDependencies };
+    } catch {
+      // A package.json that does not read: the general advice is given.
+    }
+    lines.push(
+      "",
+      u.warn(
+        `Fonts are fetched from another site while the page loads, so text moves when they arrive:\n${fonts
+          .slice(0, 10)
+          .map((path) => `  ${path}`)
+          .join(
+            "\n",
+          )}${fonts.length > 10 ? `\n  and ${fonts.length - 10} more` : ""}\n${fontRemedy(dependencies)}`,
+      ),
+    );
   }
 
   stdout(`${lines.join("\n")}\n`);

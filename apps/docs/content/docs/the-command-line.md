@@ -165,6 +165,11 @@ Prints every region, the file it resolves to, which ones are still rendering
 schema defaults, and any unsaved edit left in `.cms/draft/`: the one thing that
 shows in your dev server and nowhere else.
 
+It also names any source file that fetches fonts from another site while the
+page loads (Google Fonts and the like), which is what makes text move when
+they arrive, and says how to serve them from the site instead. It is a
+warning, not a failure.
+
 ## `greatcms studio`
 
 ```sh
