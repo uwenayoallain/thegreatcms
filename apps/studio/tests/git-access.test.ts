@@ -159,6 +159,16 @@ describe("the Git access page", () => {
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 
+  it("points an owner at GitHub from every screen, and says so on the home page until it is connected", async () => {
+    const target = app();
+    const { document } = new JSDOM(await (await target.request("/", { headers: signedIn })).text())
+      .window;
+    expect(document.querySelector('.sidebar a[href="/git-access"]')?.textContent).toContain(
+      "GitHub",
+    );
+    expect(document.querySelector(".notice.setup a")?.getAttribute("href")).toBe("/git-access");
+  });
+
   it("is not there without a place to keep them", async () => {
     const plain = createApp({ store: new Store(":memory:"), password: PASSWORD, secret: SECRET });
     expect((await plain.request("/git-access", { headers: signedIn })).status).toBe(404);

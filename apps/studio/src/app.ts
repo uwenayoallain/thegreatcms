@@ -669,6 +669,11 @@ export function createApp(options: AppOptions) {
       ...panesOf(c.req.header("cookie")),
       unread: () => store.countUnread(mine.among),
       local: options.local,
+      github: options.github
+        ? options.github.config()
+          ? ("connected" as const)
+          : ("not connected" as const)
+        : undefined,
       timeZone,
       roots: () => mine.sites.map((site) => site.path),
       flash: () => {

@@ -12,6 +12,8 @@ export interface Chrome {
   timeZone?: string;
   /** A notice an action left for this page, taken by the page that shows it. */
   flash?: () => { kind: "success" | "error"; message: string } | undefined;
+  /** Whether GitHub can be connected here, and whether it is: an owner's way to its page. */
+  github?: "connected" | "not connected";
   /** One project, on the machine of whoever started it: nothing about other sites or other people is offered. */
   local?: boolean;
   /** The folders of the sites this person can open, which an error may name relative to. */

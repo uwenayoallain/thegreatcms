@@ -139,7 +139,7 @@ export function signInPage(
         options.github
           ? html`<p class="sign-in-github">
                 <a
-                  class="button secondary"
+                  class="button"
                   href="/sign-in/github${options.next ? `?next=${encodeURIComponent(options.next)}` : ""}"
                   >${icon("github")} Continue with GitHub</a
                 >
@@ -499,7 +499,7 @@ export function gitAccessPage(options: {
   return page(
     {
       title: "Git access",
-      section: "sites",
+      section: "github",
       crumbs: [
         { href: "/", label: "Sites" },
         { href: "/git-access", label: "Git access" },
