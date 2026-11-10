@@ -3,6 +3,7 @@
 import { html } from "hono/html";
 import type { Editor, Site } from "../db.js";
 import { brandMark, flashNotice, page, type PageOptions, themeSwitch } from "./layout.js";
+import { icon } from "./icons.js";
 import { when } from "./locale.js";
 import { personAvatar, pixelWord } from "./pixel.js";
 
@@ -75,8 +76,38 @@ export function shareCard(siteName: string, open: string): string {
     </html>`.toString();
 }
 
+/** For someone GitHub signed in who can push to none of the connected sites' repositories. */
+export function noAccessPage(options: { name: string; login: string }): string {
+  return outside(
+    "No sites to edit",
+    html`
+      <div class="page-head">
+        <h1>No sites to edit</h1>
+        <p class="lede">
+          You are signed in as ${options.name} (<code>${options.login}</code> on GitHub), and that
+          account cannot push to the repository of any site connected to this studio.
+        </p>
+      </div>
+      <p>
+        Access here follows GitHub. Ask whoever owns the site's repository to give your account
+        write access to it, then open this page again: the site appears within a couple of minutes.
+      </p>
+      <form method="POST" action="/sign-out">
+        <div class="actions"><button class="secondary" type="submit">Sign out</button></div>
+      </form>
+    `,
+  );
+}
+
 export function signInPage(
-  options: { error?: string; next?: string; email?: string; editors?: boolean } = {},
+  options: {
+    error?: string;
+    next?: string;
+    email?: string;
+    editors?: boolean;
+    /** Whether the studio's GitHub App can sign people in. */
+    github?: boolean;
+  } = {},
 ): string {
   // A `next` that is a full address is a sibling host, such as the preview, asking us to vouch.
   const onward = options.next?.startsWith("/") === false ? new URL(options.next).host : null;
@@ -94,6 +125,18 @@ export function signInPage(
           }
         </p>
       </div>
+      ${
+        options.github
+          ? html`<p class="sign-in-github">
+                <a
+                  class="button secondary"
+                  href="/sign-in/github${options.next ? `?next=${encodeURIComponent(options.next)}` : ""}"
+                  >${icon("github")} Continue with GitHub</a
+                >
+              </p>
+              <p class="sign-in-or"><span>or with a password</span></p>`
+          : ""
+      }
       <form method="POST" action="/sign-in">
         ${options.next ? html`<input type="hidden" name="next" value="${options.next}" />` : ""}
         ${
@@ -309,6 +352,61 @@ export interface GitHubView {
         installations?: Array<{ id: number; account: string }>;
         repositories?: Array<{ fullName: string }>;
       };
+  /** Signing people in through the app: whether it can, where GitHub returns them, who is an owner. */
+  signIn?: { ready: boolean; callback: string; owners: string[] };
+}
+
+/** Who may sign in with GitHub, or what an app made before sign-in existed still needs. */
+function githubSignInSection(github: GitHubView) {
+  const signIn = github.signIn;
+  if (!signIn) return "";
+  if (signIn.ready) {
+    return html`<h3 id="github-sign-in">Signing in with GitHub</h3>
+      <p>
+        Anyone GitHub lets push to a connected site's repository can sign in with their GitHub
+        account and edit that site, and only that site. Take their access away on GitHub and it ends
+        here within two minutes, and at once for publishing.
+        ${
+          signIn.owners.length > 0
+            ? html`Owners of this studio:
+              ${signIn.owners.map(
+                (login, index) => html`${index > 0 ? ", " : ""}<code>${login}</code>`,
+              )}.`
+            : html`No GitHub account is an owner of this studio: set
+                <code>STUDIO_GITHUB_OWNERS</code> to name some.`
+        }
+      </p>`;
+  }
+  return html`<h3 id="github-sign-in">Signing in with GitHub</h3>
+    <p>
+      This app was made before the studio could sign people in with GitHub, so it is missing two
+      things. Copying and pushing keep working as they are. To turn sign-in on without making the
+      app again:
+    </p>
+    <ol class="steps">
+      <li>
+        Open
+        ${
+          github.settingsUrl
+            ? html`<a href="${github.settingsUrl}">the app's settings on GitHub</a>`
+            : "the app's settings on GitHub"
+        }.
+      </li>
+      <li>Under Callback URL, add <code>${signIn.callback}</code> and save.</li>
+      <li>Under Client secrets, generate a new client secret and copy it.</li>
+      <li>Paste it here. It is kept beside the app's key and never shown again.</li>
+    </ol>
+    <form method="POST" action="/git-access/github/secret" class="card-form">
+      <div class="field">
+        <label for="client-secret">Client secret</label>
+        <input type="password" id="client-secret" name="secret" autocomplete="off" required />
+      </div>
+      <div class="form-actions"><button type="submit">Turn on sign-in</button></div>
+    </form>
+    <p class="hint">
+      Or disconnect GitHub below and connect it again: a new app has both from the start, and you
+      choose its repositories again.
+    </p>`;
 }
 
 /** How the studio signs in to Git hosts: GitHub through its own app, other hosts by token. */
@@ -506,11 +604,13 @@ function githubSection(github: GitHubView) {
           </div>`
         : ""
     }
+    ${githubSignInSection(github)}
     <details class="danger-confirm">
       <summary>Disconnect GitHub</summary>
       <p>
         Uninstalls the app from every account and forgets it here. Copies already made stay, but
-        nothing is pushed to GitHub until it is connected again.
+        nothing is pushed to GitHub until it is connected again, and everyone who signed in with
+        GitHub is signed out.
       </p>
       <form method="POST" action="/git-access/github/delete">
         <button class="danger" type="submit">Confirm disconnect GitHub</button>

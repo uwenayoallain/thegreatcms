@@ -1,6 +1,7 @@
 /** Moving between screens moves nothing they share, and nothing jumps once a screen has loaded. */
 
 import { execFileSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import { serve } from "@hono/node-server";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie, sessionKey } from "../src/auth.js";
+import { createSessionCookie, editorStamp, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 import { GitAccess } from "../src/git-access.js";
 import { GitHub } from "../src/github.js";
@@ -76,7 +77,14 @@ collections:
 const LONG = Array.from({ length: 12 }, (_, i) => `<p>Paragraph ${i + 1} of copy.</p>`).join("");
 
 /** Every kind of screen, and the site whose sidebar it shows. */
-const SCREENS: Array<{ name: string; path: string; site?: string; signedOut?: boolean }> = [
+const SCREENS: Array<{
+  name: string;
+  path: string;
+  site?: string;
+  signedOut?: boolean;
+  /** Signed in with GitHub, as someone who can open no site. */
+  github?: boolean;
+}> = [
   { name: "sites", path: "/" },
   { name: "connect", path: "/sites/new" },
   { name: "set up", path: "/sites/setup?path=SITES_ROOT/bare" },
@@ -95,6 +103,7 @@ const SCREENS: Array<{ name: string; path: string; site?: string; signedOut?: bo
   { name: "search", path: "/sites/site-1/search?q=e", site: "site-1" },
   { name: "region down", path: "/sites/site-2/regions/home.hero", site: "site-2" },
   { name: "sign in", path: "/sign-in", signedOut: true },
+  { name: "no sites", path: "/", signedOut: true, github: true },
 ];
 
 const WIDTHS = [375, 768, 1024, 1280, 1600];
@@ -171,6 +180,7 @@ let server: ReturnType<typeof serve>;
 let devServer: ReturnType<typeof createServer>;
 let origin: string;
 let sitesRoot: string;
+let githubCookie: string;
 const roots: string[] = [];
 
 function makeSiteFolder(): string {
@@ -240,13 +250,40 @@ beforeAll(async () => {
   mkdirSync(join(sitesRoot, "ready", ".cms"), { recursive: true });
   writeFileSync(join(sitesRoot, "ready", ".cms", "schema.yaml"), SCHEMA);
   mkdirSync(join(sitesRoot, "bare"));
+  // A GitHub App that can sign people in and is installed nowhere, so the sign-in screen has its
+  // GitHub button and someone who signs in with it has no site to open.
+  const appFile = join(sitesRoot, ".github-app.json");
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs1", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  writeFileSync(
+    appFile,
+    JSON.stringify({
+      id: 7,
+      slug: "greatcms-layout",
+      clientId: "Iv1.layout",
+      pem: privateKey,
+      htmlUrl: "https://github.com/apps/greatcms-layout",
+      owner: "acme",
+      ownerType: "Organization",
+      clientSecret: "0123456789abcdef0123456789abcdef01234567",
+    }),
+  );
+  const person = store.saveGithubPerson({ id: 303, login: "visitor", name: "A Visitor" });
+  const key = sessionKey(SECRET, PASSWORD);
+  githubCookie = createSessionCookie(key, {
+    actor: `github:${person.id}`,
+    stamp: editorStamp(key, `${person.salt}:7`),
+  }).split(";")[0]!;
   const app = createApp({
     store,
     password: PASSWORD,
     secret: SECRET,
     sitesRoot,
     gitAccess: new GitAccess(join(sitesRoot, ".git-access"), {}),
-    github: new GitHub(join(sitesRoot, ".github-app.json")),
+    github: new GitHub(appFile, undefined, async () => new Response("[]")),
   });
   server = serve({ fetch: app.fetch, port: 0, createServer });
   const address = server.address();
@@ -284,7 +321,11 @@ async function newContext(
 /** Loads a screen as a first visit would, with fonts and scripts arriving late, and measures it. */
 async function measure(screen: (typeof SCREENS)[number], width: number): Promise<Measure> {
   const { path, signedOut } = screen;
-  const context = await newContext(width, { signedOut });
+  const [cookieName, cookieValue] = githubCookie.split("=") as [string, string];
+  const context = await newContext(width, {
+    signedOut,
+    cookies: screen.github ? { [cookieName]: cookieValue } : undefined,
+  });
   // Late fonts and bundles are what make a page jump; routing also turns the HTTP cache off.
   await context.route(/\/assets\/.*\.(woff2|js)/, async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -411,6 +452,34 @@ describe.skipIf(!browser)("layout stability", () => {
     expect.soft(shifted).toEqual([]);
     expect.soft(mismatches(results)).toEqual([]);
   });
+
+  it.each([375, 1280])(
+    "at %ipx, lines the GitHub button up with the password form, with no script",
+    async (width) => {
+      const context = await newContext(width, { signedOut: true, js: false });
+      try {
+        const page = await context.newPage();
+        await page.goto(`${origin}/sign-in`);
+        const github = await page.locator(".sign-in-github a").boundingBox();
+        const submit = await page.locator("form[action='/sign-in'] button").boundingBox();
+        expect(github && submit).toBeTruthy();
+        expect(github!.x).toBe(submit!.x);
+        expect(github!.width).toBe(submit!.width);
+        expect(github!.height).toBeGreaterThanOrEqual(44);
+        expect(github!.y + github!.height).toBeLessThan(submit!.y);
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow).toBeLessThanOrEqual(0);
+        // A link, so the trip to GitHub needs no form-action beyond this studio.
+        await expect(page.locator(".sign-in-github a").getAttribute("href")).resolves.toBe(
+          "/sign-in/github",
+        );
+      } finally {
+        await context.close();
+      }
+    },
+  );
 
   it("draws every screen at the widths the panes were dragged to, before any script runs", async () => {
     const cookies = { greatcms_sidebar: "320", greatcms_live: "560" };

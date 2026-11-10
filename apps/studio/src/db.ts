@@ -3,7 +3,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { UploadError, type UploadResult } from "./media.js";
 
 export interface Site {
@@ -202,7 +202,30 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     name: "012-revoked-sessions",
     sql: "CREATE TABLE revoked_sessions (id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);",
   },
+  {
+    // People who signed in with GitHub: who they are there, and nothing GitHub did not make public.
+    name: "013-github-people",
+    sql: `
+      CREATE TABLE github_people (
+        id      INTEGER PRIMARY KEY,
+        login   TEXT NOT NULL,
+        name    TEXT NOT NULL,
+        salt    TEXT NOT NULL,
+        seen_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
+
+export interface GithubPerson {
+  /** The account's id on GitHub, which never changes. */
+  id: number;
+  login: string;
+  /** The name they show on GitHub, or their login when they show none. */
+  name: string;
+  /** Made when they first sign in; forgetting them ends every session that carries it. */
+  salt: string;
+}
 
 export interface Submission {
   id: number;
@@ -465,13 +488,23 @@ export class Store {
 
   /** Submissions across every site, newest first: the unified inbox. */
   listSubmissions(
-    options: { siteId?: string; includeSpam?: boolean; limit?: number } = {},
+    options: {
+      siteId?: string;
+      /** The only sites to list from, for someone who cannot open them all. */
+      among?: string[];
+      includeSpam?: boolean;
+      limit?: number;
+    } = {},
   ): Submission[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (options.siteId) {
       clauses.push("site_id = ?");
       params.push(options.siteId);
+    }
+    if (options.among) {
+      clauses.push(`site_id IN (${options.among.map(() => "?").join(",") || "NULL"})`);
+      params.push(...options.among);
     }
     if (!options.includeSpam) clauses.push("spam_score < 3");
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
@@ -491,10 +524,13 @@ export class Store {
     return row ? toSubmission(row) : null;
   }
 
-  countUnread(): number {
+  countUnread(among?: string[]): number {
+    const within = among ? ` AND site_id IN (${among.map(() => "?").join(",") || "NULL"})` : "";
     const row = this.db
-      .prepare("SELECT COUNT(*) AS n FROM submissions WHERE read_at IS NULL AND spam_score < 3")
-      .get() as unknown as { n: number };
+      .prepare(
+        `SELECT COUNT(*) AS n FROM submissions WHERE read_at IS NULL AND spam_score < 3${within}`,
+      )
+      .get(...(among ?? [])) as unknown as { n: number };
     return row.n;
   }
 
@@ -543,6 +579,32 @@ export class Store {
 
   removeEditor(id: number): void {
     this.db.prepare("DELETE FROM editors WHERE id = ?").run(id);
+  }
+
+  /** Records a GitHub sign-in, and forgets people whose last session has long run out. */
+  saveGithubPerson(
+    person: { id: number; login: string; name: string },
+    now = Date.now(),
+  ): GithubPerson {
+    this.db.prepare("DELETE FROM github_people WHERE seen_at < ?").run(now - 30 * 86_400_000);
+    this.db
+      .prepare(
+        "INSERT INTO github_people (id, login, name, salt, seen_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET login = excluded.login, name = excluded.name, seen_at = excluded.seen_at",
+      )
+      .run(person.id, person.login, person.name, randomBytes(12).toString("base64url"), now);
+    return this.getGithubPerson(person.id) as GithubPerson;
+  }
+
+  getGithubPerson(id: number): GithubPerson | null {
+    const row = this.db
+      .prepare("SELECT id, login, name, salt FROM github_people WHERE id = ?")
+      .get(id) as unknown as GithubPerson | undefined;
+    return row ? { id: Number(row.id), login: row.login, name: row.name, salt: row.salt } : null;
+  }
+
+  /** Signs everyone who came in through GitHub out, wherever they are. */
+  clearGithubPeople(): void {
+    this.db.exec("DELETE FROM github_people");
   }
 
   /** Marks `actor` as having this content open, and returns who else did recently. */

@@ -19,6 +19,17 @@ export interface GitHubAppConfig {
   /** The account that owns the app, and whether it is an organization. */
   owner: string;
   ownerType: "User" | "Organization";
+  /** That account's id on GitHub, which a renamed or reused login does not change. */
+  ownerId?: number;
+  /** What proves a sign-in came through this app. Absent on an app made before sign-in existed. */
+  clientSecret?: string;
+}
+
+/** A person as GitHub describes them at sign-in: no email is asked for, and none is kept. */
+export interface GitHubPerson {
+  id: number;
+  login: string;
+  name: string;
 }
 
 export interface Installation {
@@ -68,6 +79,12 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 /** The least an app needs to clone and push: file contents, and metadata GitHub always grants. */
 export const PERMISSIONS = { contents: "write", metadata: "read" } as const;
 
+/** Where GitHub sends a person back after they sign in. */
+export const SIGN_IN_CALLBACK = "/sign-in/github/callback";
+
+const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,99})$/;
+const SECRET = /^[A-Za-z0-9_-]{20,255}$/;
+
 export class GitHub {
   /** Where GitHub's API lives: api.github.com, or /api/v3 on GitHub Enterprise Server. */
   readonly api: string;
@@ -112,6 +129,7 @@ export class GitHub {
       description: `Lets the GreatCMS studio at ${new URL(origin).host} copy the repositories you choose and publish your team's edits to them as commits. It reads and writes file contents only: no issues, no settings, no webhooks.`,
       request_oauth_on_install: false,
       redirect_url: `${origin}/git-access/github/created`,
+      callback_urls: [`${origin}${SIGN_IN_CALLBACK}`],
       setup_url: `${origin}/git-access/github/installed`,
       setup_on_update: true,
       public: false,
@@ -144,7 +162,8 @@ export class GitHub {
       client_id: string;
       pem: string;
       html_url: string;
-      owner?: { login?: string; type?: string };
+      client_secret?: string;
+      owner?: { login?: string; type?: string; id?: number };
     };
     // The answer is kept and later followed, so it has to be an app on this GitHub and nothing else.
     if (
@@ -163,15 +182,156 @@ export class GitHub {
       htmlUrl: made.html_url,
       owner: made.owner?.login ?? "",
       ownerType: made.owner?.type === "Organization" ? "Organization" : "User",
+      ownerId: Number.isSafeInteger(made.owner?.id) ? made.owner?.id : undefined,
+      clientSecret: SECRET.test(String(made.client_secret)) ? made.client_secret : undefined,
     };
+    this.write(config);
+    this.forget();
+    return config;
+  }
+
+  private write(config: GitHubAppConfig): void {
     mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 });
     chmodSync(dirname(this.file), 0o700);
     // Whole or not at all, and never readable by anyone else on the way.
     const temporary = `${this.file}.${randomBytes(6).toString("hex")}.tmp`;
     writeFileSync(temporary, JSON.stringify(config), { mode: 0o600, flag: "wx" });
     renameSync(temporary, this.file);
-    this.forget();
-    return config;
+  }
+
+  /** Whether people can sign in through the app: it has to hold the app's client secret. */
+  signIn(): boolean {
+    return Boolean(this.config()?.clientSecret);
+  }
+
+  /** Adds the client secret to an app made before sign-in existed; says what is wrong, or nothing. */
+  saveClientSecret(secret: string): string | null {
+    const config = this.config();
+    if (!config) return "Connect GitHub first.";
+    if (!SECRET.test(secret)) return "That is not a client secret as GitHub shows it.";
+    this.write({ ...config, clientSecret: secret });
+    return null;
+  }
+
+  /** GitHub's page asking a person to sign in to this studio. */
+  authorizeUrl(redirectUri: string, state: string, challenge: string): string | null {
+    const config = this.config();
+    if (!config?.clientSecret) return null;
+    const query = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      state,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    });
+    return `${this.web}/login/oauth/authorize?${query}`;
+  }
+
+  /**
+   * Trades the code GitHub sent back for who signed in, then gives the person's token up: nothing
+   * after this needs it, since the app's own installation answers what they may open.
+   */
+  async identify(code: string, redirectUri: string, verifier: string): Promise<GitHubPerson> {
+    const config = this.config();
+    if (!config?.clientSecret) throw new GitHubError("Signing in with GitHub is not set up.");
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(code)) throw new GitHubError("GitHub sent no usable code.");
+    let token: unknown;
+    try {
+      const response = await this.fetcher(`${this.web}/login/oauth/access_token`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "user-agent": "greatcms-studio",
+        },
+        body: JSON.stringify({
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          code,
+          redirect_uri: redirectUri,
+          code_verifier: verifier,
+        }),
+        redirect: "error",
+        signal: AbortSignal.timeout(20_000),
+      });
+      token = ((await response.json()) as { access_token?: unknown }).access_token;
+    } catch {
+      throw new GitHubError(`This studio could not reach ${new URL(this.web).host}.`);
+    }
+    if (typeof token !== "string" || !SECRET.test(token)) {
+      throw new GitHubError("GitHub did not accept that sign-in. Start again.");
+    }
+    try {
+      const user = (await this.request("/user", { bearer: token })) as {
+        id?: number;
+        login?: string;
+        name?: string | null;
+        type?: string;
+      };
+      if (
+        !Number.isSafeInteger(user.id) ||
+        !LOGIN.test(String(user.login)) ||
+        user.type !== "User"
+      ) {
+        throw new GitHubError("GitHub's answer did not describe a person.");
+      }
+      const name = typeof user.name === "string" ? user.name.replace(/\s+/g, " ").trim() : "";
+      return { id: user.id as number, login: user.login as string, name: name.slice(0, 80) };
+    } finally {
+      void this.revoke(config, token);
+    }
+  }
+
+  /** Ends a person's token at GitHub; if that fails it still expires there on its own. */
+  private async revoke(config: GitHubAppConfig, token: string): Promise<void> {
+    const basic = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64");
+    await this.fetcher(`${this.api}/applications/${encodeURIComponent(config.clientId)}/token`, {
+      method: "DELETE",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Basic ${basic}`,
+        "content-type": "application/json",
+        "user-agent": "greatcms-studio",
+      },
+      body: JSON.stringify({ access_token: token }),
+      signal: AbortSignal.timeout(20_000),
+    }).catch(() => undefined);
+  }
+
+  /**
+   * Whether GitHub lets this person push to a repository the app was given. Asked with the app's
+   * installation token, and matched on the account's id: a login can be renamed and taken again.
+   */
+  async canPush(remoteUrl: string, person: { id: number; login: string }): Promise<boolean> {
+    const repository = this.repositoryOf(remoteUrl);
+    if (!this.config() || !repository || !LOGIN.test(person.login)) return false;
+    const installation = (await this.installations()).find(
+      (entry) => entry.account.toLowerCase() === repository.owner.toLowerCase(),
+    );
+    if (!installation) return false;
+    // A public repository answers anyone; only one the app was given counts.
+    const wanted = `${repository.owner}/${repository.name}`.toLowerCase();
+    const given = (await this.repositories()).some(
+      (entry) => entry.fullName.toLowerCase() === wanted,
+    );
+    if (!given) return false;
+    const path = `/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/collaborators/${encodeURIComponent(person.login)}/permission`;
+    let answer: { permission?: string; role_name?: string; user?: { id?: number } };
+    try {
+      answer = (await this.request(path, {
+        token: await this.token(installation.id),
+      })) as typeof answer;
+    } catch (error) {
+      // Not a collaborator, not a repository the app was given, or an account that is gone.
+      if (error instanceof GitHubError && (error.status === 404 || error.status === 403)) {
+        return false;
+      }
+      throw error;
+    }
+    if (answer.user?.id !== person.id) return false;
+    return ["admin", "maintain", "write"].some(
+      (level) => answer.permission === level || answer.role_name === level,
+    );
   }
 
   /** Where the owner picks the accounts and repositories the app may reach. */
@@ -282,14 +442,19 @@ export class GitHub {
 
   /** The account a repository address belongs to, when it is on this GitHub. */
   ownerOf(remoteUrl: string): string | null {
+    return this.repositoryOf(remoteUrl)?.owner ?? null;
+  }
+
+  /** The account and name of a repository address, when it is on this GitHub. */
+  repositoryOf(remoteUrl: string): { owner: string; name: string } | null {
     const host = escapeRegExp(new URL(this.web).host);
     const scheme = new URL(this.web).protocol.replace(":", "");
     const match =
-      new RegExp(`^${scheme}://(?:[^@/]+@)?${host}/([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(
+      new RegExp(`^${scheme}://(?:[^@/]+@)?${host}/([^/]+)/([^/]+?)(?:\\.git)?/?$`, "i").exec(
         remoteUrl,
       ) ??
-      new RegExp(`^(?:ssh://)?git@${host}[:/]([^/]+)/[^/]+?(?:\\.git)?/?$`, "i").exec(remoteUrl);
-    return match?.[1] ?? null;
+      new RegExp(`^(?:ssh://)?git@${host}[:/]([^/]+)/([^/]+?)(?:\\.git)?/?$`, "i").exec(remoteUrl);
+    return match ? { owner: match[1] as string, name: match[2] as string } : null;
   }
 
   /** Removes the app from every account it was installed on, then forgets it here. */
@@ -348,7 +513,7 @@ export class GitHub {
 
   private async request(
     path: string,
-    options: { method?: string; app?: boolean; token?: string } = {},
+    options: { method?: string; app?: boolean; token?: string; bearer?: string } = {},
   ): Promise<unknown> {
     const headers: Record<string, string> = {
       accept: "application/vnd.github+json",
@@ -357,6 +522,7 @@ export class GitHub {
     };
     if (options.app) headers.authorization = `Bearer ${this.appJwt()}`;
     if (options.token) headers.authorization = `token ${options.token}`;
+    if (options.bearer) headers.authorization = `Bearer ${options.bearer}`;
     let response: Response;
     try {
       response = await this.fetcher(`${this.api}${path}`, {

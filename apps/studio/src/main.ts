@@ -104,6 +104,7 @@ const app = createApp({
   clonePrivate: process.env.STUDIO_CLONE_PRIVATE === "1",
   // Beside the database, so a container keeps its GitHub App and tokens in the same volume.
   gitAccess: new GitAccess(join(dirname(databaseFile), "git")),
+  githubOwners: process.env.STUDIO_GITHUB_OWNERS?.split(","),
   github: new GitHub(
     join(dirname(databaseFile), "git", "github-app.json"),
     process.env.STUDIO_GITHUB_URL || undefined,

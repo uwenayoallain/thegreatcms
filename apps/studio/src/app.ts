@@ -40,10 +40,15 @@ import { html } from "hono/html";
 import { bodyLimit } from "hono/body-limit";
 import { pack } from "./pack.js";
 import { setFlagsFromString } from "node:v8";
+import { SiteAccess } from "./access.js";
 import {
   checkPassword,
+  clearGithubTrip,
   clearPreviewCookie,
   clearSessionCookie,
+  readGithubTrip,
+  sameText,
+  startGithubTrip,
   createPreviewCookie,
   createSessionCookie,
   editorStamp,
@@ -60,7 +65,7 @@ import {
   shareCookie,
   verifyPassword,
 } from "./auth.js";
-import type { Site, Store } from "./db.js";
+import type { GithubPerson, Site, Store } from "./db.js";
 import { decodeBlocks, decodeForm } from "./form.js";
 import { ALLOWED_TYPES, MAX_BYTES, UploadError, type UploadResult } from "./media.js";
 import {
@@ -82,8 +87,10 @@ import { page, type PageOptions } from "./views/layout.js";
 import { asset, compressed, icon, ICONS } from "./assets.js";
 import {
   editorsPage,
+  type GitHubView,
   gitAccessPage,
   githubCreatePage,
+  noAccessPage,
   shareCard,
   sharePage,
   shareProblemPage,
@@ -122,7 +129,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { LocalRepository } from "./repo.js";
 import type { GitAccess } from "./git-access.js";
-import type { GitHub } from "./github.js";
+import { type GitHub, SIGN_IN_CALLBACK } from "./github.js";
 import { useRemoteAuth } from "./repo.js";
 import { siteTile } from "./views/pixel.js";
 import { findSiteIcon } from "./site-icon.js";
@@ -175,6 +182,13 @@ export interface AppOptions {
   gitAccess?: GitAccess;
   /** The GitHub App this studio connects GitHub through. */
   github?: GitHub;
+  /**
+   * `STUDIO_GITHUB_OWNERS`: GitHub logins that are owners here once they sign in. Unset, the
+   * account that owns the GitHub App is one, when that account is a person.
+   */
+  githubOwners?: string[];
+  /** Replaces reading a site's origin remote, in tests. */
+  originOf?: (path: string) => Promise<string | null>;
   /** Replaces git for clones, in tests. */
   cloneGit?: CloneGit;
   /** How many copies run at once and how large one may grow. */
@@ -215,6 +229,10 @@ type Variables = {
   actor: string;
   viewer: Viewer;
   session: string;
+  /** The sites this person may open: every site, or for a GitHub sign-in those they can push to. */
+  sites: Site[];
+  /** Those sites' ids when they are not all of them, to keep the inbox to the same ones. */
+  among?: string[];
   /** Another origin this one page may post a form to, such as GitHub. */
   formTarget?: string;
   /** Why a "publish later" was not scheduled; the editor shows it with the form as submitted. */
@@ -454,18 +472,72 @@ export function createApp(options: AppOptions) {
     return c.html(thanksPage(), 200);
   });
 
+  const hub = options.local ? undefined : options.github;
+  const access = hub ? new SiteAccess(hub, options.originOf) : undefined;
+  /** Whether people can sign in with GitHub: never in local mode, and only with the app's secret. */
+  const githubSignIn = () => Boolean(hub?.signIn());
+  const namedOwners = (options.githubOwners ?? [])
+    .map((login) => login.trim().toLowerCase())
+    .filter(Boolean);
+  /** The logins that are owners here, for the Git access page. */
+  const githubOwners = () => {
+    if (namedOwners.length > 0) return namedOwners;
+    const made = hub?.config();
+    return made?.ownerType === "User" && made.owner ? [made.owner] : [];
+  };
+  const isGithubOwner = (person: GithubPerson) => {
+    const login = person.login.toLowerCase();
+    if (namedOwners.length > 0) return namedOwners.includes(login);
+    const made = hub?.config();
+    if (made?.ownerType !== "User") return false;
+    return made.ownerId === undefined
+      ? made.owner.toLowerCase() === login
+      : made.ownerId === person.id;
+  };
+  /** Ends with the app it was made through, and with the person being forgotten. */
+  const githubStamp = (person: GithubPerson) =>
+    editorStamp(signingKey, `${person.salt}:${hub?.config()?.id ?? ""}`);
+  const noreply = hub
+    ? `users.noreply.${new URL(hub.web).host.replace(/^www\./, "")}`
+    : "users.noreply.github.com";
+
   /** Who a signed session belongs to now: null once an editor is removed or their password changes. */
   const viewerOf = (session: Session | null): Viewer | null => {
     if (!session || store.isSessionRevoked(session.id)) return null;
     if (session.actor === "studio") return { name: "studio", owner: true };
+    if (session.actor.startsWith("github:")) {
+      if (!githubSignIn()) return null;
+      const person = store.getGithubPerson(Number(session.actor.slice("github:".length)));
+      if (!person || !sameText(session.stamp, githubStamp(person))) return null;
+      return {
+        name: person.name,
+        owner: isGithubOwner(person),
+        github: {
+          id: person.id,
+          login: person.login,
+          email: `${person.id}+${person.login}@${noreply}`,
+        },
+      };
+    }
     const editor = store.getEditor(Number(session.actor.slice("editor:".length)));
     if (!editor || session.stamp !== editorStamp(signingKey, editor.passwordHash)) return null;
     return { name: editor.name, email: editor.email, owner: false };
   };
   const stampFor = (actor: string) => {
     if (actor === "studio") return "-";
+    if (actor.startsWith("github:")) {
+      const person = store.getGithubPerson(Number(actor.slice("github:".length)));
+      return person ? githubStamp(person) : "-";
+    }
     const editor = store.getEditor(Number(actor.slice("editor:".length)));
     return editor ? editorStamp(signingKey, editor.passwordHash) : "-";
+  };
+  /** The sites someone may open: all of them, unless GitHub is what let them in. */
+  const sitesFor = async (who: Viewer) => {
+    const all = store.listSites();
+    if (!who.github || who.owner) return { sites: all };
+    const sites = access ? await access.among(who.github, all) : [];
+    return { sites, among: sites.map((site) => site.id) };
   };
   /** The studio's own session, plus the preview's cookie when the preview lives on a sibling host. */
   const signIn = (c: Context, actor: string) => {
@@ -480,8 +552,8 @@ export function createApp(options: AppOptions) {
       );
     }
   };
-  const signOut = (c: Context) => {
-    // Clearing the cookie is the browser's part; a copy of it must stop working as well.
+  /** Stops the sessions a browser arrived with from working, in any copy of them. */
+  const retire = (c: Context) => {
     const cookies = c.req.header("cookie");
     for (const session of [
       readSession(cookies, signingKey),
@@ -489,6 +561,10 @@ export function createApp(options: AppOptions) {
     ]) {
       if (session) store.revokeSession(session.id, session.expiresAt);
     }
+  };
+  const signOut = (c: Context) => {
+    // Clearing the cookie is the browser's part; a copy of it must stop working as well.
+    retire(c);
     c.header("Set-Cookie", clearSessionCookie(isSecure(c)));
     if (options.cookieDomain) {
       c.header("Set-Cookie", clearPreviewCookie(isSecure(c), options.cookieDomain), {
@@ -514,6 +590,8 @@ export function createApp(options: AppOptions) {
     // The sign-in page needs the stylesheet, and the assets are this app's own code, not data.
     if (
       path === "/sign-in" ||
+      path === "/sign-in/github" ||
+      path === SIGN_IN_CALLBACK ||
       path === "/theme" ||
       path === "/auth/check" ||
       path === "/share" ||
@@ -539,9 +617,12 @@ export function createApp(options: AppOptions) {
     c.set("actor", who.name);
     c.set("viewer", who);
     c.set("session", session.actor);
+    const mine = await sitesFor(who);
+    c.set("sites", mine.sites);
+    c.set("among", mine.among);
     const shell = {
       ...panesOf(c.req.header("cookie")),
-      unread: () => store.countUnread(),
+      unread: () => store.countUnread(mine.among),
       local: options.local,
     };
     return withViewer(who, () => withChrome(shell, next));
@@ -613,6 +694,20 @@ export function createApp(options: AppOptions) {
     app.use(route, ownerOnly);
   }
 
+  // A site someone cannot open does not exist for them, by any address under it. Anything that
+  // changes the site asks GitHub again first, so access taken away there ends here at once.
+  const reachable: MiddlewareHandler = async (c, next) => {
+    const who = c.get("viewer") as Viewer | undefined;
+    if (!who?.github || who.owner) return next();
+    const site = (c.get("sites") as Site[]).find((known) => known.id === c.req.param("id"));
+    if (!site) return c.notFound();
+    const changes = c.req.method !== "GET" && !c.req.path.endsWith("/draft");
+    if (changes && !(await access?.reaches(who.github, site, true))) return c.notFound();
+    return next();
+  };
+  app.use("/sites/:id", reachable);
+  app.use("/sites/:id/*", reachable);
+
   /**
    * Where to send someone after signing in: a page of this studio, or a sibling host
    * under the same domain, such as the preview the proxy asked us to vouch for.
@@ -659,16 +754,18 @@ export function createApp(options: AppOptions) {
     }
   };
 
-  app.get("/auth/check", (c) => {
+  app.get("/auth/check", async (c) => {
     const cookies = c.req.header("cookie");
-    if (
-      viewerOf(readPreviewSession(cookies, signingKey)) ||
-      viewerOf(readSession(cookies, signingKey))
-    ) {
-      return c.body(null, 204);
-    }
     const host = c.req.header("x-forwarded-host");
+    const who =
+      viewerOf(readPreviewSession(cookies, signingKey)) ??
+      viewerOf(readSession(cookies, signingKey));
+    // A GitHub sign-in opens the previews of the sites it opens, and no one else's.
+    const theirs = async (person: Viewer) =>
+      (await sitesFor(person)).sites.some((site) => previewHost(site.devUrl) === host);
+    if (who && (!who.github || who.owner || (await theirs(who)))) return c.body(null, 204);
     if (shareFits(readShareCookie(c.req.header("cookie")), host)) return c.body(null, 204);
+    if (who) return c.text("That preview is not of a site you can open.", 403);
     // A share link: trade the token for a cookie at the studio, which can set one for the whole domain.
     const uri = c.req.header("x-forwarded-uri") ?? "/";
     const token =
@@ -769,9 +866,8 @@ export function createApp(options: AppOptions) {
   const hasEditors = () => store.listEditors().length > 0;
 
   /** Records that the signed-in person has this content open, and says who else does. */
-  const here = (c: { get(key: "viewer"): Viewer }, siteId: string, path: string) => {
-    const who = c.get("viewer");
-    return store.presence({ siteId, path, actor: who.email ?? "owner", name: who.name });
+  const here = (c: Context<{ Variables: Variables }>, siteId: string, path: string) => {
+    return store.presence({ siteId, path, actor: c.get("session"), name: c.get("viewer").name });
   };
 
   app.get("/sign-in", (c) => {
@@ -782,7 +878,72 @@ export function createApp(options: AppOptions) {
       if (next) signIn(c, session!.actor);
       return c.redirect(next ?? "/", 303);
     }
-    return c.html(signInPage({ next, editors: hasEditors() }));
+    return c.html(signInPage({ next, editors: hasEditors(), github: githubSignIn() }));
+  });
+
+  /** Sends the browser to GitHub to say who it is, remembering in a cookie that it was sent. */
+  app.get("/sign-in/github", (c) => {
+    if (!hub || !githubSignIn()) return c.notFound();
+    const next = allowedNext(c.req.query("next")) ?? "";
+    const { cookie, trip } = startGithubTrip(signingKey, next, isSecure(c));
+    const url = hub.authorizeUrl(
+      `${publicOrigin(c)}${SIGN_IN_CALLBACK}`,
+      trip.state,
+      trip.challenge,
+    );
+    if (!url) return c.notFound();
+    c.header("Set-Cookie", cookie);
+    return c.redirect(url, 302);
+  });
+
+  /** GitHub sent the browser back: who it is comes from GitHub itself, never from the address. */
+  app.get(SIGN_IN_CALLBACK, async (c) => {
+    if (!hub || !githubSignIn()) return c.notFound();
+    const address = addressOf(c);
+    const trip = readGithubTrip(c.req.header("cookie"), signingKey);
+    const next = allowedNext(trip?.next) ?? undefined;
+    const refuse = (error: string, status: 400 | 429 = 400) => {
+      c.header("Set-Cookie", clearGithubTrip(isSecure(c)));
+      return c.html(signInPage({ error, next, editors: hasEditors(), github: true }), status);
+    };
+    const limit = signInLimiter.check(`github:${address}`);
+    if (!limit.allowed) {
+      c.header("retry-after", String(limit.retryAfterSeconds));
+      return refuse(
+        `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+        429,
+      );
+    }
+    const started =
+      trip && sameText(c.req.query("state") ?? "", trip.state) && !store.isSessionRevoked(trip.id);
+    if (!trip || !started) {
+      return refuse(
+        "That sign-in was not started in this browser, or it took too long. Start again.",
+      );
+    }
+    // Good for one answer: the same address opened again signs nobody in.
+    store.revokeSession(trip.id, trip.expiresAt);
+    // Whatever GitHub says went wrong is its text in the address bar, so none of it is repeated.
+    if (c.req.query("error")) return refuse("GitHub did not sign you in. Nothing was changed.");
+    let person: GithubPerson;
+    try {
+      const found = await hub.identify(
+        c.req.query("code") ?? "",
+        `${publicOrigin(c)}${SIGN_IN_CALLBACK}`,
+        trip.verifier,
+      );
+      person = store.saveGithubPerson({ ...found, name: found.name || found.login });
+    } catch {
+      return refuse("GitHub did not complete that sign-in. Start again.");
+    }
+    // A session this browser already carried is not kept alongside the new one.
+    retire(c);
+    signInLimiter.clear(`github:${address}`);
+    signIn(c, `github:${person.id}`);
+    c.header("Set-Cookie", clearGithubTrip(isSecure(c)), { append: true });
+    const all = store.listSites();
+    const sites = isGithubOwner(person) ? all : ((await access?.among(person, all)) ?? []);
+    return c.redirect(next ?? (sites.length === 1 ? `/sites/${sites[0]!.id}` : "/"), 303);
   });
 
   app.get("/editors", (c) => c.html(editorsPage({ editors: store.listEditors() })));
@@ -882,7 +1043,13 @@ export function createApp(options: AppOptions) {
     if (!actor) {
       // Deliberately vague, and the same shape whether or not a password was supplied: there is nothing to learn from it.
       return c.html(
-        signInPage({ error: "That did not work.", next, email, editors: hasEditors() }),
+        signInPage({
+          error: "That did not work.",
+          next,
+          email,
+          editors: hasEditors(),
+          github: githubSignIn(),
+        }),
         401,
       );
     }
@@ -900,8 +1067,15 @@ export function createApp(options: AppOptions) {
   });
 
   app.get("/", async (c) => {
-    const sites = store.listSites();
-    return c.html(sitesPage(sites, store.countUnread(), undefined, await liveness.all(sites)));
+    const sites = c.get("sites");
+    const who = c.get("viewer");
+    // Signed in, and GitHub lets them push to nothing here: said plainly, with the way out.
+    if (who.github && !who.owner && sites.length === 0) {
+      return c.html(noAccessPage({ name: who.name, login: who.github.login }));
+    }
+    return c.html(
+      sitesPage(sites, store.countUnread(c.get("among")), undefined, await liveness.all(sites)),
+    );
   });
 
   app.get("/inbox", (c) => {
@@ -909,27 +1083,31 @@ export function createApp(options: AppOptions) {
     const includeSpam = c.req.query("spam") === "1";
     return c.html(
       inboxPage({
-        submissions: store.listSubmissions({ siteId, includeSpam }),
-        sites: store.listSites(),
-        siteId,
+        submissions: store.listSubmissions({ siteId, among: c.get("among"), includeSpam }),
+        sites: c.get("sites"),
+        siteId: siteId && c.get("sites").some((site) => site.id === siteId) ? siteId : undefined,
         includeSpam,
       }),
     );
   });
 
-  /** The inbox as it was filtered when a submission in it was acted on. */
-  const inboxView = (form: FormData) => {
-    const query = new URLSearchParams();
-    const siteId = String(form.get("site") ?? "");
-    if (store.getSite(siteId)) query.set("site", siteId);
-    if (form.get("spam") === "1") query.set("spam", "1");
-    return query.size > 0 ? `/inbox?${query}` : "/inbox";
+  /** Whether a submission is one this person may act on: any, or one from a site they can open. */
+  const inInbox = (c: Context<{ Variables: Variables }>, id: number) => {
+    const among = c.get("among");
+    if (!among) return true;
+    const submission = store.getSubmission(id);
+    return submission !== null && among.includes(submission.siteId);
   };
 
   app.get("/inbox.csv", (c) => {
     const siteId = c.req.query("site") || undefined;
-    const rows = store.listSubmissions({ siteId, includeSpam: false, limit: 5000 });
-    const names = new Map(store.listSites().map((site) => [site.id, site.name]));
+    const rows = store.listSubmissions({
+      siteId,
+      among: c.get("among"),
+      includeSpam: false,
+      limit: 5000,
+    });
+    const names = new Map(c.get("sites").map((site) => [site.id, site.name]));
     const named = rows.map((row) =>
       Object.assign({ site: names.get(row.siteId) ?? row.siteId }, row),
     );
@@ -941,19 +1119,19 @@ export function createApp(options: AppOptions) {
 
   app.post("/inbox/:id/read", async (c) => {
     const id = submissionId(c.req.param("id"));
-    if (id === null) return c.notFound();
+    if (id === null || !inInbox(c, id)) return c.notFound();
     const form = await c.req.formData();
     store.markRead(id, String(form.get("read") ?? "1") === "1");
-    return c.redirect(inboxView(form), 303);
+    return c.redirect(inboxView(c, form), 303);
   });
 
   app.post("/inbox/:id/delete", async (c) => {
     const id = submissionId(c.req.param("id"));
-    if (id === null) return c.notFound();
+    if (id === null || !inInbox(c, id)) return c.notFound();
     store.deleteSubmission(id);
     // A bare POST still deletes; it just has no filter to go back to.
     const form = await c.req.formData().catch(() => new FormData());
-    return c.redirect(inboxView(form), 303);
+    return c.redirect(inboxView(c, form), 303);
   });
 
   /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
@@ -1219,22 +1397,33 @@ export function createApp(options: AppOptions) {
       return { connected: true as const, error: describeError(error) };
     }
   };
-  const gitAccessView = async (extra: Partial<Parameters<typeof gitAccessPage>[0]> = {}) =>
+  const gitAccessView = async (
+    c: Context,
+    extra: Partial<Parameters<typeof gitAccessPage>[0]> = {},
+  ) =>
     gitAccessPage({
       tokens: gitAccess?.tokens() ?? [],
-      github: github
-        ? {
-            config: github.config(),
-            installUrl: github.installUrl(),
-            settingsUrl: github.settingsUrl(),
-            state: await githubState(),
-          }
-        : undefined,
+      github: github ? await githubView(publicOrigin(c)) : undefined,
       ...extra,
     });
+  /** What the page is told about the app: its name and owner, never its key or secret. */
+  const githubView = async (origin: string): Promise<GitHubView> => {
+    const made = (github as GitHub).config();
+    return {
+      config: made ? { slug: made.slug, owner: made.owner, htmlUrl: made.htmlUrl } : null,
+      installUrl: (github as GitHub).installUrl(),
+      settingsUrl: (github as GitHub).settingsUrl(),
+      state: await githubState(),
+      signIn: {
+        ready: githubSignIn(),
+        callback: `${origin}${SIGN_IN_CALLBACK}`,
+        owners: githubOwners(),
+      },
+    };
+  };
 
   app.get("/git-access", async (c) =>
-    gitAccess || github ? c.html(await gitAccessView()) : c.notFound(),
+    gitAccess || github ? c.html(await gitAccessView(c)) : c.notFound(),
   );
 
   /** The page that sends the browser to GitHub with the app's manifest, ready to create. */
@@ -1244,7 +1433,7 @@ export function createApp(options: AppOptions) {
     const organization = String(form.get("organization") ?? "").trim();
     if (organization && !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(organization)) {
       return c.html(
-        await gitAccessView({
+        await gitAccessView(c, {
           flash: { kind: "error", message: "That is not a GitHub organization name." },
         }),
         422,
@@ -1261,7 +1450,7 @@ export function createApp(options: AppOptions) {
       await github.finishCreation(c.req.query("code") ?? "", c.req.query("state") ?? "");
     } catch (error) {
       return c.html(
-        await gitAccessView({ flash: { kind: "error", message: describeError(error) } }),
+        await gitAccessView(c, { flash: { kind: "error", message: describeError(error) } }),
         400,
       );
     }
@@ -1272,9 +1461,10 @@ export function createApp(options: AppOptions) {
   app.get("/git-access/github/installed", async (c) => {
     if (!github) return c.notFound();
     github.forget();
+    access?.forget();
     if (c.req.query("setup_action") === "request") {
       return c.html(
-        await gitAccessView({
+        await gitAccessView(c, {
           flash: {
             kind: "success",
             message:
@@ -1286,8 +1476,24 @@ export function createApp(options: AppOptions) {
     return c.redirect("/sites/new#github", 303);
   });
 
+  /** For an app made before sign-in existed: the client secret its owner generated on GitHub. */
+  app.post("/git-access/github/secret", async (c) => {
+    if (!github || options.local) return c.notFound();
+    const form = await c.req.formData();
+    const problem = github.saveClientSecret(String(form.get("secret") ?? "").trim());
+    return c.html(
+      await gitAccessView(c, {
+        flash: problem
+          ? { kind: "error", message: `Nothing was saved. ${problem}` }
+          : { kind: "success", message: "People can now sign in with GitHub." },
+      }),
+      problem ? 422 : 200,
+    );
+  });
+
   app.post("/git-access/github/refresh", (c) => {
     github?.forget();
+    access?.forget();
     return c.redirect(
       c.req.header("referer")?.includes("/sites/new") ? "/sites/new#github" : "/git-access",
       303,
@@ -1298,8 +1504,11 @@ export function createApp(options: AppOptions) {
     if (!github) return c.notFound();
     const settings = github.settingsUrl();
     await github.disconnect();
+    // Everyone GitHub let in is signed out with it, wherever they are.
+    store.clearGithubPeople();
+    access?.forget();
     return c.html(
-      await gitAccessView({
+      await gitAccessView(c, {
         flash: {
           kind: "success",
           message: "GitHub is disconnected and the app is removed from every account.",
@@ -1320,7 +1529,7 @@ export function createApp(options: AppOptions) {
     );
     if (problem) {
       return c.html(
-        gitAccessView({
+        gitAccessView(c, {
           host,
           tokenError: problem,
           flash: { kind: "error", message: "Nothing was saved." },
@@ -2392,7 +2601,9 @@ export function createApp(options: AppOptions) {
               ? "It no longer passes validation; open it and publish by hand."
               : response.status === 303
                 ? "The person who scheduled it can no longer sign in."
-                : `The publish failed (${response.status}).`;
+                : response.status === 404
+                  ? "The person who scheduled it can no longer open this site."
+                  : `The publish failed (${response.status}).`;
       store.settleScheduled(job.id, outcome ? "failed" : "published", outcome ?? undefined);
     }
   };
@@ -2496,8 +2707,9 @@ export function reviewUrl(state: BranchState, web = "https://github.com"): strin
   return `${web.replace(/\/+$/, "")}/${match[1]}/compare/${base}${encodeURIComponent(branch)}?expand=1`;
 }
 
-/** The owner commits as git's configured identity; an editor commits as themselves. */
+/** The password owner commits as git's configured identity; everyone else commits as themselves. */
 function authorOf(who: Viewer): Author | undefined {
+  if (who.github) return { name: who.name, email: who.github.email };
   return who.owner || !who.email ? undefined : { name: who.name, email: who.email };
 }
 
@@ -2505,6 +2717,24 @@ function authorOf(who: Viewer): Author | undefined {
 function baseOf(entries: Array<[string, string]>): string | undefined {
   const sha = entries.find(([key]) => key === "headSha")?.[1];
   return sha && /^[0-9a-f]{7,64}$/.test(sha) ? sha : undefined;
+}
+
+/** The inbox as it was filtered when a submission in it was acted on. */
+function inboxView(c: Context<{ Variables: Variables }>, form: FormData): string {
+  const query = new URLSearchParams();
+  const siteId = String(form.get("site") ?? "");
+  if (c.get("sites").some((site) => site.id === siteId)) query.set("site", siteId);
+  if (form.get("spam") === "1") query.set("spam", "1");
+  return query.size > 0 ? `/inbox?${query}` : "/inbox";
+}
+
+/** The host a site's preview is served on, or null when it has none. */
+function previewHost(devUrl: string): string | null {
+  try {
+    return new URL(devUrl).host;
+  } catch {
+    return null;
+  }
 }
 
 /** Programs that fetch a pasted link to draw a card for it. */

@@ -97,7 +97,12 @@ The layering:
 - Feature modules the routes call: `elsewhere.ts` (other regions for the
   preview inspector), `search.ts`, `schedule.ts` (time zones for publish-later),
   `deploys.ts` (reads the builder's folder, asks it to roll back),
-  `views/viewer.ts` (who is signed in, per request).
+  `views/viewer.ts` (who is signed in, per request), `github.ts` (the studio's
+  GitHub App: tokens for git, and signing people in), `access.ts` (which sites
+  a GitHub sign-in opens: those GitHub lets the person push to). A middleware
+  on `/sites/:id` turns every other site into a 404, so a new site route needs
+  no check of its own; a route outside it (the inbox, `/auth/check`) must use
+  the request's `sites`.
 - `repo.ts` defines `Repository`, read a file, list a directory, read the head,
   commit a set of files, with `LocalRepository` as the only implementation.
   **Adding a backend means implementing that interface, not branching in
