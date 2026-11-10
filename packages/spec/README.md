@@ -34,4 +34,23 @@ an error. Fields may carry `when` conditions, blocks may declare `variants`,
 and both resolve and validate here. The JSON Schemas for the two `.cms` files
 ship in `json-schema/`.
 
+## Validating a schema you did not write
+
+A field's `pattern` is a regular expression from the schema, and validation
+runs it over the content as it is. A pattern such as `^(a+)+$` can take longer
+than anyone will wait on a long value, and this package does not guard against
+that itself. If the schema or the content comes from somewhere you do not
+control (a pull request, a hosted editor), turn on V8's linear-time fallback
+once, before you first validate:
+
+```ts
+import { setFlagsFromString } from "node:v8";
+
+setFlagsFromString("--enable-experimental-regexp-engine-on-excessive-backtracks");
+```
+
+The `greatcms` command and the studio both do this at start. It does not cover
+a pattern with a backreference or a lookaround, which V8 cannot run in linear
+time: review those, or validate in a worker you can stop.
+
 Documentation: https://github.com/uwenayoallain/thegreatcms/blob/main/apps/docs/content/docs/getting-started.md · Source: https://github.com/uwenayoallain/thegreatcms
