@@ -261,21 +261,21 @@ export function startDevServer(options: DevServerOptions): DevServer {
   child.stdout?.on("data", keep);
   child.stderr?.on("data", keep);
 
-  let exited = false;
+  const state = { exited: false };
   const gone = new Promise<void>((done) => {
     child.once("exit", () => {
-      exited = true;
+      state.exited = true;
       done();
     });
     child.once("error", (error) => {
       output += `${error.message}\n`;
-      exited = true;
+      state.exited = true;
       done();
     });
   });
 
   const signal = (name: NodeJS.Signals) => {
-    if (exited || child.pid === undefined) return;
+    if (state.exited || child.pid === undefined) return;
     try {
       if (windows) spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
       else process.kill(-child.pid, name);
@@ -289,9 +289,9 @@ export function startDevServer(options: DevServerOptions): DevServer {
 
   const deadline = Date.now() + (options.timeoutMs ?? 90_000);
   const ready = (async () => {
-    while (!exited && Date.now() < deadline) {
+    while (!state.exited && Date.now() < deadline) {
       // oxlint-disable-next-line no-await-in-loop -- polling: each try follows the last
-      if (await answers(options.url, 500)) return !exited;
+      if (await answers(options.url, 500)) return !state.exited;
       // oxlint-disable-next-line no-await-in-loop -- polling: each try follows the last
       await Promise.race([gone, new Promise((wake) => setTimeout(wake, 120))]);
     }

@@ -212,6 +212,33 @@ describe("a dev server that says where it is", () => {
   });
 });
 
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A person at a terminal who answers every yes-or-no question the same way. */
+function answering(answer: boolean): PromptPort & { asked: string[] } {
+  const asked: string[] = [];
+  return {
+    asked,
+    interactive: true,
+    note: () => {},
+    select: async () => {
+      throw new Error("not asked");
+    },
+    text: async () => "",
+    confirm: async (question) => {
+      asked.push(question);
+      return answer;
+    },
+  };
+}
+
 describe("running the dev command", () => {
   /** A stand-in dev server: listens on the port it is given, and starts a child of its own. */
   const FAKE = `
@@ -223,14 +250,6 @@ describe("running the dev command", () => {
     console.log("fake dev server starting");
     createServer((_q, r) => r.end("site")).listen(Number(process.argv[2]), "127.0.0.1");
   `;
-  const alive = (pid: number) => {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  };
 
   it("is ready once the address answers, and stops with everything it started", async () => {
     write("fake.cjs", FAKE);
@@ -584,22 +603,7 @@ describe("the command", () => {
   });
 
   describe("when the studio is not installed", () => {
-    const prompt = (answer: boolean): PromptPort & { asked: string[] } => {
-      const asked: string[] = [];
-      return {
-        asked,
-        interactive: true,
-        note: () => {},
-        select: async () => {
-          throw new Error("not asked");
-        },
-        text: async () => "",
-        confirm: async (question) => {
-          asked.push(question);
-          return answer;
-        },
-      };
-    };
+    const prompt = answering;
 
     it("without a terminal, installs nothing and prints the exact command", async () => {
       site("astro");
