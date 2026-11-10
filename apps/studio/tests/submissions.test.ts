@@ -55,6 +55,43 @@ function submit(fields: Record<string, string>, headers: Record<string, string> 
   });
 }
 
+describe("a post with nothing written in it", () => {
+  it.each([
+    ["no fields at all", {}],
+    ["only blank fields", { name: "", message: "   " }],
+    ["only the form's own machinery", { _redirect: "/thanks", _gotcha: "" }],
+  ])("is answered as usual and not kept: %s", async (_, fields: Record<string, string>) => {
+    const response = await submit(fields);
+    expect(response.status).toBe(fields._redirect ? 303 : 200);
+    if (fields._redirect) {
+      expect(response.headers.get("location")).toBe("https://example.com/thanks");
+    } else {
+      expect(await response.text()).toContain("Thank you");
+    }
+    expect(store.listSubmissions({ includeSpam: true })).toHaveLength(0);
+    expect(store.countUnread()).toBe(0);
+    expect(notified).toHaveLength(0);
+  });
+
+  it("does not use up the site's daily allowance", async () => {
+    const one = createApp({
+      store,
+      password: PASSWORD,
+      secret: SECRET,
+      siteSubmissionLimiter: new RateLimiter(1, 60_000),
+    });
+    const send = (fields: Record<string, string>) =>
+      one.request("/f/site-1/contact", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(fields),
+      });
+    expect((await send({})).status).toBe(200);
+    expect((await send({ message: "Hello" })).status).toBe(200);
+    expect(store.listSubmissions({})).toHaveLength(1);
+  });
+});
+
 describe("receiving a submission", () => {
   it("accepts a cross-origin form post from a managed site", async () => {
     const response = await submit({ name: "Ada", email: "ada@example.com", message: "Hello" });

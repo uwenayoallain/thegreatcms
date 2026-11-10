@@ -432,24 +432,33 @@ export function createApp(options: AppOptions) {
       fields[key] = key in fields ? `${fields[key]}, ${text}`.slice(0, 10_000) : text;
     }
 
-    const budget = siteSubmissions.check(siteId);
-    if (!budget.allowed) {
+    const data = contentFields(fields);
+    // Nothing was written in it: the visitor is answered as usual, and no blank card is kept.
+    const blank = Object.values(data).every((value) => value.trim() === "");
+    const budget = blank ? null : siteSubmissions.check(siteId);
+    if (budget && !budget.allowed) {
       return c.text("This site is receiving too many submissions. Try again later.", 429, {
         "retry-after": String(budget.retryAfterSeconds),
       });
     }
 
     const spam = assessSpam(fields);
-    const data = contentFields(fields);
-    store.addSubmission({
-      siteId,
-      form,
-      data,
-      spamScore: spam.score,
-      spamReasons: spam.reasons,
-    });
+    if (!blank) {
+      store.addSubmission({
+        siteId,
+        form,
+        data,
+        spamScore: spam.score,
+        spamReasons: spam.reasons,
+      });
+    }
 
-    if (options.notifier && spam.score < SPAM_THRESHOLD && notifications.check(siteId).allowed) {
+    if (
+      !blank &&
+      options.notifier &&
+      spam.score < SPAM_THRESHOLD &&
+      notifications.check(siteId).allowed
+    ) {
       // Not awaited: the visitor should not wait on an email provider.
       void options.notifier.notify({
         kind: "submission",
