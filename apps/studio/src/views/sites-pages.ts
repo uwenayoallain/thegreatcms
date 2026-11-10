@@ -583,6 +583,7 @@ function githubList(github: GitHubRepositories) {
           ? html`Missing one? <a href="${github.installUrl}">Choose repositories on GitHub</a>.`
           : ""
       }
+      <a href="/git-access">Manage the GitHub connection</a>.
     </p>
     ${
       github.error

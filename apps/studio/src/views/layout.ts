@@ -364,13 +364,6 @@ function navigation(
             : ""
         }
         ${
-          viewer()?.owner && shell().github
-            ? html`<a href="/git-access" aria-current="${current("github")}"
-                >${icon("github")} <span class="label">GitHub</span></a
-              >`
-            : ""
-        }
-        ${
           viewer() && (viewer()?.github || !viewer()?.owner)
             ? html`<p class="signed-in">${personAvatar(viewer()?.name ?? "")} ${viewer()?.name}</p>`
             : ""
