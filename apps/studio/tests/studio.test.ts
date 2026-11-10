@@ -182,7 +182,7 @@ describe("editing a region", () => {
 
     const written = JSON.parse(site.read("content/cms/home.hero.json"));
     expect(written.heading).toBe("Edited in the studio");
-    expect(written._meta.updatedBy).toBe("studio");
+    expect(written._meta.updatedBy).toBe("Owner");
     // External-ness is derived, not typed by hand.
     expect(written.cta).toEqual({ href: "/get-started", label: "Get started" });
   });
@@ -698,7 +698,7 @@ collections:
         headers: signedIn,
         body: publish,
       });
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(kind === "region" ? 200 : 303);
       expect(commits()).toHaveLength(1);
       expect(commitPaths()).toHaveLength(action === "remove-image" ? 1 : 2);
       if (action !== "remove-image")
@@ -833,7 +833,8 @@ collections:
       body,
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/sites/site-1/collections/products/lake-fish");
     expect(commitPaths()).toHaveLength(2);
     expect(commitPaths()).toContain("content/products/lake-fish.json");
     expect(
@@ -983,7 +984,10 @@ collections:
       "f[content]": "Some words in the body.",
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "/sites/site-1/collections/blog/a-brand-new-post",
+    );
     expect(commits()).toHaveLength(1);
 
     // The file name is derived from the title via the schema's slug field.
@@ -1105,7 +1109,7 @@ regions:
     const body = await (await get("/sites/site-1/regions/home.hero")).text();
 
     expect(body).toContain('value="Typed but never saved"');
-    expect(body).toContain("Unsaved edits restored");
+    expect(body).toContain("This form holds unsaved edits");
     expect(body).toContain('action="/sites/site-1/regions/home.hero/draft/discard"');
   });
 
@@ -1115,7 +1119,7 @@ regions:
     const body = await (await get("/sites/site-1/regions/home.hero")).text();
 
     expect(body).not.toContain("Typed but never saved");
-    expect(body).not.toContain("Unsaved edits restored");
+    expect(body).not.toContain("This form holds unsaved edits");
   });
 
   it("serves the live-editing and conditional-field bundles", async () => {

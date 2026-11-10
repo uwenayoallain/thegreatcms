@@ -96,6 +96,23 @@ describe("what an editor is offered", () => {
     expect(offered).toContain(`/sites/${SITE_ID}/regions/home.hero`);
   });
 
+  it("is not shown where on the server a site's folder is", async () => {
+    site = makeSite({ schema: SCHEMA });
+    const folder = site.root.split("/").at(-1) as string;
+    for (const path of ["/", `/sites/${SITE_ID}`]) {
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time keeps the failure readable
+      const owner = await (await get(site, path)).text();
+      expect(owner, path).toContain(`title="${site.root}"`);
+    }
+    const who = await editor();
+    for (const path of ["/", `/sites/${SITE_ID}`]) {
+      // oxlint-disable-next-line no-await-in-loop
+      const shown = await (await get(site, path, who)).text();
+      expect(shown, path).toContain("Example");
+      expect(shown, path).not.toContain(folder);
+    }
+  });
+
   it("shows another person's name wherever they have been, and never their address", async () => {
     site = makeSite({ schema: SCHEMA });
     const who = await editor();

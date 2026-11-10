@@ -60,7 +60,6 @@ export function page(
   const {
     title,
     crumbs = [],
-    flash,
     editor = false,
     liveSite = false,
     section,
@@ -68,6 +67,7 @@ export function page(
     site,
     refresh,
   } = options;
+  const flash = options.flash ?? shell().flash?.();
   const unread = options.unread ?? shell().unread?.() ?? 0;
   const sidebar = chrome ? shell().sidebar : undefined;
   // Top-level screens name themselves, so the bar is there on every screen and nothing below it moves.
@@ -471,7 +471,7 @@ body {
 .handle { position: relative; width: .6rem; cursor: col-resize; z-index: 5; touch-action: none; }
 .handle::before { content: ""; position: absolute; inset: 0 auto 0 50%; width: 1px; background: transparent; transition: background .15s, width .15s; }
 .handle:hover::before, .handle:focus-visible::before, .is-resizing .handle::before { width: 3px; margin-left: -1px; background: var(--accent); }
-.handle:focus-visible { outline: none; }
+.handle:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; border-radius: 3px; }
 .sidebar-handle { position: absolute; top: 0; bottom: 0; right: -.3rem; margin: 0; }
 .split-handle { align-self: stretch; }
 .is-resizing { cursor: col-resize; user-select: none; }
@@ -1127,12 +1127,13 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
   background: radial-gradient(rgba(255, 255, 255, .09) 1px, transparent 1.4px) 0 0 / 14px 14px;
   mask: linear-gradient(115deg, #000 20%, transparent 85%);
 }
-.sign-in-art .brand { padding: 0; border: 0; color: inherit; }
+.sign-in-art .brand { padding: 0; border: 0; color: inherit; max-width: none; }
 .sign-in-art .brand small { color: #8f959d; }
 .sign-in-art .brand .mark { width: 2rem; height: 2rem; border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .14); }
 .sign-in-word { max-width: 36rem; }
 .pixel-word { display: block; width: 100%; height: auto; }
-.sign-in-word p { margin: 1.75rem 0 0; max-width: 30ch; font: 500 clamp(1.05rem, .92rem + .45vw, 1.3rem)/1.45 var(--display); letter-spacing: -.01em; color: #c3c7cc; }
+/* Measured in em, not ch: a ch is the font's own zero, so it changed width when Space Grotesk landed. */
+.sign-in-word p { margin: 1.75rem 0 0; max-width: 19.35em; font: 500 clamp(1.05rem, .92rem + .45vw, 1.3rem)/1.45 var(--display); letter-spacing: -.01em; color: #c3c7cc; }
 /* Squares on a hairline, every eighth one green: a row of commits. */
 .pixel-rule {
   height: 4px; margin: 0; max-width: none;
@@ -1156,7 +1157,8 @@ body.plain:has(.sign-in) main { max-width: none; padding: 0; }
   .sign-in { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .sign-in-art { gap: 1.5rem; padding: 1.1rem 1.25rem 1.25rem; }
   .sign-in-word .pixel-word { max-width: 17rem; }
-  .sign-in-word p { margin-top: 1rem; font-size: 1rem; }
+  /* Two lines in either font at any width, in room that is held, so the form below never moves. */
+  .sign-in-word p { margin-top: 1rem; font-size: min(1rem, 4.4vw); height: 2lh; }
   .sign-in-form { justify-items: stretch; padding: 2rem 1.25rem 3rem; }
   .sign-in-form > * { width: auto; }
 }

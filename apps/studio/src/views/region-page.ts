@@ -221,6 +221,8 @@ function renderBlocks(
       const definition = schema.blocks[type];
       const name = fieldName(["blocks", index, "_type"]);
       const hasError = [...errors.keys()].some((path) => path.startsWith(`blocks[${index}]`));
+      // Two sections of one type are told apart by where they are, as the outline numbers them.
+      const which = `section ${index + 1} (${definition?.label ?? type})`;
       return html`
         <section
           class="block block-collapsible"
@@ -254,17 +256,13 @@ function renderBlocks(
               }
             </div>
           </details>
-          <div
-            class="tools"
-            role="group"
-            aria-label="Reorder or remove ${definition?.label ?? type}"
-          >
+          <div class="tools" role="group" aria-label="Reorder or remove ${which}">
             <button
               type="submit"
               name="action"
               value="up:${index}"
-              aria-label="Move ${definition?.label ?? type} up"
-              title="Move up"
+              aria-label="Move ${which} up"
+              title="Move section ${index + 1} up"
               formnovalidate
               ${index === 0 ? "disabled" : ""}
             >
@@ -274,8 +272,8 @@ function renderBlocks(
               type="submit"
               name="action"
               value="down:${index}"
-              aria-label="Move ${definition?.label ?? type} down"
-              title="Move down"
+              aria-label="Move ${which} down"
+              title="Move section ${index + 1} down"
               formnovalidate
               ${index === blocks.length - 1 ? "disabled" : ""}
             >

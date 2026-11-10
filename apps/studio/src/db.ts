@@ -215,6 +215,10 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       );
     `,
   },
+  {
+    name: "014-share-round",
+    sql: "ALTER TABLE sites ADD COLUMN share_round INTEGER NOT NULL DEFAULT 0;",
+  },
 ];
 
 export interface GithubPerson {
@@ -340,6 +344,19 @@ export class Store {
         changes.deployRoot ?? null,
         id,
       );
+  }
+
+  /** How many times a site has stopped sharing: a preview link opens only in the round it was made in. */
+  shareRound(id: string): number {
+    const row = this.db.prepare("SELECT share_round FROM sites WHERE id = ?").get(id) as
+      | { share_round: number }
+      | undefined;
+    return row?.share_round ?? 0;
+  }
+
+  /** Ends every preview link made for a site so far. */
+  stopSharing(id: string): void {
+    this.db.prepare("UPDATE sites SET share_round = share_round + 1 WHERE id = ?").run(id);
   }
 
   removeSite(id: string): void {

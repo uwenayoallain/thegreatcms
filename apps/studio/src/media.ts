@@ -44,9 +44,12 @@ export class UploadError extends Error {
 export function prepareUpload(config: CmsConfig, input: UploadInput): UploadResult {
   const extension = ALLOWED_TYPES[input.type];
   if (!extension) {
+    const kind = /^[a-z]+\/([a-z0-9]{2,5})(\+xml)?$/i.exec(input.type)?.[1]?.toUpperCase();
     throw new UploadError(
-      `${input.fileName} is a ${input.type || "unknown"} file, which cannot be uploaded.`,
-      `Use one of: ${Object.keys(ALLOWED_TYPES).join(", ")}.`,
+      kind
+        ? `${input.fileName} cannot be uploaded: ${kind} files are not accepted.`
+        : `${input.fileName} cannot be uploaded: it is not a kind of image this studio accepts.`,
+      "Use a PNG, JPEG, WebP, GIF or AVIF image.",
     );
   }
   if (input.bytes.byteLength === 0) {

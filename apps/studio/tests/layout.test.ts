@@ -10,7 +10,7 @@ import { serve } from "@hono/node-server";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
-import { createSessionCookie, editorStamp, sessionKey } from "../src/auth.js";
+import { createSessionCookie, editorStamp, flashCookie, sessionKey } from "../src/auth.js";
 import { Store } from "../src/db.js";
 import { GitAccess } from "../src/git-access.js";
 import { GitHub } from "../src/github.js";
@@ -174,6 +174,7 @@ interface Measure {
   shifts: Array<{ value: number; sources: string[] }>;
   boxes: Record<string, Box | null>;
   font: string;
+  notice: string;
 }
 
 let server: ReturnType<typeof serve>;
@@ -319,12 +320,16 @@ async function newContext(
 }
 
 /** Loads a screen as a first visit would, with fonts and scripts arriving late, and measures it. */
-async function measure(screen: (typeof SCREENS)[number], width: number): Promise<Measure> {
+async function measure(
+  screen: (typeof SCREENS)[number],
+  width: number,
+  extra: Record<string, string> = {},
+): Promise<Measure> {
   const { path, signedOut } = screen;
   const [cookieName, cookieValue] = githubCookie.split("=") as [string, string];
   const context = await newContext(width, {
     signedOut,
-    cookies: screen.github ? { [cookieName]: cookieValue } : undefined,
+    cookies: { ...extra, ...(screen.github ? { [cookieName]: cookieValue } : {}) },
   });
   // Late fonts and bundles are what make a page jump; routing also turns the HTTP cache off.
   await context.route(/\/assets\/.*\.(woff2|js)/, async (route) => {
@@ -390,6 +395,7 @@ async function measure(screen: (typeof SCREENS)[number], width: number): Promise
         shifts,
         boxes,
         font: h1 ? getComputedStyle(h1).fontSize : "",
+        notice: document.querySelector("main > .flash")?.textContent?.trim() ?? "",
       };
     }, LANDMARKS);
   } finally {
@@ -429,6 +435,27 @@ function mismatches(results: Map<string, Measure>): string[] {
   return problems;
 }
 
+/** Where everything on the sign-in screen is, and how many lines its tagline runs to. */
+const places = (page: Page) =>
+  page.evaluate(() => {
+    const found: Record<string, string> = {};
+    let index = 0;
+    for (const element of document.querySelectorAll("body *")) {
+      // The letters inside the wordmark are drawn, not laid out, and are still lifting.
+      if (element.closest("svg") && element.tagName !== "svg") continue;
+      const rect = element.getBoundingClientRect();
+      const name = `${index++} ${element.tagName.toLowerCase()}.${element.getAttribute("class") ?? ""}`;
+      found[name] = `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.height)}`;
+    }
+    found.page = String(document.documentElement.scrollHeight);
+    // Its room is held, so its lines are counted too: a third would spill out of it unseen.
+    const words = document.createRange();
+    words.selectNodeContents(document.querySelector(".sign-in-word p")!);
+    const tops = [...words.getClientRects()].map((rect) => Math.round(rect.y));
+    found.lines = String(new Set(tops).size);
+    return found;
+  });
+
 describe.skipIf(!browser)("layout stability", () => {
   const report: Record<number, Record<string, Measure>> = {};
 
@@ -451,6 +478,68 @@ describe.skipIf(!browser)("layout stability", () => {
       .map(([name, result]) => `${name}: ${result.cls.toFixed(4)}`);
     expect.soft(shifted).toEqual([]);
     expect.soft(mismatches(results)).toEqual([]);
+  });
+
+  it.each([375, 1280])(
+    "at %ipx, a notice left by an action is on the page from its first paint",
+    async (width) => {
+      const [name, value] = flashCookie(sessionKey(SECRET, PASSWORD), "studio", {
+        kind: "success",
+        message: "Settings saved.",
+      })
+        .split(";")[0]!
+        .split("=") as [string, string];
+      const result = await measure({ name: "site with a notice", path: "/sites/site-1" }, width, {
+        [name]: value,
+      });
+      expect(result.notice).toBe("Settings saved.");
+      expect(result.shifts).toEqual([]);
+    },
+  );
+
+  it("lays the sign-in screen out the same before and after its font arrives, at any width", async () => {
+    const pages: Page[] = [];
+    const contexts = await Promise.all(
+      [false, true].map(() => newContext(1280, { signedOut: true })),
+    );
+    try {
+      // One browser never gets the font, the other has it: what a late font moves is their difference.
+      await contexts[0]!.route(/\.woff2/, (route) => route.abort());
+      for (const context of contexts) {
+        // oxlint-disable-next-line no-await-in-loop
+        const page = await context.newPage();
+        // oxlint-disable-next-line no-await-in-loop
+        await page.goto(`${origin}/sign-in`, { waitUntil: "load" });
+        // oxlint-disable-next-line no-await-in-loop
+        await page.evaluate(() => document.fonts.ready.then(() => undefined)).catch(() => {});
+        pages.push(page);
+      }
+      const faces = await Promise.all(
+        pages.map((page) =>
+          page.evaluate(() => document.fonts.check('700 16px "Space Grotesk"', "Sign in")),
+        ),
+      );
+      expect(faces).toEqual([false, true]);
+      const moved: string[] = [];
+      for (let width = 300; width <= 1700; width += 4) {
+        // oxlint-disable-next-line no-await-in-loop
+        await Promise.all(pages.map((page) => page.setViewportSize({ width, height: 900 })));
+        // oxlint-disable-next-line no-await-in-loop
+        const [without, withFont] = (await Promise.all(pages.map(places))) as [
+          Record<string, string>,
+          Record<string, string>,
+        ];
+        if (withFont.lines !== "2")
+          moved.push(`${width}px: ${withFont.lines} lines under the wordmark`);
+        for (const [name, place] of Object.entries(without)) {
+          if (withFont[name] !== place)
+            moved.push(`${width}px ${name}: ${place} -> ${withFont[name]}`);
+        }
+      }
+      expect(moved.slice(0, 12)).toEqual([]);
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()));
+    }
   });
 
   it.each([375, 1280])(

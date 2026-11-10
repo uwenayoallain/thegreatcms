@@ -401,6 +401,10 @@ describe("copying from Git", () => {
     ({ document } = await page(target, "/sites/new"));
     expect(document.querySelector("meta[http-equiv=refresh]")).toBeNull();
     expect(document.body.textContent).toContain("asked for a sign-in");
+    // A mistyped public address gets the same answer from the host, so both are named.
+    expect(document.body.textContent).toContain("there is no repository at that address");
+    expect(document.body.textContent).toContain("it is private and this studio has no access");
+    expect(document.body.textContent).toMatch(/Check the address for a typing mistake/);
     expect(existsSync(join(root, "private"))).toBe(false);
     expect(existsSync(join(root, ".private.cloning"))).toBe(false);
 

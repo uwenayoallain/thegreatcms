@@ -64,19 +64,34 @@ const SHARE_DAYS = 7;
  * A preview link for someone without an account: the site it is for, when it stops working, and
  * a signature. It opens the preview and nothing else; the studio never reads it as a session.
  */
-export function createShareToken(secret: string, siteId: string, now = Date.now()): string {
-  const payload = `${siteId}.${now + SHARE_DAYS * 86_400_000}`;
+export function createShareToken(
+  secret: string,
+  siteId: string,
+  now = Date.now(),
+  round = 0,
+): string {
+  // A site that never stopped sharing signs what it always did, so links made before still open.
+  const payload = `${siteId}${round > 0 ? `.r${round}` : ""}.${now + SHARE_DAYS * 86_400_000}`;
   return `${payload}.${sign(payload, keyFor(secret, "share"))}`;
 }
 
-/** The site a share token is for, or null when it is forged or has run out. */
-export function readShareToken(token: string | undefined, secret: string): string | null {
+/**
+ * The site a share token is for, or null when it is forged, has run out, or was made before
+ * that site last stopped sharing. `roundOf` says how many times a site has.
+ */
+export function readShareToken(
+  token: string | undefined,
+  secret: string,
+  roundOf: (siteId: string) => number = () => 0,
+): string | null {
   const parts = decoded(token)?.split(".");
-  if (parts?.length !== 3) return null;
-  const [siteId, expiry, signature] = parts as [string, string, string];
-  if (!constantTimeEqual(sign(`${siteId}.${expiry}`, keyFor(secret, "share")), signature))
-    return null;
+  if (!parts || parts.length < 3 || parts.length > 4) return null;
+  const signature = parts.pop() as string;
+  if (!constantTimeEqual(sign(parts.join("."), keyFor(secret, "share")), signature)) return null;
+  const expiry = parts.pop() as string;
   if (!(Number(expiry) > Date.now())) return null;
+  const [siteId, round = "r0"] = parts as [string, string?];
+  if (!/^r\d+$/.test(round) || Number(round.slice(1)) !== roundOf(siteId)) return null;
   return siteId;
 }
 
@@ -156,6 +171,54 @@ export function clearGithubTrip(secure = false): string {
   return `${GITHUB_COOKIE}=; Path=/sign-in/github; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
 }
 
+const FLASH_COOKIE = "greatcms_flash";
+const FLASH_SECONDS = 60;
+
+/** What an action answers with once the browser has followed its redirect. */
+export interface Flash {
+  kind: "success" | "error";
+  message: string;
+}
+
+/** A notice for the next page this person opens: signed, theirs alone, and gone in a minute. */
+export function flashCookie(
+  secret: string,
+  actor: string,
+  flash: Flash,
+  secure = false,
+  now = Date.now(),
+): string {
+  const text = Buffer.from(flash.message.slice(0, 400)).toString("base64url");
+  const payload = `${flash.kind}.${text}.${now + FLASH_SECONDS * 1000}`;
+  const signature = sign(`${actor} ${payload}`, keyFor(secret, "flash"));
+  return `${FLASH_COOKIE}=${payload}.${signature}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${FLASH_SECONDS}${cookieScope(secure)}`;
+}
+
+/** The notice waiting for this person, or null when there is none, it is not theirs, or it ran out. */
+export function readFlash(
+  cookieHeader: string | undefined,
+  secret: string,
+  actor: string,
+  now = Date.now(),
+): Flash | null {
+  const parts = parseCookies(cookieHeader)[FLASH_COOKIE]?.split(".");
+  if (parts?.length !== 4) return null;
+  const [kind, text, expiry, signature] = parts as [string, string, string, string];
+  if (kind !== "success" && kind !== "error") return null;
+  const expected = sign(`${actor} ${kind}.${text}.${expiry}`, keyFor(secret, "flash"));
+  if (!constantTimeEqual(expected, signature)) return null;
+  if (!(Number(expiry) >= now)) return null;
+  return { kind, message: Buffer.from(text, "base64url").toString() };
+}
+
+export function hasFlash(cookieHeader: string | undefined): boolean {
+  return FLASH_COOKIE in parseCookies(cookieHeader);
+}
+
+export function clearFlash(secure = false): string {
+  return `${FLASH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
+}
+
 /** Whether two strings match, taking as long whether or not they do. */
 export function sameText(a: string, b: string): boolean {
   return constantTimeEqual(sign(a, "compare"), sign(b, "compare"));
@@ -207,7 +270,7 @@ function readSigned(raw: string | undefined, key: string): Session | null {
 /** One key per kind of token, so none of them can be passed off as another. */
 function keyFor(
   secret: string,
-  purpose: "session" | "preview" | "share" | "stamp" | "github",
+  purpose: "session" | "preview" | "share" | "stamp" | "github" | "flash",
 ): string {
   return createHmac("sha256", secret).update(`greatcms ${purpose}`).digest("hex");
 }

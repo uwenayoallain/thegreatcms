@@ -112,12 +112,26 @@ describe("preparing an upload", () => {
   it("refuses a type that is not an image", () => {
     expect(() => upload({ type: "application/pdf", fileName: "invoice.pdf" })).toThrow(UploadError);
     expect(() => upload({ type: "application/pdf", fileName: "invoice.pdf" })).toThrow(
-      /image\/png/,
+      "invoice.pdf cannot be uploaded: PDF files are not accepted.\n  fix: Use a PNG, JPEG, WebP, GIF or AVIF image.",
     );
   });
 
-  it("refuses SVG, which is a script-bearing document", () => {
+  it("refuses SVG, which is a script-bearing document, and says so in plain words", () => {
     expect(() => upload({ type: "image/svg+xml", fileName: "logo.svg" })).toThrow(UploadError);
+    expect(() => upload({ type: "image/svg+xml", fileName: "logo.svg" })).toThrow(
+      /^logo\.svg cannot be uploaded: SVG files are not accepted\./,
+    );
+    expect(() => upload({ type: "image/svg+xml", fileName: "logo.svg" })).not.toThrow(
+      /a image|image\/svg/,
+    );
+  });
+
+  it("does not guess at a type it cannot name", () => {
+    for (const type of ["", "application/vnd.ms-excel", "nonsense"]) {
+      expect(() => upload({ type, fileName: "sheet.xls" })).toThrow(
+        /^sheet\.xls cannot be uploaded: it is not a kind of image this studio accepts\./,
+      );
+    }
   });
 
   it("refuses a file over the size limit, and says how big it was", () => {

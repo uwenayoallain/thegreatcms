@@ -442,7 +442,8 @@ export function cloneFailure(error: Error & { stderr?: string }): string {
       /could not read Username|Authentication failed|terminal prompts disabled/i.test(line),
     )
   ) {
-    return "The repository asked for a sign-in this studio does not have: add a key or token for it, then try again.";
+    // A host answers a repository that is not there exactly as it answers a private one.
+    return "The host asked for a sign-in. Either there is no repository at that address, or it is private and this studio has no access to it.\n  fix: check the address for a typing mistake, or give the studio access under Git access, then try again.";
   }
   if (text.some((line) => /Remote branch .* not found/i.test(line))) {
     return "That branch does not exist in the repository.";

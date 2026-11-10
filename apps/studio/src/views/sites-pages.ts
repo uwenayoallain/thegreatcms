@@ -5,6 +5,7 @@ import type { Site } from "../db.js";
 import type { CmsSchema } from "@greatcms/spec";
 import type { CloneState, Folder } from "../connect.js";
 import type { BranchState } from "../repo.js";
+import { stopSharing } from "./account-pages.js";
 import { siteNav } from "./editor-parts.js";
 import { chrome } from "./chrome.js";
 import { page, type PageOptions, withRemedy } from "./layout.js";
@@ -55,9 +56,13 @@ export function sitesPage(
                       ${siteAvatar(site.id)}
                       <div class="site-card-body">
                         <h2><a href="/sites/${site.id}">${site.name}</a></h2>
-                        <p class="path" title="${site.path}">
-                          <code>${shortPath(site.path)}</code>
-                        </p>
+                        ${
+                          owner
+                            ? html`<p class="path" title="${site.path}">
+                                <code>${shortPath(site.path)}</code>
+                              </p>`
+                            : ""
+                        }
                         ${previewStatus(site, running.get(site.id))}
                       </div>
                     </li>
@@ -141,6 +146,7 @@ export function newSitePage(
           devUrl: editing.devUrl,
           deployRoot: editing.deployRoot,
           branch: options.branch?.branch ?? "",
+          pushAfterPublish: editing.pushAfterPublish ? "on" : "",
         }
       : {});
   const onDefault = Boolean(
@@ -335,7 +341,7 @@ export function newSitePage(
                       id="pushAfterPublish"
                       name="pushAfterPublish"
                       aria-describedby="push-hint"
-                      ${editing.pushAfterPublish ? html`checked` : ""}
+                      ${values.pushAfterPublish === "on" ? html`checked` : ""}
                     />
                     <label for="pushAfterPublish">Push after every publish</label>
                   </div>
@@ -359,6 +365,18 @@ export function newSitePage(
           <a class="button secondary" href="${editing ? `/sites/${editing.id}` : "/"}">Cancel</a>
         </div>
       </form>
+      ${
+        editing?.devUrl
+          ? html`<section class="danger-zone" aria-labelledby="sharing">
+              <h2 id="sharing">Preview links</h2>
+              <p>
+                A preview link opens this site's preview for seven days, for anyone who has it. Stop
+                sharing ends every link made for this site so far; other sites' links keep working.
+              </p>
+              ${stopSharing(editing)}
+            </section>`
+          : ""
+      }
       ${
         editing && !chrome().local
           ? html`<section class="danger-zone" aria-labelledby="danger">
@@ -421,7 +439,7 @@ function connectSources(options: Parameters<typeof newSitePage>[0]) {
                     <strong>${clone.folder}</strong>
                     <span class="error-text"
                       >Not copied:
-                      ${clone.state === "failed" ? clone.reason : ""}${
+                      ${clone.state === "failed" ? withRemedy(clone.reason).join(" ") : ""}${
                         gitAccess && clone.state === "failed" && clone.reason.includes("sign-in")
                           ? html` <a href="/git-access">Set up Git access</a>.`
                           : ""

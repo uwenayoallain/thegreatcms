@@ -1,6 +1,7 @@
 /** The language the studio's own chrome speaks and formats dates in; content has its own, per site. */
 
 import { html } from "hono/html";
+import { chrome } from "./chrome.js";
 
 let current = "en";
 
@@ -17,7 +18,10 @@ export function locale(): string {
   return current;
 }
 
-/** SQLite's `datetime('now')` is UTC without a zone marker; say so rather than let the browser guess. */
+/** The zone times are shown in: the studio's, the same one "publish later" is typed in. */
+const zone = () => chrome().timeZone ?? "UTC";
+
+/** SQLite's `datetime('now')` is UTC without a zone marker; read as that, shown in the studio's zone. */
 export function when(stored: string) {
   const date = new Date(
     /[zZ]|[+-]\d\d:\d\d$/.test(stored) ? stored : `${stored.replace(" ", "T")}Z`,
@@ -29,9 +33,10 @@ export function when(stored: string) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: zone(),
+    timeZoneName: "short",
   });
-  return html`<time datetime="${date.toISOString()}">${label} UTC</time>`;
+  return html`<time datetime="${date.toISOString()}">${label}</time>`;
 }
 
 const STEPS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
@@ -49,18 +54,19 @@ const formatterCache = new Map<
   string,
   { relative: Intl.RelativeTimeFormat; exact: Intl.DateTimeFormat }
 >();
-function formatters(tag: string) {
-  let found = formatterCache.get(tag);
+function formatters(tag: string, timeZone: string) {
+  const key = `${tag} ${timeZone}`;
+  let found = formatterCache.get(key);
   if (!found) {
     found = {
       relative: new Intl.RelativeTimeFormat(tag, { numeric: "auto" }),
       exact: new Intl.DateTimeFormat(tag, {
         dateStyle: "medium",
-        timeStyle: "short",
-        timeZone: "UTC",
+        timeStyle: "long",
+        timeZone,
       }),
     };
-    formatterCache.set(tag, found);
+    formatterCache.set(key, found);
   }
   return found;
 }
@@ -73,7 +79,7 @@ export function ago(stored: string, now = Date.now()) {
   const label =
     unit === "second"
       ? "just now"
-      : formatters(locale()).relative.format(Math.round(seconds / size), unit);
-  const exact = formatters(locale()).exact.format(date);
-  return html`<time datetime="${date.toISOString()}" title="${exact} UTC">${label}</time>`;
+      : formatters(locale(), zone()).relative.format(Math.round(seconds / size), unit);
+  const exact = formatters(locale(), zone()).exact.format(date);
+  return html`<time datetime="${date.toISOString()}" title="${exact}">${label}</time>`;
 }

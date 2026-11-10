@@ -43,7 +43,11 @@ import { setFlagsFromString } from "node:v8";
 import { SiteAccess } from "./access.js";
 import {
   checkPassword,
+  clearFlash,
   clearGithubTrip,
+  flashCookie,
+  hasFlash,
+  readFlash,
   clearPreviewCookie,
   clearSessionCookie,
   readGithubTrip,
@@ -145,6 +149,8 @@ export interface AppOptions {
   /** The zone "publish later" times are typed in; defaults to STUDIO_TIMEZONE or the server's. */
   timeZone?: string;
   password: string;
+  /** `STUDIO_OWNER_NAME`: what the person who signs in with the studio's password is called. */
+  ownerName?: string;
   secret: string;
   /** Injected in tests so routes can be driven without touching the network. */
   fetch?: typeof globalThis.fetch;
@@ -275,6 +281,8 @@ export function createApp(options: AppOptions) {
   // Ten guesses per quarter hour: no bother to a person who mistyped, a wall to a script.
   const signInLimiter = options.signInLimiter ?? new RateLimiter(10, 15 * 60_000);
   const signingKey = sessionKey(secret, password);
+  const ownerName = options.ownerName?.trim().slice(0, 80) || "Owner";
+  const timeZone = options.timeZone ?? studioTimeZone();
 
   /** Who is asking, for rate limiting. */
   const addressOf = (c: { req: { header(name: string): string | undefined }; env: unknown }) => {
@@ -428,24 +436,33 @@ export function createApp(options: AppOptions) {
       fields[key] = key in fields ? `${fields[key]}, ${text}`.slice(0, 10_000) : text;
     }
 
-    const budget = siteSubmissions.check(siteId);
-    if (!budget.allowed) {
+    const data = contentFields(fields);
+    // Nothing was written in it: the visitor is answered as usual, and no blank card is kept.
+    const blank = Object.values(data).every((value) => value.trim() === "");
+    const budget = blank ? null : siteSubmissions.check(siteId);
+    if (budget && !budget.allowed) {
       return c.text("This site is receiving too many submissions. Try again later.", 429, {
         "retry-after": String(budget.retryAfterSeconds),
       });
     }
 
     const spam = assessSpam(fields);
-    const data = contentFields(fields);
-    store.addSubmission({
-      siteId,
-      form,
-      data,
-      spamScore: spam.score,
-      spamReasons: spam.reasons,
-    });
+    if (!blank) {
+      store.addSubmission({
+        siteId,
+        form,
+        data,
+        spamScore: spam.score,
+        spamReasons: spam.reasons,
+      });
+    }
 
-    if (options.notifier && spam.score < SPAM_THRESHOLD && notifications.check(siteId).allowed) {
+    if (
+      !blank &&
+      options.notifier &&
+      spam.score < SPAM_THRESHOLD &&
+      notifications.check(siteId).allowed
+    ) {
       // Not awaited: the visitor should not wait on an email provider.
       void options.notifier.notify({
         kind: "submission",
@@ -504,7 +521,7 @@ export function createApp(options: AppOptions) {
   /** Who a signed session belongs to now: null once an editor is removed or their password changes. */
   const viewerOf = (session: Session | null): Viewer | null => {
     if (!session || store.isSessionRevoked(session.id)) return null;
-    if (session.actor === "studio") return { name: "studio", owner: true };
+    if (session.actor === "studio") return { name: ownerName, owner: true };
     if (session.actor.startsWith("github:")) {
       if (!githubSignIn()) return null;
       const person = store.getGithubPerson(Number(session.actor.slice("github:".length)));
@@ -620,13 +637,41 @@ export function createApp(options: AppOptions) {
     const mine = await sitesFor(who);
     c.set("sites", mine.sites);
     c.set("among", mine.among);
+    // A notice an action left behind: shown by the first page drawn after it, then forgotten.
+    const waiting =
+      c.req.method === "GET" ? readFlash(c.req.header("cookie"), signingKey, session.actor) : null;
+    let shown = false;
     const shell = {
       ...panesOf(c.req.header("cookie")),
       unread: () => store.countUnread(mine.among),
       local: options.local,
+      timeZone,
+      flash: () => {
+        shown = true;
+        return waiting ?? undefined;
+      },
     };
-    return withViewer(who, () => withChrome(shell, next));
+    await withViewer(who, () => withChrome(shell, next));
+    const stale = c.req.method === "GET" && !waiting && hasFlash(c.req.header("cookie"));
+    if ((shown && waiting) || (stale && c.res.status === 200)) {
+      c.header("Set-Cookie", clearFlash(isSecure(c)), { append: true });
+    }
   });
+
+  /** Answers an action with a redirect, and a notice for the page it lands on. */
+  const done = (
+    c: Context<{ Variables: Variables }>,
+    to: string,
+    message: string,
+    kind: "success" | "error" = "success",
+  ) => {
+    c.header(
+      "Set-Cookie",
+      flashCookie(signingKey, c.get("session"), { kind, message }, isSecure(c)),
+      { append: true },
+    );
+    return c.redirect(to, 303);
+  };
 
   /** A plain form post, so the switch works before any script has loaded, or without one. */
   app.post("/theme", async (c) => {
@@ -742,9 +787,10 @@ export function createApp(options: AppOptions) {
    * otherwise a redirect to sign in that comes back to the page it wanted. Caddy's
    * `forward_auth` sends the original request's host and path in these headers.
    */
+  const shareRound = (siteId: string) => store.shareRound(siteId);
   /** A share token is good for the preview host of the site it names, and no other. */
   const shareFits = (token: string | undefined, host: string | undefined) => {
-    const siteId = readShareToken(token, signingKey);
+    const siteId = readShareToken(token, signingKey, shareRound);
     const site = siteId ? store.getSite(siteId) : null;
     if (!site?.devUrl || !host) return false;
     try {
@@ -800,7 +846,7 @@ export function createApp(options: AppOptions) {
   app.get("/share", (c) => {
     const token = c.req.query("token");
     const next = allowedNext(c.req.query("next"));
-    const siteId = readShareToken(token, signingKey);
+    const siteId = readShareToken(token, signingKey, shareRound);
     if (!token || !siteId || !next || next.startsWith("/")) {
       return c.html(shareProblemPage(), 403);
     }
@@ -823,10 +869,23 @@ export function createApp(options: AppOptions) {
     let url = new URL(path.startsWith("/") ? path : "/", preview);
     // `//elsewhere` is a path to another host: the token would travel with it.
     if (url.origin !== preview.origin) url = new URL("/", preview);
-    const token = createShareToken(signingKey, site.id);
+    const token = createShareToken(signingKey, site.id, Date.now(), store.shareRound(site.id));
     url.searchParams.set("greatcms-share", token);
     const until = new Date(Number(token.split(".").at(-2))).toISOString();
     return c.html(sharePage({ site, url: url.href, until }));
+  });
+
+  /** Ends this site's preview links, and no other site's: the next link made starts a new round. */
+  app.post("/sites/:id/share/stop", (c) => {
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.notFound();
+    store.stopSharing(site.id);
+    const back = c.get("viewer").owner ? `/sites/${site.id}/settings` : `/sites/${site.id}`;
+    return done(
+      c,
+      back,
+      `Every preview link made for ${site.name} so far has stopped working. A new one works as usual.`,
+    );
   });
 
   app.get("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|greatcms-logo\\.png}", (c) => {
@@ -1005,8 +1064,9 @@ export function createApp(options: AppOptions) {
 
   app.post("/editors/:id/delete", (c) => {
     const editor = store.getEditor(Number(c.req.param("id")));
-    if (editor) store.removeEditor(editor.id);
-    return c.redirect("/editors", 303);
+    if (!editor) return c.redirect("/editors", 303);
+    store.removeEditor(editor.id);
+    return done(c, "/editors", `${editor.name} can no longer sign in.`);
   });
 
   app.post("/sign-in", async (c) => {
@@ -1121,8 +1181,9 @@ export function createApp(options: AppOptions) {
     const id = submissionId(c.req.param("id"));
     if (id === null || !inInbox(c, id)) return c.notFound();
     const form = await c.req.formData();
-    store.markRead(id, String(form.get("read") ?? "1") === "1");
-    return c.redirect(inboxView(c, form), 303);
+    const read = String(form.get("read") ?? "1") === "1";
+    store.markRead(id, read);
+    return done(c, inboxView(c, form), read ? "Marked as read." : "Marked as unread.");
   });
 
   app.post("/inbox/:id/delete", async (c) => {
@@ -1131,7 +1192,7 @@ export function createApp(options: AppOptions) {
     store.deleteSubmission(id);
     // A bare POST still deletes; it just has no filter to go back to.
     const form = await c.req.formData().catch(() => new FormData());
-    return c.redirect(inboxView(c, form), 303);
+    return done(c, inboxView(c, form), "The submission is deleted.");
   });
 
   /** The repositories the GitHub App reaches, and which are already here, for the connect page. */
@@ -1228,7 +1289,7 @@ export function createApp(options: AppOptions) {
     }
     store.addSite(site);
     sitesChanged();
-    return c.redirect(`/sites/${site.id}`, 303);
+    return done(c, `/sites/${site.id}`, `${site.name} is connected.`);
   };
 
   app.post("/sites", async (c) => {
@@ -1473,7 +1534,7 @@ export function createApp(options: AppOptions) {
         }),
       );
     }
-    return c.redirect("/sites/new#github", 303);
+    return done(c, "/sites/new#github", "GitHub is connected. Choose a repository to copy.");
   });
 
   /** For an app made before sign-in existed: the client secret its owner generated on GitHub. */
@@ -1494,9 +1555,10 @@ export function createApp(options: AppOptions) {
   app.post("/git-access/github/refresh", (c) => {
     github?.forget();
     access?.forget();
-    return c.redirect(
+    return done(
+      c,
       c.req.header("referer")?.includes("/sites/new") ? "/sites/new#github" : "/git-access",
-      303,
+      "Asked GitHub again: this is what it reports now.",
     );
   });
 
@@ -1537,13 +1599,14 @@ export function createApp(options: AppOptions) {
         422,
       );
     }
-    return c.redirect("/git-access", 303);
+    return done(c, "/git-access", `The token for ${hostLabel(host)} is saved.`);
   });
 
   app.post("/git-access/token/delete", async (c) => {
     const form = await c.req.formData();
-    gitAccess?.removeToken(String(form.get("host") ?? ""));
-    return c.redirect("/git-access", 303);
+    const host = String(form.get("host") ?? "");
+    gitAccess?.removeToken(host);
+    return done(c, "/git-access", `The token for ${hostLabel(host)} is removed.`);
   });
 
   app.post("/sites/clone/dismiss", async (c) => {
@@ -1574,6 +1637,7 @@ export function createApp(options: AppOptions) {
       devUrl: String(form.get("devUrl") ?? "").trim(),
       deployRoot: String(form.get("deployRoot") ?? "").trim(),
       branch: String(form.get("branch") ?? "").trim(),
+      pushAfterPublish: form.get("pushAfterPublish") === "on" ? "on" : "",
     };
     const client = new SiteClient(site);
     const branch = await client.branchState().catch(() => null);
@@ -1627,18 +1691,17 @@ export function createApp(options: AppOptions) {
     store.updateSite(site.id, {
       name: values.name,
       devUrl: values.devUrl,
-      pushAfterPublish: form.get("pushAfterPublish") === "on",
+      pushAfterPublish: values.pushAfterPublish === "on",
       deployRoot: values.deployRoot,
     });
     sitesChanged();
-    return c.redirect(`/sites/${site.id}`, 303);
+    return done(c, `/sites/${site.id}`, "Settings saved.");
   });
 
   /**
    * "Publish later": the form is kept as submitted, and replayed through the ordinary publish
    * when it falls due, so validation, the conflict check and authorship are the same as now.
    */
-  const timeZone = options.timeZone ?? studioTimeZone();
   for (const base of ["/sites/:id/regions/:regionId", "/sites/:id/collections/:name/:slug"]) {
     app.post(base, async (c, next) => {
       const form = await c.req.formData();
@@ -1677,7 +1740,11 @@ export function createApp(options: AppOptions) {
         actor: c.get("session"),
         author: authorOf(who) ?? null,
       });
-      return c.redirect(`/sites/${site.id}#scheduled`, 303);
+      return done(
+        c,
+        `/sites/${site.id}`,
+        "Scheduled. It is listed under Scheduled until it publishes.",
+      );
     });
   }
 
@@ -1685,7 +1752,7 @@ export function createApp(options: AppOptions) {
     const job = store.getScheduled(Number(c.req.param("job")));
     if (!job || job.siteId !== c.req.param("id")) return c.notFound();
     store.settleScheduled(job.id, "cancelled", `cancelled by ${c.get("actor")}`);
-    return c.redirect(`/sites/${job.siteId}#scheduled`, 303);
+    return done(c, `/sites/${job.siteId}`, `The scheduled publish of ${job.label} is cancelled.`);
   });
 
   app.get("/sites/:id/search", async (c) => {
@@ -1711,7 +1778,11 @@ export function createApp(options: AppOptions) {
     if (!(await requestRollback(site.deployRoot, sha))) {
       return c.html(errorPage(site.name, "There is no release of that commit to go back to."), 404);
     }
-    return c.redirect(`/sites/${site.id}#live`, 303);
+    return done(
+      c,
+      `/sites/${site.id}`,
+      `Asked the builder to go back to ${sha.slice(0, 7)}. The live site changes once it has.`,
+    );
   });
 
   app.get("/sites/:id/pending-media/:token/:index", (c) => {
@@ -1797,7 +1868,7 @@ export function createApp(options: AppOptions) {
       branch,
       reviewUrl: branch ? reviewUrl(branch, options.github?.web) : undefined,
       live,
-      scheduled: { jobs: store.listScheduled(site.id), timeZone },
+      scheduled: { jobs: store.listScheduled(site.id), timeZone, owner: ownerName },
       running,
       activity,
       counts: Object.fromEntries(names.map((name, index) => [name, counts[index] ?? 0])),
@@ -1819,7 +1890,7 @@ export function createApp(options: AppOptions) {
     const site = store.getSite(c.req.param("id"));
     if (!site) return c.notFound();
     const pushed = await new SiteClient(site).push();
-    if (pushed.ok) return c.redirect(`/sites/${site.id}`, 303);
+    if (pushed.ok) return done(c, `/sites/${site.id}`, `Pushed to ${pushed.upstream}.`);
 
     try {
       return c.html(await renderSitePage(c, site, { kind: "error", message: pushed.reason }), 502);
@@ -1829,9 +1900,15 @@ export function createApp(options: AppOptions) {
   });
 
   app.post("/sites/:id/delete", (c) => {
-    store.removeSite(c.req.param("id"));
+    const site = store.getSite(c.req.param("id"));
+    if (!site) return c.redirect("/", 303);
+    store.removeSite(site.id);
     sitesChanged();
-    return c.redirect("/", 303);
+    return done(
+      c,
+      "/",
+      `${site.name} is disconnected. Its folder and its content are as they were.`,
+    );
   });
 
   /** Collections are edited with the same generated forms and the same validation as regions. */
@@ -1949,7 +2026,11 @@ export function createApp(options: AppOptions) {
         actor: c.get("actor"),
         author: authorOf(c.get("viewer")),
       });
-      return c.redirect(`/sites/${site.id}/collections/${name}`, 303);
+      return done(
+        c,
+        `/sites/${site.id}/collections/${name}`,
+        `Deleted “${entryTitle(context.schema.collections[name]!, entry.data, slug)}”.`,
+      );
     } catch (error) {
       return c.html(errorPage(site.name, describeError(error)), 502);
     }
@@ -2166,13 +2247,23 @@ export function createApp(options: AppOptions) {
         lines: [`commit ${result.commitSha.slice(0, 7)}`],
       });
 
+      const flash = await publishedFlash(site, client, result.commitSha);
+      // A new entry has an address of its own now: reloading or sharing `/new` would start another.
+      if (requested === "new") {
+        return done(
+          c,
+          `/sites/${site.id}/collections/${name}/${encodeURIComponent(slug)}`,
+          flash.message,
+          flash.kind,
+        );
+      }
       return c.html(
         renderEntry({
           slug,
           document,
           errors: new Map(),
           headSha: result.commitSha,
-          flash: await publishedFlash(site, client, result.commitSha),
+          flash,
         }),
       );
     } catch (error) {
@@ -2223,7 +2314,7 @@ export function createApp(options: AppOptions) {
 
     const client = new SiteClient(site);
     await client.clearLiveDraft({ context: await client.context(), regionId });
-    return c.redirect(`/sites/${site.id}/regions/${regionId}`, 303);
+    return done(c, `/sites/${site.id}/regions/${regionId}`, DISCARDED);
   });
 
   app.post("/sites/:id/collections/:name/:slug/draft/discard", async (c) => {
@@ -2235,7 +2326,7 @@ export function createApp(options: AppOptions) {
 
     const client = new SiteClient(site);
     await client.clearLiveDraft({ context: await client.context(), collection: { name, slug } });
-    return c.redirect(`/sites/${site.id}/collections/${name}/${encodeURIComponent(slug)}`, 303);
+    return done(c, `/sites/${site.id}/collections/${name}/${encodeURIComponent(slug)}`, DISCARDED);
   });
 
   app.post("/sites/:id/collections/:name/:slug/draft", async (c) => {
@@ -2309,7 +2400,11 @@ export function createApp(options: AppOptions) {
         sha: c.req.param("sha") ?? "",
       });
       if (!restored) return c.html(errorPage(site.name, "That version could not be read."), 404);
-      return c.redirect(`/sites/${site.id}/${target.back}`, 303);
+      return done(
+        c,
+        `/sites/${site.id}/${target.back}`,
+        `Version ${(c.req.param("sha") ?? "").slice(0, 7)} is in the form as unsaved edits. Publish to bring it back, or discard them to keep what is published.`,
+      );
     });
   }
 
@@ -2683,6 +2778,11 @@ function contentOf(c: { req: { param(name: string): string | undefined } }) {
   return { collection: { name, slug }, back: `collections/${name}/${encodeURIComponent(slug)}` };
 }
 
+const DISCARDED = "Unsaved edits discarded. This is what is published.";
+
+/** A host as someone typed it, short enough to repeat back. */
+const hostLabel = (host: string) => host.trim().slice(0, 80) || "that host";
+
 /** Compared against when an unknown email signs in, so the reply takes the same time. */
 let dummy: string | undefined;
 const dummyHash = () => (dummy ??= hashPassword(randomSecret()));
@@ -2774,6 +2874,7 @@ function entryPreview(
 function errorPage(title: string, message: string): string {
   return page(
     { title, flash: { kind: "error", message } },
-    html`<p><a class="button secondary" href="/">Back to sites</a></p>`,
+    html`<div class="page-head"><h1>${title}</h1></div>
+      <p><a class="button secondary" href="/">Back to sites</a></p>`,
   );
 }

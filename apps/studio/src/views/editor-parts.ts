@@ -234,8 +234,8 @@ export function draftNotice(discard: string, stale = false) {
             ? html`<strong>Someone published this since your unsaved edits began.</strong>
                 Publishing them would overwrite that change, so it will be refused. Discard them to
                 start from what is published now.`
-            : html`<strong>Unsaved edits restored.</strong> The form and the preview show what you
-                were editing last time; nothing is published until you publish.`
+            : html`<strong>This form holds unsaved edits.</strong> It and the preview show them, not
+                what is published; nothing changes on the site until you publish.`
         }
       </p>
       <details class="inline-confirm">

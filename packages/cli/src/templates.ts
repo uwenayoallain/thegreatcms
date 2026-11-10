@@ -29,5 +29,9 @@ export const TEMPLATES: Template[] = [
     label: "Blog",
     hint: "a Markdown collection with a managed intro region",
   },
-  { id: "blank", label: "Blank", hint: "config only: you write the regions" },
+  {
+    id: "blank",
+    label: "Blank",
+    hint: "one example region with a heading: you write the rest",
+  },
 ];

@@ -1,7 +1,7 @@
 import { parseConfig, parseSchema } from "@greatcms/spec";
 import { describe, expect, it } from "vitest";
 import { detectFramework, FRAMEWORKS } from "./detect.js";
-import { nextSteps, planInit, planStarter, type InitAnswers } from "./init.js";
+import { nextSteps, planInit, planStarter, TEMPLATES, type InitAnswers } from "./init.js";
 
 function answers(overrides: Partial<InitAnswers> = {}): InitAnswers {
   const framework = overrides.framework ?? FRAMEWORKS.astro;
@@ -186,6 +186,17 @@ describe("next steps", () => {
       );
       expect(output, framework.id).not.toContain("home.hero.json");
     }
+  });
+
+  it("describes the blank template as what it writes: a schema with one example region", () => {
+    const plan = planInit(answers({ template: "blank" }));
+    expect(plan.files.map((entry) => entry.path)).toEqual([".cms/schema.yaml", ".cms/config.yaml"]);
+    const schema = parseSchema(file(plan, ".cms/schema.yaml"));
+    expect(Object.keys(schema.regions)).toEqual(["home.hero"]);
+    expect(Object.keys(schema.collections)).toEqual([]);
+    const hint = TEMPLATES.find((template) => template.id === "blank")?.hint ?? "";
+    expect(hint).toBe("one example region with a heading: you write the rest");
+    expect(hint).not.toMatch(/config only/);
   });
 
   it("skips the snippet for the blank template, which has nothing to show yet", () => {

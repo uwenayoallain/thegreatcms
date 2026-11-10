@@ -107,8 +107,9 @@ Debian, for the native packages sites install.
 The link icon above the editor's preview makes a link anyone can open for
 seven days, unpublished edits included, without a studio account. It works
 through the same `forward_auth` check: the link carries a signed token, the
-studio trades it for a cookie that opens that site's preview and nothing else,
-and changing `STUDIO_PASSWORD` revokes every link at once.
+studio trades it for a cookie that opens that site's preview and nothing else.
+**Stop sharing**, on the link's page and in site settings, ends that site's
+links; changing `STUDIO_PASSWORD` ends every site's.
 
 ## Live preview on the server
 

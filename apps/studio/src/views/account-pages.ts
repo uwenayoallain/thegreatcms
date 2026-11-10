@@ -227,13 +227,27 @@ export function sharePage(options: { site: Site; url: string; until: string }): 
           passed on to can open it until then.
         </li>
         <li>
-          <strong>Taking it back.</strong> Changing the studio's password ends every preview link at
-          once, along with every session. One link cannot be withdrawn on its own.
+          <strong>Taking it back.</strong> Stop sharing ends this link and every other link made for
+          ${site.name}, at once. Links to other sites keep working; changing the studio's password
+          ends those too, along with every session.
         </li>
       </ul>
-      <p><a class="button secondary" href="/sites/${site.id}">Back to ${site.name}</a></p>
+      <div class="form-actions">
+        <a class="button secondary" href="/sites/${site.id}">Back to ${site.name}</a>
+        ${stopSharing(site)}
+      </div>
     `,
   );
+}
+
+/** One button that ends a site's preview links, asked for twice like anything that cannot be undone. */
+export function stopSharing(site: Site) {
+  return html`<details class="inline-confirm">
+    <summary>Stop sharing</summary>
+    <form method="POST" action="/sites/${site.id}/share/stop">
+      <button class="danger" type="submit">Confirm: end every link to ${site.name}</button>
+    </form>
+  </details>`;
 }
 
 export function editorsPage(options: {

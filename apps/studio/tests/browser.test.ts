@@ -554,6 +554,31 @@ describe.skipIf(!browser)("accessibility with real layout", () => {
     }
   });
 
+  it("rings a resize handle that the keyboard has reached", async () => {
+    const page = await editor();
+    for (const selector of [".sidebar-handle", ".split-handle"]) {
+      const handle = page.locator(selector);
+      // oxlint-disable-next-line no-await-in-loop -- one focus at a time
+      await handle.focus();
+      // oxlint-disable-next-line no-await-in-loop
+      const ring = await handle.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+        return {
+          visible: element.matches(":focus-visible"),
+          style: style.outlineStyle,
+          width: Number.parseFloat(style.outlineWidth),
+          color: style.outlineColor,
+          surface: getComputedStyle(document.body).backgroundColor,
+          onScreen: box.width > 0 && box.height > 0 && box.right <= innerWidth,
+        };
+      });
+      expect(ring, selector).toMatchObject({ visible: true, style: "solid", onScreen: true });
+      expect(ring.width, selector).toBeGreaterThanOrEqual(2);
+      expect(ring.color, selector).not.toBe(ring.surface);
+    }
+  });
+
   it("keeps the workspace and every navigation action inside a narrow screen", async () => {
     const page = await context.newPage();
     opened.push({ page, own: null });
