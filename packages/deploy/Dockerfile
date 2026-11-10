@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # The builder: git, Node and pnpm, and nothing of the site until it clones it.
 FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS build
 WORKDIR /app
@@ -7,13 +6,10 @@ RUN corepack enable
 # Manifests alone first, so the install is reused until a dependency changes, not on every edit.
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/deploy/package.json packages/deploy/
-RUN --mount=type=cache,id=greatcms-pnpm,target=/pnpm/store \
-  --mount=type=cache,id=greatcms-corepack,target=/root/.cache/node/corepack \
-  pnpm install --frozen-lockfile --filter @greatcms/deploy...
+RUN pnpm install --frozen-lockfile --filter @greatcms/deploy...
 COPY tsconfig.base.json ./
 COPY packages/deploy ./packages/deploy
-RUN --mount=type=cache,id=greatcms-corepack,target=/root/.cache/node/corepack \
-  pnpm --filter @greatcms/deploy build
+RUN pnpm --filter @greatcms/deploy build
 
 # It has no dependencies of its own: the build output and two launchers are the whole program.
 # Debian rather than Alpine: as the preview service it runs dev servers from node_modules that

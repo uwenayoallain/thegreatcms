@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # The studio is one Node process and one SQLite file. No database server, no
 # native modules to compile, nothing to orchestrate.
 #   docker build -t greatcms-studio -f apps/studio/Dockerfile .
@@ -15,15 +14,12 @@ COPY packages/reader/package.json packages/reader/
 COPY packages/cli/package.json packages/cli/
 COPY packages/conformance/package.json packages/conformance/
 COPY apps/studio/package.json apps/studio/
-RUN --mount=type=cache,id=greatcms-pnpm,target=/pnpm/store \
-  --mount=type=cache,id=greatcms-corepack,target=/root/.cache/node/corepack \
-  pnpm install --frozen-lockfile --filter @greatcms/studio...
+RUN pnpm install --frozen-lockfile --filter @greatcms/studio...
 
 COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/studio ./apps/studio
-RUN --mount=type=cache,id=greatcms-corepack,target=/root/.cache/node/corepack \
-  pnpm --filter @greatcms/studio... build
+RUN pnpm --filter @greatcms/studio... build
 
 # The server is one bundled file and the browser code a few more: no node_modules ship, and no
 # package manager either, so the image is Alpine, the Node binary, git and the program.
