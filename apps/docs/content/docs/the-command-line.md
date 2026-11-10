@@ -14,6 +14,11 @@ work where they exist (`-y` for `--yes`, `-f` for `--force`, `-o` for `--out`),
 `--` ends the options, and a misspelt command or option gets a suggestion
 rather than silence. `--no-color` or `NO_COLOR=1` gives plain text.
 
+When a newer release is on npm, a command run in a terminal says so on its last
+line, with the command that updates the project. npm is asked at most once a
+day, with a short time limit, and never from a script or CI;
+`GREATCMS_NO_UPDATE_CHECK=1` turns it off.
+
 The exit status is meant for scripts: `0` when done, `1` when the command failed
 or found problems (such as `check` finding content that will not render), `2`
 when it was called wrongly, and `130` when you cancelled a prompt.

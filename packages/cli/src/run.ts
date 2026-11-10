@@ -17,6 +17,8 @@ import { defaultsOnlyPrompt, PromptCancelled, terminalPrompt, type PromptPort } 
 import { plainUi, ui, useUi, type Ui } from "./ui.js";
 
 export { createUi, wantsColour } from "./ui.js";
+export { updateNotice } from "./update.js";
+export { VERSION } from "./version.js";
 
 type Handlers = typeof import("./handlers.js");
 let handlers: Handlers | undefined;
