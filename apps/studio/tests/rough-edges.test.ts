@@ -96,6 +96,33 @@ describe("what an editor is offered", () => {
     expect(offered).toContain(`/sites/${SITE_ID}/regions/home.hero`);
   });
 
+  it("shows another person's name wherever they have been, and never their address", async () => {
+    site = makeSite({ schema: SCHEMA });
+    const who = await editor();
+    await post(
+      site,
+      `/sites/${SITE_ID}/regions/home.hero`,
+      { headSha: site.head(), action: "publish", "f[heading]": "By Ed" },
+      who,
+    );
+    await get(site, `/sites/${SITE_ID}/regions/home.hero`, who);
+    for (const path of [
+      "/",
+      `/sites/${SITE_ID}`,
+      `/sites/${SITE_ID}/regions/home.hero`,
+      `/sites/${SITE_ID}/regions/home.hero/history`,
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time keeps the failure readable
+      const body = await (await get(site, path)).text();
+      expect(body, path).not.toContain("ed@example.com");
+    }
+    const editing = await (await get(site, `/sites/${SITE_ID}/regions/home.hero`)).text();
+    expect(editing.replace(/<[^>]+>/g, "")).toMatch(/Also open here:\s+Ed/);
+    expect(await (await get(site, `/sites/${SITE_ID}/regions/home.hero/history`)).text()).toContain(
+      "Ed",
+    );
+  });
+
   it("sends someone already signed in past the sign-in page", async () => {
     site = makeSite({ schema: SCHEMA });
     const response = await get(site, "/sign-in");
