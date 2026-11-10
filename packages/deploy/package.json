@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/deploy",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "greatcms-deploy and greatcms-preview: build a site on every commit and run its dev server only while someone is editing.",
   "keywords": [
     "cms",

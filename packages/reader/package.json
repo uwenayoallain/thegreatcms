@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/reader",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Build-time reader for GreatCMS content: synchronous filesystem reads, schema defaults, and live-preview integrations for Astro, Next.js, Nuxt, SvelteKit and Vite.",
   "keywords": [
     "astro",

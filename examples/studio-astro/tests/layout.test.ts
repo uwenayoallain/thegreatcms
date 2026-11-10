@@ -176,10 +176,11 @@ describe.skipIf(!browser)("layout", () => {
           expect(box, `${path} has no ${name}`).toBeTruthy();
           for (const edge of edges) {
             const at = "xywh".indexOf(edge);
-            expect(box![at], `${path} ${name}.${edge} at ${width}px`).toBeCloseTo(
-              home.boxes[name]![at]!,
-              0,
-            );
+            // A pixel is the most text rounding differs by between machines' font renderers.
+            expect(
+              Math.abs(box![at]! - home.boxes[name]![at]!),
+              `${path} ${name}.${edge} at ${width}px`,
+            ).toBeLessThanOrEqual(1);
           }
         }
       }

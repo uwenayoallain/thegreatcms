@@ -84,6 +84,7 @@ your real components beside the form as you type.
 | [`@greatcms/spec`](https://www.npmjs.com/package/@greatcms/spec)               | The standard in TypeScript: parsing, validation, resolution       |
 | [`@greatcms/conformance`](https://www.npmjs.com/package/@greatcms/conformance) | Fixtures and a verifier for readers in any language               |
 | [`@greatcms/deploy`](https://www.npmjs.com/package/@greatcms/deploy)           | Builds and serves a site on every publish, beside the studio      |
+| [`@greatcms/studio`](https://www.npmjs.com/package/@greatcms/studio)           | The studio itself, which `greatcms studio` runs for one site      |
 
 The studio lives in [`apps/studio`](./apps/studio). It and the builder are
 published as container images: `ghcr.io/uwenayoallain/greatcms-studio` and
