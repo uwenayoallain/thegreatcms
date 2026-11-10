@@ -23,7 +23,7 @@ import { isIP } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { Site } from "./db.js";
-import { configRefusal, findRepository, gitIn, originFromConfig } from "./git-guard.js";
+import { findRepository, gitIn, originFromConfig } from "./git-guard.js";
 import { withGitConfig } from "./repo.js";
 
 /** A folder path as typed: `~` is this machine's home, and anything else must be absolute. */
@@ -456,8 +456,8 @@ export async function moveInto(
 async function assertGuarded(path: string): Promise<void> {
   const layout = await findRepository(path);
   if (layout?.top !== path) return;
-  const problems = (await gitIn(path))?.problems ?? [];
-  if (problems.length > 0) throw new Error(configRefusal(problems).message);
+  const refusal = (await gitIn(path))?.refusal;
+  if (refusal) throw new Error(refusal.message);
 }
 
 /** Bytes under a folder, stopping early once past `limit`; links are counted, not followed. */

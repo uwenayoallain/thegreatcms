@@ -126,6 +126,9 @@ describe("the built server", () => {
         STUDIO_PASSWORD: "a password for the test",
         STUDIO_DB: join(data, "studio.sqlite"),
         STUDIO_SITES_ROOT: sites,
+        // A parent cookie domain over plain http is warned about, and the studio starts all the same.
+        STUDIO_COOKIE_DOMAIN: "example.test",
+        STUDIO_URL: "",
         PORT: "0",
       },
     });
@@ -147,6 +150,7 @@ describe("the built server", () => {
       expect(response.status).toBe(200);
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       expect(existsSync(join(sites, ".half.cloning"))).toBe(false);
+      expect(output).toContain("warning: STUDIO_COOKIE_DOMAIN is example.test");
 
       const exited = new Promise<number | null>((resolve) => child.once("exit", resolve));
       child.kill("SIGTERM");

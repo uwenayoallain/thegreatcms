@@ -18,7 +18,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { DRAFT_DIR, draftFilePath } from "@greatcms/spec";
-import { configRefusal, gitIn, localEnd, trackBranch } from "./git-guard.js";
+import { gitIn, localEnd, trackBranch } from "./git-guard.js";
 
 const run = promisify(execFile);
 
@@ -642,9 +642,8 @@ export class LocalRepository implements Repository {
   private async pushNow(): Promise<PushResult> {
     const guard = await gitIn(this.root);
     if (!guard) return { ok: false, reason: "The folder is not a git repository." };
-    if (guard.problems.length > 0) {
-      const { message, fix } = configRefusal(guard.problems);
-      return { ok: false, reason: `${message}\n  fix: ${fix}` };
+    if (guard.refusal) {
+      return { ok: false, reason: `${guard.refusal.message}\n  fix: ${guard.refusal.fix}` };
     }
     const tracked = await this.syncState();
     const where = await this.branchState();
@@ -862,10 +861,8 @@ export class LocalRepository implements Repository {
 
   /** Stops a publish or branch change in a folder whose git config holds more than the studio reads. */
   private async refuseUncheckedConfig(): Promise<void> {
-    const problems = (await gitIn(this.root))?.problems ?? [];
-    if (problems.length === 0) return;
-    const { message, fix } = configRefusal(problems);
-    throw new LocalRepositoryError(message, fix);
+    const refusal = (await gitIn(this.root))?.refusal;
+    if (refusal) throw new LocalRepositoryError(refusal.message, refusal.fix);
   }
 
   /** A new branch from the remote's, with that as its upstream. */
@@ -892,6 +889,9 @@ export class LocalRepository implements Repository {
   private async git(args: string[], env?: Record<string, string>): Promise<string> {
     const guard = await gitIn(this.root);
     if (!guard) throw new LocalRepositoryError(`git ${args[0]} failed: not a git repository`);
+    if (guard.blocked && guard.refusal) {
+      throw new LocalRepositoryError(guard.refusal.message, guard.refusal.fix);
+    }
     try {
       const { stdout } = await run("git", [...guard.args, ...args], {
         cwd: this.root,

@@ -2,7 +2,7 @@
 
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
-import { randomSecret } from "./auth.js";
+import { cookieDomainWarning, randomSecret } from "./auth.js";
 import { applySites, parseSites, withoutSecrets } from "./config.js";
 import { warmAssets } from "./assets.js";
 import { PreviewAddresses, sweepStaleClones } from "./connect.js";
@@ -65,6 +65,10 @@ try {
   process.stderr.write(`${(error as Error).message}\n`);
   process.exit(1);
 }
+
+// Said at every start, and never a reason to stop: on one machine, plain http is how it is run.
+const cookieWarning = cookieDomainWarning(process.env.STUDIO_COOKIE_DOMAIN, process.env.STUDIO_URL);
+if (cookieWarning) process.stderr.write(`warning: ${cookieWarning}\n`);
 
 const emailed = Boolean(process.env.RESEND_API_KEY);
 const hooked = Boolean(process.env.STUDIO_WEBHOOK_URL);

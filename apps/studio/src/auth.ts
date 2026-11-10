@@ -13,6 +13,19 @@ const MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
  */
 const own = (name: string, secure: boolean) => (secure ? `__Host-${name}` : name);
 
+/**
+ * What to tell whoever starts the studio with a parent cookie domain and no HTTPS, or null: without
+ * the `__Host-` prefix, a preview under that domain can set cookies the studio then reads.
+ */
+export function cookieDomainWarning(
+  cookieDomain: string | undefined,
+  publicUrl: string | undefined,
+): string | null {
+  if (!cookieDomain || publicUrl?.startsWith("https://")) return null;
+  const domain = cookieDomain.replace(/^\./, "");
+  return `STUDIO_COOKIE_DOMAIN is ${domain}, and STUDIO_URL is not an https:// address.\n  Over plain http the studio's cookies cannot be tied to its own host, so a preview under ${domain}, which runs a site's code, can set cookies the studio reads.\n  fix: serve the studio over HTTPS and set STUDIO_URL to its https:// address, or leave STUDIO_COOKIE_DOMAIN unset.`;
+}
+
 export interface Session {
   /** `studio` for the owner, `editor:<id>` for an editor, `github:<id>` for a GitHub account. */
   actor: string;

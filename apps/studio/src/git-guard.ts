@@ -14,9 +14,9 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { mkdir, open, stat } from "node:fs/promises";
+import { lstat, mkdir, open, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 /** Hooks, the file-watcher program and command remotes never run, whoever configured them. */
 export const SAFE_GIT = [
@@ -304,12 +304,51 @@ export function checkConfig(text: string | null): CheckedConfig {
 }
 
 /** Why the studio will not publish, push or change branch in a folder, for its owner. */
-export function configRefusal(problems: string[]): { message: string; fix: string } {
+export function configRefusal(problems: string[]): Refusal {
   const shown = problems.slice(0, 8).join(", ");
   const more = problems.length > 8 ? `, and ${problems.length - 8} more` : "";
   return {
     message: `This folder's git configuration has settings the studio does not work with: ${shown}${more}. Nothing was changed.`,
     fix: "the site's own code can write .git/config, so the studio reads only a short list of settings from it. Remove each one in the site's folder (git config --local --unset <name>, or edit .git/config), or set it for the whole machine (git config --global) if it is yours.",
+  };
+}
+
+type Refusal = { message: string; fix: string };
+
+/**
+ * An object store named by `objects/info/alternates` that lies outside the repository, or null.
+ * Git reads objects from wherever that file says, and the site's code can write it.
+ */
+async function borrowedStore(objects: string, within: string, depth = 0): Promise<string | null> {
+  const file = join(objects, "info", "alternates");
+  const text = await readPlain(file);
+  if (text === null) {
+    const present = await lstat(file).then(
+      () => true,
+      () => false,
+    );
+    return present ? "a file the studio will not read" : null;
+  }
+  for (const line of text.split(/\r?\n/)) {
+    if (line === "" || line.startsWith("#")) continue;
+    const target = resolve(objects, line);
+    // Git follows a chain of these five deep; a quoted line is a path spelled another way.
+    if (line.startsWith('"') || depth >= 5 || !target.startsWith(`${within}${sep}`)) {
+      // oxlint-disable-next-line no-control-regex -- the path is shown on a page
+      return line.replace(/[\u0000-\u001f\u007f]/g, "?").slice(0, 200);
+    }
+    // oxlint-disable-next-line no-await-in-loop -- a chain is followed one link at a time
+    const deeper = await borrowedStore(target, within, depth + 1);
+    if (deeper) return deeper;
+  }
+  return null;
+}
+
+/** Why the studio runs no git in a folder whose objects come from outside it, for its owner. */
+function borrowedRefusal(store: string): Refusal {
+  return {
+    message: `This folder's repository takes git objects from outside itself (.git/objects/info/alternates names ${store}), so the studio does not run git in it. Nothing was changed.`,
+    fix: "the site's own code can write that file, and through it git would read another repository on this machine. In the site's folder run `git repack -a -d`, then delete .git/objects/info/alternates.",
   };
 }
 
@@ -376,18 +415,25 @@ export interface GitRun {
   env: NodeJS.ProcessEnv;
   /** Settings in the folder's config that stop a publish, push or branch change. */
   problems: string[];
+  /** Why the studio will not publish, push or change branch here, or null when it will. */
+  refusal: Refusal | null;
+  /** Git is not run here at all, even to read: what it would read is not this repository's. */
+  blocked: boolean;
   /** The repository's real config file, when the studio writes a branch's upstream itself. */
   configFile?: string;
 }
 
 /** How to run git in a site's folder, or null when the folder is in no repository. */
 export async function gitIn(root: string): Promise<GitRun | null> {
-  if (trusted) return { args: SAFE_GIT, env: process.env, problems: [] };
+  if (trusted) {
+    return { args: SAFE_GIT, env: process.env, problems: [], refusal: null, blocked: false };
+  }
   const layout = await findRepository(root);
   if (!layout) return null;
   const configFile = join(layout.commonDir, "config");
   const checked = checkConfig(await readPlain(configFile));
   const copy = await copyFor(layout, checked.text);
+  const borrowed = await borrowedStore(join(layout.commonDir, "objects"), layout.commonDir);
   return {
     args: GUARDED_GIT,
     env: {
@@ -399,6 +445,12 @@ export async function gitIn(root: string): Promise<GitRun | null> {
       GIT_EDITOR: ":",
     },
     problems: checked.problems,
+    refusal: borrowed
+      ? borrowedRefusal(borrowed)
+      : checked.problems.length > 0
+        ? configRefusal(checked.problems)
+        : null,
+    blocked: borrowed !== null,
     configFile,
   };
 }

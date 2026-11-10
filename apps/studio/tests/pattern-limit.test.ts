@@ -3,7 +3,7 @@
 import { parseSchema, usePatternMatcher, validateRegion } from "@greatcms/spec";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { boundedMatch, runsInLinearTime } from "../src/patterns.js";
-import { type Fixture, makeSite, post, SITE_ID } from "./site.js";
+import { type Fixture, get, makeSite, post, SITE_ID } from "./site.js";
 
 const SCHEMA = `version: 1
 regions:
@@ -47,6 +47,13 @@ describe("a pattern the linear-time engine cannot run", () => {
       expect(Date.now() - began).toBeLessThan(PROMPT_MS);
     },
   );
+
+  it("is never handed to the browser, where it would hang the editor's own tab", async () => {
+    const page = await (await get(site, `/sites/${SITE_ID}/regions/home.hero`)).text();
+
+    expect(page).toContain('name="f[lookahead]"');
+    expect(page).not.toMatch(/\spattern=/);
+  });
 
   it("does not add up over a long list", async () => {
     const fields = Object.fromEntries(
