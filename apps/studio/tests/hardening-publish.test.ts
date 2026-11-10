@@ -239,7 +239,9 @@ describe("property 3: publish concurrency, conflicts, atomicity, and draft isola
 
     const statuses = [first.status, second.status].toSorted((a, b) => a - b);
     expect(statuses).toEqual([200, 409]);
-    expect(JSON.parse(site.read("content/cms/home.hero.json")).heading).toBe("Editor One");
+    // Either may reach the queue first; what is on disk is the winner's, whole.
+    const winner = first.status === 200 ? "Editor One" : "Editor Two";
+    expect(JSON.parse(site.read("content/cms/home.hero.json")).heading).toBe(winner);
   });
 
   it("refuses a publish whose expected head no longer matches with 409", async () => {
