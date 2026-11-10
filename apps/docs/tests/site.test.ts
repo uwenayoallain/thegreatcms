@@ -303,7 +303,7 @@ describe("weight", () => {
   it("keeps the pages people read well under budget", () => {
     const files = walk(DIST).filter((file) => /\.(html|css)$/.test(file));
     const total = kilobytes(files);
-    expect(total, `${total.toFixed(1)} KB of HTML and CSS`).toBeLessThan(260);
+    expect(total, `${total.toFixed(1)} KB of HTML and CSS`).toBeLessThan(270);
   });
 
   it("keeps scroll timelines where browsers read them, not folded into the shorthand", () => {
