@@ -307,16 +307,12 @@ describe.skipIf(!browser)("with no script on the page", () => {
         });
       });
       await page.goto(origins.onTime + "/");
-      const motion = await page.evaluate(() => {
-        const timeline = (selector: string) =>
-          getComputedStyle(document.querySelector(selector)!).animationTimeline;
-        return {
-          scrollDriven: CSS.supports("animation-timeline: view()"),
-          card: timeline(".card"),
-          stamp: timeline(".stamp text"),
-          masthead: getComputedStyle(document.querySelector("body > header")!).viewTransitionName,
-        };
-      });
+      const motion = await page.evaluate(() => ({
+        scrollDriven: CSS.supports("animation-timeline: view()"),
+        card: getComputedStyle(document.querySelector(".card")!).animationTimeline,
+        stamp: getComputedStyle(document.querySelector(".stamp text")!).animationTimeline,
+        masthead: getComputedStyle(document.querySelector("body > header")!).viewTransitionName,
+      }));
       expect(motion.masthead).toBe("masthead");
       // A browser without scroll timelines shows the page still, which the stylesheet allows for.
       if (motion.scrollDriven) {

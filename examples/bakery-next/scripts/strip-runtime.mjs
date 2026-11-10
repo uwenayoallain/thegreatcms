@@ -50,9 +50,11 @@ function clientModules() {
   ))
     runInNewContext(readFileSync(file, "utf8"), sandbox);
   const byId = new Map();
-  for (const manifest of Object.values(sandbox.globalThis.__RSC_MANIFEST ?? {}))
-    for (const [path, { id }] of Object.entries(manifest.clientModules ?? {}))
-      byId.set(String(id), path);
+  // Each manifest files itself under the one global the build names, keyed by route.
+  for (const routes of Object.values(sandbox.globalThis))
+    for (const manifest of Object.values(routes))
+      for (const [path, { id }] of Object.entries(manifest.clientModules ?? {}))
+        byId.set(String(id), path);
   if (byId.size === 0) throw new Error("The build's client reference manifests list no module.");
   return byId;
 }
@@ -110,10 +112,9 @@ function pruneEmpty(dir) {
 
 const modules = clientModules();
 const pages = files(DIST).filter((path) => path.endsWith(".html"));
-const results = pages.map((path) => ({
-  path,
-  ...strip(readFileSync(path, "utf8"), modules),
-}));
+const results = pages.map((path) =>
+  Object.assign(strip(readFileSync(path, "utf8"), modules), { path }),
+);
 
 const failures = results.filter((result) => result.problems.length > 0);
 if (failures.length > 0) {
