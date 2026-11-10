@@ -89,9 +89,11 @@ which keeps every box that was ticked.
 `next dev` renders on every request, so the studio's drafts appear on the next
 load. It does not watch content files, so `<GreatcmsPreview />` in the root
 layout tells the studio, which reloads the preview after each draft. The
-preview script is added only under `next dev`. The tests check that an
-exported page carries none of it, and keep the JavaScript Next.js brings under
-a budget.
+preview script is added only under `next dev`. No page has a client
+component, so a step after `next build` removes the Next.js runtime from the
+export, about 450 KB a visitor had no use for, and fails the build if a page
+ever needs it. The tests check that an exported page runs no script and stays
+under 50 KB with everything it loads.
 
 ## A journal on SvelteKit
 

@@ -4,8 +4,9 @@
 
 A neighbourhood bakery's whole site, on Next.js 16 with the App Router. The
 notice bar, hero, story, opening hours and menu are all content files in this
-folder. Server Components read them through `@greatcms/reader`, and
-`output: "export"` writes every page as HTML.
+folder. Server Components read them through `@greatcms/reader`,
+`output: "export"` writes every page as HTML, and a step after the build takes
+out the JavaScript those pages have no use for.
 
 ```sh
 pnpm dev                                           # from the repo root: studio + every example
@@ -24,6 +25,7 @@ pnpm --filter @greatcms/example-bakery-next build  # then `test`
 | `app/layout.tsx`        | The page shell, and the studio's preview script under `next dev`      |
 | `app/page.tsx`, `menu/` | The pages, as Server Components                                       |
 | `app/site.css`          | One stylesheet, which Next.js bundles and minifies                    |
+| `scripts/strip-runtime` | The step after `next build` that takes the runtime out of the export  |
 
 ## How Next.js meets GreatCMS
 
@@ -42,15 +44,60 @@ pnpm --filter @greatcms/example-bakery-next build  # then `test`
   Its items are a checkbox group under one name, and the inbox keeps every box
   that was ticked.
 
+## What the export ships, and why
+
+No page here has a client component: every link is a plain anchor, the order
+form posts natively, and the motion is CSS. Next.js still gives each exported
+page its runtime: React, the router, and a copy of the page as data for the
+router to read. Next.js 16 has no supported switch for leaving them out of an
+App Router export (`unstable_runtimeJS` was for the Pages Router). So
+`pnpm build` is `next build && node scripts/strip-runtime.mjs`, and the second
+half:
+
+- removes the runtime's `<script>` tags and script preloads from every page,
+  and keeps the structured data (`application/ld+json`);
+- deletes the chunks and the router's `.txt` payloads, which nothing refers to
+  any more;
+- **fails the build, changing nothing**, if a page references a client
+  component (yours, or one from a package, `next/link` and `next/script`
+  included), carries an inline script it does not recognise, or loads a script
+  from anywhere but Next.js's own chunks. The message names the page and the
+  component.
+
+The home page, cold, on a throttled phone profile (1.6 Mbps, 150 ms round
+trip, CPU slowed four times, text gzipped, median of five loads in Chromium):
+
+|                          | With the runtime | Without it |
+| ------------------------ | ---------------- | ---------- |
+| Requests                 | 10               | 5          |
+| Bytes, uncompressed      | 521.7 KB         | 45.0 KB    |
+| Bytes over the wire      | 168.8 KB         | 29.4 KB    |
+| Largest contentful paint | 584 ms           | 516 ms     |
+| Total blocking time      | 69 ms            | 0 ms       |
+| Load event               | 1391 ms          | 382 ms     |
+
+`next dev` is untouched: the step runs only after a build, so hot reload, the
+studio's live preview and its inspector work as before.
+
+**When you add a client component**, the build stops and says so. Make the
+`build` script in `package.json` plain `next build` again, and in
+`tests/site.test.ts` drop the checks under "the export" that expect no script
+and raise the 50 KB page budget: the runtime is about 450 KB before
+compression. The script-free checks in `tests/layout.test.ts` go with them.
+
 ## Budgets the tests hold
 
-axe-clean pages, one `h1` each, nothing of the studio in an exported page, one
-minified stylesheet, the JavaScript Next.js brings kept under 700 KB before
-compression, every menu item priced and grouped in the schema's order, and
-every form control labelled.
+axe-clean pages, one `h1` each, nothing of the studio in an exported page, no
+executable script and no JavaScript file anywhere in the export, every link,
+anchor and asset resolving, one minified stylesheet, each page with all it
+loads under 50 KB before compression, every menu item priced and grouped in
+the schema's order, and every form control labelled.
 
 In Chromium, when one is installed, `tests/layout.test.ts` loads every page at
 375, 768, 1024, 1280 and 1600 pixels wide and fails on any layout shift, or on
 a masthead, main column or footer that sits differently from one page to the
 next or across a click. It runs again with the font held back, where
 `font-display: optional` must keep the fallback rather than reflow the page.
+The same browser checks that no page asks for a script, that the scroll-driven
+effects and the transition between pages still run, and that the order form
+is held back by the browser's own validation and then posts.
