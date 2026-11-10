@@ -34,12 +34,13 @@ import {
   previewPath,
   resolveRegion,
   validateRegion,
+  usePatternMatcher,
 } from "@greatcms/spec";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { html } from "hono/html";
 import { bodyLimit } from "hono/body-limit";
 import { pack } from "./pack.js";
-import { setFlagsFromString } from "node:v8";
+import { boundedMatch } from "./patterns.js";
 import { editorSites, SiteAccess } from "./access.js";
 import { withoutServerPaths } from "./redact.js";
 import {
@@ -143,9 +144,8 @@ import { findSiteIcon } from "./site-icon.js";
 import { Liveness } from "./liveness.js";
 import { historyPage, searchPage } from "./views/tool-pages.js";
 
-// A schema's `pattern` comes from the repository and runs on every save. One that backtracks
-// without end, like `^(a+)+$`, is handed to V8's linear-time engine instead of hanging the server.
-setFlagsFromString("--enable-experimental-regexp-engine-on-excessive-backtracks");
+// A schema's `pattern` comes from the repository and runs on every save, so each is time-limited.
+usePatternMatcher(boundedMatch);
 
 export interface AppOptions {
   store: Store;

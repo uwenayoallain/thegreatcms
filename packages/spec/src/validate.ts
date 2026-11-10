@@ -65,6 +65,19 @@ function compiled(source: string): RegExp {
   return pattern;
 }
 
+/** Tests a value against a compiled `pattern`; null says the check was stopped before it finished. */
+export type PatternMatcher = (pattern: RegExp, value: string) => boolean | null;
+
+let matcher: PatternMatcher | undefined;
+
+/**
+ * Lets a long-running host, such as the studio, put a time limit on a schema's patterns. Without
+ * one a pattern is simply tested, which is what a build and the command line do.
+ */
+export function usePatternMatcher(next: PatternMatcher | undefined): void {
+  matcher = next;
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 export function validateFields(
@@ -177,14 +190,26 @@ function validateField(
           `Must be at most ${def.max} characters (has ${value.length}).`,
         );
       }
-      if (def.pattern && !compiled(def.pattern).test(value)) {
-        push(
-          issues,
-          opts,
-          path,
-          "pattern_mismatch",
-          `Does not match required pattern ${def.pattern}.`,
-        );
+      if (def.pattern) {
+        const pattern = compiled(def.pattern);
+        const matched = matcher ? matcher(pattern, value) : pattern.test(value);
+        if (matched === null) {
+          push(
+            issues,
+            opts,
+            path,
+            "pattern_timeout",
+            `Could not be checked against pattern ${def.pattern} in time, so it was not accepted.`,
+          );
+        } else if (!matched) {
+          push(
+            issues,
+            opts,
+            path,
+            "pattern_mismatch",
+            `Does not match required pattern ${def.pattern}.`,
+          );
+        }
       }
       return;
     }

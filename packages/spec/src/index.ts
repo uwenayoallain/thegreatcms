@@ -57,6 +57,8 @@ export {
   validateFields,
   validateRegion,
   referencesIn,
+  usePatternMatcher,
+  type PatternMatcher,
   type Reference,
   type ValidateOptions,
   type ValidationResult,
