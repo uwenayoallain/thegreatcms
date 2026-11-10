@@ -41,6 +41,7 @@ import { bodyLimit } from "hono/body-limit";
 import { pack } from "./pack.js";
 import { setFlagsFromString } from "node:v8";
 import { editorSites, SiteAccess } from "./access.js";
+import { withoutServerPaths } from "./redact.js";
 import {
   checkPassword,
   clearFlash,
@@ -657,6 +658,7 @@ export function createApp(options: AppOptions) {
       unread: () => store.countUnread(mine.among),
       local: options.local,
       timeZone,
+      roots: () => mine.sites.map((site) => site.path),
       flash: () => {
         shown = true;
         return waiting ?? undefined;
@@ -676,9 +678,16 @@ export function createApp(options: AppOptions) {
     message: string,
     kind: "success" | "error" = "success",
   ) => {
+    // The cookie is the browser's to read, so it carries no more than the page would show.
+    const said = c.get("viewer").owner
+      ? message
+      : withoutServerPaths(
+          message,
+          c.get("sites").map((site) => site.path),
+        );
     c.header(
       "Set-Cookie",
-      flashCookie(signingKey, c.get("session"), { kind, message }, isSecure(c)),
+      flashCookie(signingKey, c.get("session"), { kind, message: said }, isSecure(c)),
       { append: true },
     );
     return c.redirect(to, 303);

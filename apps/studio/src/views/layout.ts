@@ -7,6 +7,7 @@ import { icon } from "./icons.js";
 import { personAvatar, siteAvatar } from "./pixel.js";
 import { locale } from "./locale.js";
 import { viewer } from "./viewer.js";
+import { withoutServerPaths } from "../redact.js";
 import { theme, type Theme } from "./theme.js";
 import { chrome as shell } from "./chrome.js";
 
@@ -172,7 +173,8 @@ export function themeSwitch() {
 }
 
 /** A result or an error, announced on arrival; a page may place it itself, as sign-in does. */
-export function flashNotice(flash: NonNullable<PageOptions["flash"]>) {
+export function flashNotice(shown: NonNullable<PageOptions["flash"]>) {
+  const flash = viewer()?.owner ? shown : withoutPaths(shown);
   return html`
     <div
       class="flash ${flash.kind}"
@@ -1240,6 +1242,16 @@ export const STYLESHEET = STYLES;
 export function withRemedy(message: string): [headline: string, fix?: string] {
   const [headline = "", fix] = message.split(/\n\s*fix:\s*/, 2);
   return fix ? [headline, fix.charAt(0).toUpperCase() + fix.slice(1)] : [headline];
+}
+
+/** A notice for someone who is not an owner, who is never told where a folder is on the server. */
+function withoutPaths(flash: NonNullable<PageOptions["flash"]>): NonNullable<PageOptions["flash"]> {
+  const roots = shell().roots?.() ?? [];
+  return {
+    ...flash,
+    message: withoutServerPaths(flash.message, roots),
+    detail: flash.detail?.map((line) => withoutServerPaths(line, roots)),
+  };
 }
 
 function flashMessage(message: string) {
