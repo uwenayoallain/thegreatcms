@@ -7,6 +7,7 @@ import { randomSecret, sessionKey } from "./auth.js";
 import { applySites, type DeclaredSite } from "./config.js";
 import { Store } from "./db.js";
 import { GitAccess } from "./git-access.js";
+import { trustFolderGitConfig } from "./git-guard.js";
 import { GitHub } from "./github.js";
 import {
   isLoopback,
@@ -158,6 +159,8 @@ export async function startLocal(options: LocalOptions): Promise<RunningLocalStu
     store.close();
   }
 
+  // The folder is the developer's own checkout, and so is what its git config says.
+  trustFolderGitConfig(true);
   const token = loopback ? oneTimeToken() : undefined;
   const landing = `/sites/${siteId}`;
   const running = await start({

@@ -151,3 +151,30 @@ describe("what the local studio shows", () => {
     expect(site.store.getSite(SITE_ID)?.devUrl).toBe("http://localhost:4400");
   });
 });
+
+describe("a site's settings in the local studio", () => {
+  it("does not offer to push after every publish, and keeps what the site had", async () => {
+    const page = await (
+      await local.request(`/sites/${SITE_ID}/settings`, { headers: signedIn })
+    ).text();
+    expect(page).not.toContain("Push after every publish");
+    expect(page).not.toContain("pushAfterPublish");
+
+    site.store.updateSite(SITE_ID, { name: "Example", devUrl: "", pushAfterPublish: true });
+    const saved = await local.request(`/sites/${SITE_ID}/settings`, {
+      method: "POST",
+      headers: form,
+      body: new URLSearchParams({ name: "Renamed", devUrl: "" }),
+    });
+    expect(saved.status).toBe(303);
+    expect(site.store.getSite(SITE_ID)).toMatchObject({ name: "Renamed", pushAfterPublish: true });
+  });
+
+  it("still offers it on a server", async () => {
+    const server = createApp({ store: site.store, password: PASSWORD, secret: SECRET });
+    const page = await (
+      await server.request(`/sites/${SITE_ID}/settings`, { headers: signedIn })
+    ).text();
+    expect(page).toContain("Push after every publish");
+  });
+});

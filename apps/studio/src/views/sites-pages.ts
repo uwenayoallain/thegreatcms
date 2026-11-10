@@ -28,7 +28,10 @@ export function sitesPage(
           <h1>Sites</h1>
           ${sites.length > 0 && owner ? html`<a class="button" href="/sites/new">${icon("plus")} Connect a site</a>` : ""}
         </div>
-        <p class="lede">Every site the studio can edit. Content lives in your repository.</p>
+        <p class="lede">
+          ${owner ? "Every site the studio can edit." : "The sites you can edit."} Content lives in
+          your repository.
+        </p>
       </div>
 
       ${
@@ -334,28 +337,28 @@ export function newSitePage(
                       </p>`
                     : ""
                 }
-                <div class="field">
-                  <div class="checkbox">
-                    <input
-                      type="checkbox"
-                      id="pushAfterPublish"
-                      name="pushAfterPublish"
-                      aria-describedby="push-hint"
-                      ${values.pushAfterPublish === "on" ? html`checked` : ""}
-                    />
-                    <label for="pushAfterPublish">Push after every publish</label>
-                  </div>
-                  <span class="hint" id="push-hint">
-                    Sends each publish to the branch's upstream, so your host deploys it without
-                    anyone running Git. Signs in with this machine's Git
-                    credentials${
-                      chrome().local
-                        ? ""
-                        : html`, or the studio's own <a href="/git-access">Git access</a>`
-                    };
-                    hooks never run.
-                  </span>
-                </div>
+                ${
+                  // On your own machine you push when you choose to, as with any other commit.
+                  chrome().local
+                    ? ""
+                    : html`<div class="field">
+                        <div class="checkbox">
+                          <input
+                            type="checkbox"
+                            id="pushAfterPublish"
+                            name="pushAfterPublish"
+                            aria-describedby="push-hint"
+                            ${values.pushAfterPublish === "on" ? html`checked` : ""}
+                          />
+                          <label for="pushAfterPublish">Push after every publish</label>
+                        </div>
+                        <span class="hint" id="push-hint">
+                          Sends each publish to the branch's upstream, so your host deploys it
+                          without anyone running Git. Signs in with this machine's Git credentials,
+                          or the studio's own <a href="/git-access">Git access</a>; hooks never run.
+                        </span>
+                      </div>`
+                }
               `
             : ""
         }

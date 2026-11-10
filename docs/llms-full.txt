@@ -161,6 +161,13 @@ Every field accepts `label`, `description`, `required`, and `when`.
 
 `options` for `select` is either `[a, b]` or `[{ value: a, label: A }]`.
 
+`pattern` on `text` is a JavaScript regular expression without flags, matched
+anywhere in the value unless anchored with `^` and `$`. All of its syntax is
+accepted. Lookahead, lookbehind, backreferences and repeat counts above 16
+cannot be run in guaranteed linear time, so an authoring tool may stop such a
+check that takes too long and refuse the value (`pattern_timeout`); the studio
+does after a tenth of a second. Readers never run a pattern.
+
 `when` shows a field only while a sibling holds a value, so a hero's slides
 appear for the rotating style and its image for the others:
 
@@ -1416,8 +1423,9 @@ one three ways:
   with a click, signing in with a token that lasts an hour.
 - **Copy from Git.** Paste any https or SSH address, without a token in it:
   for a private repository, save one on **Git access**. Only files are
-  fetched: no hooks, submodules or redirects. Two copies run at a time, each
-  up to 2 GB.
+  fetched: no hooks, submodules or redirects. The host is looked up once and
+  the copy held to that address, so a name cannot answer differently the second
+  time. Two copies run at a time, each up to 2 GB.
 - **By path.** Any other folder; `~` is the studio user's home.
 
 The studio reads `.cms/schema.yaml` from that working copy and builds the
@@ -1562,6 +1570,12 @@ limits. `docker compose up -d` alone restores a stopped stack. What that costs:
 - `PREVIEW_MAX_RUNNING` dev servers (six) run at once, the longest unused
   stopping for one more, and a failing one waits longer before each retry.
 - A build whose output holds a link pointing outside it is not put live.
+- That code can write the folder's `.git/config`, so the studio gives git a copy
+  holding only remotes, branches and identity, and refuses to publish while the
+  file names anything else. Git LFS, an SSH command or a credential helper go
+  in the machine's own config (`git config --global`), which is the operator's
+  and is used as it is. A remote that is a folder on the same machine is pushed
+  to without its hooks; `greatcms studio` on your own checkout trusts its config.
 
 ## Declaring sites up front
 
@@ -1629,7 +1643,8 @@ preview.example.com {
 ```
 
 The studio's own session cookie never leaves the studio's host, because the
-preview runs the site's code and would otherwise receive it. Signing in also
+preview runs the site's code and would otherwise receive it; over HTTPS it is
+named `__Host-greatcms_session`, a name a preview cannot set. Signing in also
 sets a second cookie for the parent domain that opens the preview and nothing
 else. For that, the studio has to know the domain and its own address:
 

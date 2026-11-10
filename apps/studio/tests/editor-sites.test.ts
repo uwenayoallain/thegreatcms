@@ -473,3 +473,22 @@ describe("two editors, each seeing only their own things", () => {
     }
   });
 });
+
+describe("the list of sites", () => {
+  it("says whose list it is: the studio's for the owner, their own for an editor", async () => {
+    alpha.store.addEditor({
+      name: "Ann",
+      email: "ann@example.com",
+      passwordHash: hashPassword(WORD),
+      sites: [ALPHA],
+    });
+    const ann = await signInAs("ann@example.com");
+
+    const hers = (await text(get("/", ann))).replace(/\s+/g, " ");
+    expect(hers).toContain("The sites you can edit.");
+    expect(hers).not.toContain("Every site the studio can edit");
+    expect((await text(get("/", signedIn))).replace(/\s+/g, " ")).toContain(
+      "Every site the studio can edit.",
+    );
+  });
+});

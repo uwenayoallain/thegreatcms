@@ -34,12 +34,13 @@ import {
   previewPath,
   resolveRegion,
   validateRegion,
+  usePatternMatcher,
 } from "@greatcms/spec";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { html } from "hono/html";
 import { bodyLimit } from "hono/body-limit";
 import { pack } from "./pack.js";
-import { setFlagsFromString } from "node:v8";
+import { boundedMatch } from "./patterns.js";
 import { editorSites, SiteAccess } from "./access.js";
 import { withoutServerPaths } from "./redact.js";
 import {
@@ -51,6 +52,7 @@ import {
   readFlash,
   clearPreviewCookie,
   clearSessionCookie,
+  clearUnprefixedSession,
   readGithubTrip,
   sameText,
   startGithubTrip,
@@ -116,8 +118,9 @@ import {
   hasSchema,
   isBranchName,
   isFolderName,
-  reachesPrivateNetwork,
+  cloneRoute,
   type ResolveHost,
+  type SshLookup,
   isInside,
   listFolders,
   nameFromFolder,
@@ -141,9 +144,8 @@ import { findSiteIcon } from "./site-icon.js";
 import { Liveness } from "./liveness.js";
 import { historyPage, searchPage } from "./views/tool-pages.js";
 
-// A schema's `pattern` comes from the repository and runs on every save. One that backtracks
-// without end, like `^(a+)+$`, is handed to V8's linear-time engine instead of hanging the server.
-setFlagsFromString("--enable-experimental-regexp-engine-on-excessive-backtracks");
+// A schema's `pattern` comes from the repository and runs on every save, so each is time-limited.
+usePatternMatcher(boundedMatch);
 
 export interface AppOptions {
   store: Store;
@@ -207,6 +209,8 @@ export interface AppOptions {
   clonePrivate?: boolean;
   /** Replaces DNS for the check above, in tests. */
   resolveHost?: ResolveHost;
+  /** What ssh would connect to for a host; `ssh -G` unless a test says otherwise. */
+  sshLookup?: SshLookup;
   /** Submissions one site may store per day, whoever sends them. Injected by tests. */
   siteSubmissionLimiter?: RateLimiter;
   /** Notification emails one site may send per hour. Injected by tests. */
@@ -578,6 +582,7 @@ export function createApp(options: AppOptions) {
     const secure = isSecure(c);
     const stamp = stampFor(actor);
     c.header("Set-Cookie", createSessionCookie(signingKey, { actor, stamp, secure }));
+    if (secure) c.header("Set-Cookie", clearUnprefixedSession(), { append: true });
     if (options.cookieDomain) {
       c.header(
         "Set-Cookie",
@@ -590,7 +595,7 @@ export function createApp(options: AppOptions) {
   const retire = (c: Context) => {
     const cookies = c.req.header("cookie");
     for (const session of [
-      readSession(cookies, signingKey),
+      readSession(cookies, signingKey, isSecure(c)),
       readPreviewSession(cookies, signingKey),
     ]) {
       if (session) store.revokeSession(session.id, session.expiresAt);
@@ -635,7 +640,7 @@ export function createApp(options: AppOptions) {
       return next();
     }
 
-    const session = readSession(c.req.header("cookie"), signingKey);
+    const session = readSession(c.req.header("cookie"), signingKey, isSecure(c));
     if (!session) {
       if (c.req.method !== "GET")
         return c.text("Your session expired. Sign in and try again.", 401);
@@ -656,7 +661,9 @@ export function createApp(options: AppOptions) {
     c.set("among", mine.among);
     // A notice an action left behind: shown by the first page drawn after it, then forgotten.
     const waiting =
-      c.req.method === "GET" ? readFlash(c.req.header("cookie"), signingKey, session.actor) : null;
+      c.req.method === "GET"
+        ? readFlash(c.req.header("cookie"), signingKey, session.actor, Date.now(), isSecure(c))
+        : null;
     let shown = false;
     const shell = {
       ...panesOf(c.req.header("cookie")),
@@ -670,7 +677,8 @@ export function createApp(options: AppOptions) {
       },
     };
     await withViewer(who, () => withChrome(shell, next));
-    const stale = c.req.method === "GET" && !waiting && hasFlash(c.req.header("cookie"));
+    const stale =
+      c.req.method === "GET" && !waiting && hasFlash(c.req.header("cookie"), isSecure(c));
     if ((shown && waiting) || (stale && c.res.status === 200)) {
       c.header("Set-Cookie", clearFlash(isSecure(c)), { append: true });
     }
@@ -833,7 +841,7 @@ export function createApp(options: AppOptions) {
     const host = c.req.header("x-forwarded-host");
     const who =
       viewerOf(readPreviewSession(cookies, signingKey)) ??
-      viewerOf(readSession(cookies, signingKey));
+      viewerOf(readSession(cookies, signingKey, isSecure(c)));
     // Anyone but an owner opens the previews of the sites they open, and no one else's.
     const theirs = async (person: Viewer) =>
       (await sitesFor(person)).sites.some((site) => previewHost(site.devUrl) === host);
@@ -960,7 +968,7 @@ export function createApp(options: AppOptions) {
   app.get("/sign-in", (c) => {
     const next = allowedNext(c.req.query("next")) ?? undefined;
     // Signed in here already, sent from the preview: renew its cookie rather than ask again.
-    const session = readSession(c.req.header("cookie"), signingKey);
+    const session = readSession(c.req.header("cookie"), signingKey, isSecure(c));
     if (viewerOf(session)) {
       if (next) signIn(c, session!.actor);
       return c.redirect(next ?? "/", 303);
@@ -987,7 +995,7 @@ export function createApp(options: AppOptions) {
   app.get(SIGN_IN_CALLBACK, async (c) => {
     if (!hub || !githubSignIn()) return c.notFound();
     const address = addressOf(c);
-    const trip = readGithubTrip(c.req.header("cookie"), signingKey);
+    const trip = readGithubTrip(c.req.header("cookie"), signingKey, Date.now(), isSecure(c));
     const next = allowedNext(trip?.next) ?? undefined;
     const refuse = (error: string, status: 400 | 429 = 400) => {
       c.header("Set-Cookie", clearGithubTrip(isSecure(c)));
@@ -1473,24 +1481,28 @@ export function createApp(options: AppOptions) {
     }
     const busy = clones.busy(folder);
     if (busy) return again(busy);
-    if (
-      !options.clonePrivate &&
-      (await reachesPrivateNetwork(cloneValues.url, options.resolveHost))
-    ) {
-      return again(
-        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
-      );
-    }
     let config: Array<[string, string]> = [];
     try {
       config = (await options.github?.gitConfigFor(cloneValues.url)) ?? [];
     } catch (error) {
       return again(describeError(error));
     }
+    // Looked up once: git is then held to the addresses that were checked.
+    const route = options.clonePrivate
+      ? undefined
+      : await cloneRoute(cloneValues.url, config, options.resolveHost, options.sshLookup);
+    if (route?.private) {
+      return again(
+        "That address is on this machine or its private network, which Copy from Git does not reach.\n  fix: start the studio with STUDIO_CLONE_PRIVATE=1 if your Git server lives there.",
+      );
+    }
     // Asked again: another copy may have started while the address was being looked up.
     const taken = clones.busy(folder);
     if (taken) return again(taken);
-    void clones.start(cloneValues.url, folder, cloneValues.branch, config);
+    void clones.start(cloneValues.url, folder, cloneValues.branch, [
+      ...config,
+      ...(route?.pin ?? []),
+    ]);
     return c.redirect("/sites/new", 303);
   });
 
@@ -1742,7 +1754,8 @@ export function createApp(options: AppOptions) {
     store.updateSite(site.id, {
       name: values.name,
       devUrl: values.devUrl,
-      pushAfterPublish: values.pushAfterPublish === "on",
+      // The local studio's form has no such box, so what the site had is kept.
+      pushAfterPublish: options.local ? site.pushAfterPublish : values.pushAfterPublish === "on",
       deployRoot: values.deployRoot,
     });
     sitesChanged();

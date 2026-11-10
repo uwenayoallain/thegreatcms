@@ -66,6 +66,12 @@ limits. `docker compose up -d` alone restores a stopped stack. What that costs:
 - `PREVIEW_MAX_RUNNING` dev servers (six) run at once, the longest unused
   stopping for one more, and a failing one waits longer before each retry.
 - A build whose output holds a link pointing outside it is not put live.
+- That code can write the folder's `.git/config`, so the studio gives git a copy
+  holding only remotes, branches and identity, and refuses to publish while the
+  file names anything else. Git LFS, an SSH command or a credential helper go
+  in the machine's own config (`git config --global`), which is the operator's
+  and is used as it is. A remote that is a folder on the same machine is pushed
+  to without its hooks; `greatcms studio` on your own checkout trusts its config.
 
 ## Declaring sites up front
 
@@ -133,7 +139,8 @@ preview.example.com {
 ```
 
 The studio's own session cookie never leaves the studio's host, because the
-preview runs the site's code and would otherwise receive it. Signing in also
+preview runs the site's code and would otherwise receive it; over HTTPS it is
+named `__Host-greatcms_session`, a name a preview cannot set. Signing in also
 sets a second cookie for the parent domain that opens the preview and nothing
 else. For that, the studio has to know the domain and its own address:
 

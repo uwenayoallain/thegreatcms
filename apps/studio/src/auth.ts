@@ -6,6 +6,13 @@ const COOKIE = "greatcms_session";
 const PREVIEW_COOKIE = "greatcms_preview";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
 
+/**
+ * Over HTTPS the studio's own cookies carry the `__Host-` prefix: a browser accepts that name only
+ * from this exact host, so a preview on a sibling host, which runs a site's code, cannot plant one
+ * for the parent domain. Plain http, as on localhost, has no such prefix and keeps the bare name.
+ */
+const own = (name: string, secure: boolean) => (secure ? `__Host-${name}` : name);
+
 export interface Session {
   /** `studio` for the owner, `editor:<id>` for an editor, `github:<id>` for a GitHub account. */
   actor: string;
@@ -28,7 +35,7 @@ export interface CookieOptions {
  * cookie scoped to the parent domain would hand that code the studio.
  */
 export function createSessionCookie(secret: string, options: CookieOptions = {}): string {
-  return signedCookie(COOKIE, keyFor(secret, "session"), options);
+  return signedCookie(own(COOKIE, options.secure ?? false), keyFor(secret, "session"), options);
 }
 
 /** Opens the preview for whoever signed in, via the proxy's forward-auth, and nothing else. */
@@ -154,7 +161,7 @@ export function startGithubTrip(
   const expiresAt = now + GITHUB_MINUTES * 60_000;
   const payload = `${nonce}.${expiresAt}.${Buffer.from(next).toString("base64url")}`;
   return {
-    cookie: `${GITHUB_COOKIE}=${payload}.${sign(payload, key)}; Path=/sign-in/github; HttpOnly; SameSite=Lax; Max-Age=${GITHUB_MINUTES * 60}${cookieScope(secure)}`,
+    cookie: `${own(GITHUB_COOKIE, secure)}=${payload}.${sign(payload, key)}; Path=${githubPath(secure)}; HttpOnly; SameSite=Lax; Max-Age=${GITHUB_MINUTES * 60}${cookieScope(secure)}`,
     trip: githubTrip(key, nonce, next, expiresAt),
   };
 }
@@ -164,8 +171,9 @@ export function readGithubTrip(
   cookieHeader: string | undefined,
   secret: string,
   now = Date.now(),
+  secure = false,
 ): GithubTrip | null {
-  const parts = parseCookies(cookieHeader)[GITHUB_COOKIE]?.split(".");
+  const parts = parseCookies(cookieHeader)[own(GITHUB_COOKIE, secure)]?.split(".");
   if (parts?.length !== 4) return null;
   const [nonce, expiry, next, signature] = parts as [string, string, string, string];
   const key = keyFor(secret, "github");
@@ -176,8 +184,11 @@ export function readGithubTrip(
 }
 
 export function clearGithubTrip(secure = false): string {
-  return `${GITHUB_COOKIE}=; Path=/sign-in/github; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
+  return `${own(GITHUB_COOKIE, secure)}=; Path=${githubPath(secure)}; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
 }
+
+/** A `__Host-` cookie must cover the whole host; the bare one is only sent to the callback. */
+const githubPath = (secure: boolean) => (secure ? "/" : "/sign-in/github");
 
 const FLASH_COOKIE = "greatcms_flash";
 const FLASH_SECONDS = 60;
@@ -199,7 +210,7 @@ export function flashCookie(
   const text = Buffer.from(flash.message.slice(0, 400)).toString("base64url");
   const payload = `${flash.kind}.${text}.${now + FLASH_SECONDS * 1000}`;
   const signature = sign(`${actor} ${payload}`, keyFor(secret, "flash"));
-  return `${FLASH_COOKIE}=${payload}.${signature}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${FLASH_SECONDS}${cookieScope(secure)}`;
+  return `${own(FLASH_COOKIE, secure)}=${payload}.${signature}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${FLASH_SECONDS}${cookieScope(secure)}`;
 }
 
 /** The notice waiting for this person, or null when there is none, it is not theirs, or it ran out. */
@@ -208,8 +219,9 @@ export function readFlash(
   secret: string,
   actor: string,
   now = Date.now(),
+  secure = false,
 ): Flash | null {
-  const parts = parseCookies(cookieHeader)[FLASH_COOKIE]?.split(".");
+  const parts = parseCookies(cookieHeader)[own(FLASH_COOKIE, secure)]?.split(".");
   if (parts?.length !== 4) return null;
   const [kind, text, expiry, signature] = parts as [string, string, string, string];
   if (kind !== "success" && kind !== "error") return null;
@@ -219,12 +231,12 @@ export function readFlash(
   return { kind, message: Buffer.from(text, "base64url").toString() };
 }
 
-export function hasFlash(cookieHeader: string | undefined): boolean {
-  return FLASH_COOKIE in parseCookies(cookieHeader);
+export function hasFlash(cookieHeader: string | undefined, secure = false): boolean {
+  return own(FLASH_COOKIE, secure) in parseCookies(cookieHeader);
 }
 
 export function clearFlash(secure = false): string {
-  return `${FLASH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
+  return `${own(FLASH_COOKIE, secure)}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
 }
 
 /** Whether two strings match, taking as long whether or not they do. */
@@ -233,7 +245,12 @@ export function sameText(a: string, b: string): boolean {
 }
 
 export function clearSessionCookie(secure = false): string {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
+  return `${own(COOKIE, secure)}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieScope(secure)}`;
+}
+
+/** Drops the session cookie under the name it had before the prefix, which is no longer read over HTTPS. */
+export function clearUnprefixedSession(): string {
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`;
 }
 
 export function clearPreviewCookie(secure = false, domain?: string): string {
@@ -253,8 +270,12 @@ export function sessionKey(secret: string, password: string): string {
   return createHmac("sha256", secret).update(`session ${password}`).digest("hex");
 }
 
-export function readSession(cookieHeader: string | undefined, secret: string): Session | null {
-  return readSigned(parseCookies(cookieHeader)[COOKIE], keyFor(secret, "session"));
+export function readSession(
+  cookieHeader: string | undefined,
+  secret: string,
+  secure = false,
+): Session | null {
+  return readSigned(parseCookies(cookieHeader)[own(COOKIE, secure)], keyFor(secret, "session"));
 }
 
 export function readPreviewSession(

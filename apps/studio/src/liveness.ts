@@ -1,5 +1,6 @@
 /** Whether a site's dev server is answering, so a screen can say so instead of framing an error page. */
 
+import { request } from "node:http";
 import { connect } from "node:net";
 import type { Site } from "./db.js";
 import { isHttpUrl } from "./http.js";
@@ -32,17 +33,22 @@ export class Liveness {
   }
 
   private async check(site: Site): Promise<boolean | null> {
-    const url = this.managed(site) || this.probeUrls.get(site.id) || site.devUrl;
+    const service = this.managed(site);
+    const url = service || this.probeUrls.get(site.id) || site.devUrl;
     if (!url) return null;
-    const known = this.seen.get(url);
+    // A proxy in front of the preview service accepts connections whether or not the service is up.
+    const key = service ? `${url} ${site.devUrl}` : url;
+    const known = this.seen.get(key);
     if (known && Date.now() - known.at < (known.up ? FRESH_MS.up : FRESH_MS.down)) return known.up;
-    let pending = this.asking.get(url);
+    let pending = this.asking.get(key);
     if (!pending) {
-      pending = ask(url).finally(() => this.asking.delete(url));
-      this.asking.set(url, pending);
+      pending = (service ? askService(url, site.devUrl) : ask(url)).finally(() =>
+        this.asking.delete(key),
+      );
+      this.asking.set(key, pending);
     }
     const up = await pending;
-    this.seen.set(url, { up, at: Date.now() });
+    this.seen.set(key, { up, at: Date.now() });
     return up;
   }
 
@@ -52,6 +58,40 @@ export class Liveness {
     const answers = await Promise.all(sites.map((site) => this.check(site)));
     return new Map(sites.map((site, index) => [site.id, answers[index] ?? null]));
   }
+}
+
+/** What the preview service answers about one site without starting its dev server. */
+const STATUS_PATH = "/__greatcms/preview";
+
+/**
+ * Whether the preview service answers for a site: its status path, asked by the site's own host
+ * name. Anything but a 2xx, such as a proxy's 502 or the service's 404, is not running.
+ */
+function askService(probe: string, devUrl: string): Promise<boolean> {
+  if (!isHttpUrl(probe) || !isHttpUrl(devUrl)) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    try {
+      const target = new URL(probe);
+      const asked = request({
+        host: target.hostname.replace(/^\[|\]$/g, ""),
+        port: target.port || 80,
+        path: STATUS_PATH,
+        method: "GET",
+        headers: { host: new URL(devUrl).host },
+        timeout: TIMEOUT_MS,
+      });
+      asked.on("response", (response) => {
+        response.resume();
+        const status = response.statusCode ?? 0;
+        resolve(status >= 200 && status < 300);
+      });
+      asked.on("timeout", () => asked.destroy(new Error("timeout")));
+      asked.on("error", () => resolve(false));
+      asked.end();
+    } catch {
+      resolve(false);
+    }
+  });
 }
 
 /**

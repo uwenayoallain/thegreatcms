@@ -13,7 +13,7 @@ import { createApp } from "../src/app.js";
 import { compact } from "../src/views/layout.js";
 import { Store } from "../src/db.js";
 import { createSessionCookie, sessionKey } from "../src/auth.js";
-import { makeSite, PASSWORD, SECRET, signedIn, type Fixture } from "./site.js";
+import { makeSite, PASSWORD, SECRET, signedIn, signedInSecure, type Fixture } from "./site.js";
 
 const fixture = (path: string) => readFileSync(join(FIXTURES_DIR, path), "utf8");
 
@@ -408,7 +408,7 @@ describe("forms on a site", () => {
       publicUrl: "https://studio.example.com",
     });
     const response = await tunnelled.request("http://studio.example.com/sites/site-1", {
-      headers: { ...signedIn, "x-forwarded-proto": "https" },
+      headers: { ...signedInSecure, "x-forwarded-proto": "https" },
     });
     const { document } = new JSDOM(await response.text()).window;
 
