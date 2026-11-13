@@ -86,7 +86,8 @@ async function listen(server: Server): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-type Measure = { shift: number; boxes: Record<string, number[] | null> };
+/** `moved` names what shifted and when, so a failure says what moved rather than only how much. */
+type Measure = { shift: number; moved: string[]; boxes: Record<string, number[] | null> };
 
 let fast: Server;
 let slow: Server;
@@ -115,11 +116,31 @@ async function measure(url: string, width: number, withoutFonts = false): Promis
   const page = await context.newPage();
   if (withoutFonts) await page.route("**/*.woff2", (route) => route.abort());
   await page.addInitScript(() => {
-    const record = globalThis as unknown as { shift: number };
+    const record = globalThis as unknown as { shift: number; moved: string[] };
     record.shift = 0;
+    record.moved = [];
+    type Shift = {
+      value: number;
+      startTime: number;
+      sources?: Array<{ node?: Node; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }>;
+    };
     new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as unknown as { value: number }[])
+      for (const entry of list.getEntries() as unknown as Shift[]) {
         record.shift += entry.value;
+        const what = (entry.sources ?? []).slice(0, 3).map((source) => {
+          const node = source.node as Element | undefined;
+          const name = node?.nodeName
+            ? `${node.nodeName.toLowerCase()}${node.className ? `.${String(node.className).split(" ")[0]}` : ""}`
+            : "?";
+          // oxlint-disable-next-line consistent-function-scoping -- this body runs in the page, which sees nothing outside it
+          const edges = (rect: DOMRectReadOnly) =>
+            [rect.x, rect.y, rect.width, rect.height].map(Math.round);
+          return `${name} ${edges(source.previousRect)} to ${edges(source.currentRect)}`;
+        });
+        record.moved.push(
+          `${entry.value.toFixed(4)} at ${Math.round(entry.startTime)}ms in a ${innerWidth}x${innerHeight} window: ${what.join("; ")}`,
+        );
+      }
     }).observe({ type: "layout-shift", buffered: true });
   });
   try {
@@ -142,7 +163,8 @@ async function measure(url: string, width: number, withoutFonts = false): Promis
         await frames();
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
-      return { boxes, shift: (globalThis as unknown as { shift: number }).shift };
+      const { shift, moved } = globalThis as unknown as { shift: number; moved: string[] };
+      return { boxes, shift, moved };
     }, LANDMARKS);
   } finally {
     await context.close();
@@ -166,11 +188,13 @@ describe.skipIf(!browser)("layout", () => {
       );
       const home = results!.get("/")!;
 
-      for (const [path, { shift, boxes }] of results!) {
-        expect(shift, `${path} at ${width}px shifted`).toBe(0);
-        expect(late!.get(path)!.shift, `${path} at ${width}px shifted when its font was late`).toBe(
-          0,
-        );
+      for (const [path, { shift, moved, boxes }] of results!) {
+        expect(shift, `${path} at ${width}px shifted: ${moved.join(" | ")}`).toBe(0);
+        const slowly = late!.get(path)!;
+        expect(
+          slowly.shift,
+          `${path} at ${width}px shifted when its font was late: ${slowly.moved.join(" | ")}`,
+        ).toBe(0);
         for (const [name, edges] of Object.entries(COMPARED)) {
           const box = boxes[name];
           expect(box, `${path} has no ${name}`).toBeTruthy();
