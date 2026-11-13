@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/studio",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "The GreatCMS studio: the visual editor for Git-backed sites, run locally with `greatcms studio` or as a server.",
   "keywords": [
     "cms",

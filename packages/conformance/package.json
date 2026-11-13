@@ -1,6 +1,6 @@
 {
   "name": "@greatcms/conformance",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Fixtures and a verifier that define what reading the GreatCMS standard correctly means, in any language.",
   "keywords": [
     "cms",
