@@ -17,7 +17,8 @@ export function Price({ value, className = "price" }: { value: number; className
   const [currency, amount] = price(value).split(" ");
   return (
     <span className={className}>
-      <span className="currency">{currency}</span> {amount}
+      <span className="currency">{currency}</span>
+      {` ${amount}`}
     </span>
   );
 }

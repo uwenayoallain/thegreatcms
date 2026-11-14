@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Screenshots each example's home page for the website's examples page, from the combined build.
+ * Screenshots each example's home page, light and dark, for the website's examples page.
  * Run after `node scripts/build-website.mjs`; the images are committed, so only when a site changes.
  */
 
@@ -44,9 +44,19 @@ const browser = await chromium
   .catch(() => chromium.launch({ channel: "chrome" }));
 mkdirSync(SHOTS, { recursive: true });
 try {
+  const shots = EXAMPLES.flatMap(({ slug }) =>
+    ["light", "dark"].map((scheme) => ({
+      slug,
+      scheme,
+      file: scheme === "dark" ? `${slug}-dark` : slug,
+    })),
+  );
   await Promise.all(
-    EXAMPLES.map(async ({ slug }) => {
-      const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    shots.map(async ({ slug, scheme, file }) => {
+      const page = await browser.newPage({
+        viewport: { width: 1440, height: 900 },
+        colorScheme: scheme,
+      });
       await page.goto(`${origin}/examples/${slug}/`, { waitUntil: "load" });
       await page.evaluate(async () => {
         document.querySelector("[data-greatcms-back]")?.remove();
@@ -54,9 +64,9 @@ try {
       });
       // Entrance motion settles first, so the picture is the page as a visitor sees it.
       await page.waitForTimeout(1800);
-      await page.screenshot({ path: join(SHOTS, `${slug}.png`) });
+      await page.screenshot({ path: join(SHOTS, `${file}.png`) });
       await page.close();
-      console.log(`examples/${slug}`);
+      console.log(`examples/${slug} (${scheme})`);
     }),
   );
 } finally {

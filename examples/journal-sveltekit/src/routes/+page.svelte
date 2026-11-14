@@ -35,9 +35,12 @@
       {#if data.lead.dek}<p class="dek">{data.lead.dek}</p>{/if}
     </div>
     {#if data.lead.opening}
-      <blockquote class="opening" cite="/essays/{data.lead.slug}/">
-        <p>{data.lead.opening}</p>
-      </blockquote>
+      <div class="opening">
+        <p class="meta">How it begins</p>
+        <blockquote cite="/essays/{data.lead.slug}/">
+          <p>{data.lead.opening}</p>
+        </blockquote>
+      </div>
     {/if}
     <a class="more" href="/essays/{data.lead.slug}/">Read the essay <span aria-hidden="true">→</span></a>
   </article>

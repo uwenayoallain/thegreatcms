@@ -8,6 +8,10 @@ const identity = cms.region('site.identity');
 const studio = (import.meta.env.PUBLIC_CMS_URL ?? 'https://studio.paraline.example').replace(/\/+$/, '');
 const siteId = import.meta.env.PUBLIC_CMS_SITE_ID ?? 'paraline';
 const action = `${studio}/f/${encodeURIComponent(siteId)}/contact`;
+const choices = [
+  { name: 'budget', legend: 'Roughly what budget?', options: ['Under €20k', '€20–50k', '€50–100k', '€100k+'] },
+  { name: 'timeline', legend: 'When should it ship?', options: ['This quarter', 'Within six months', 'No date yet'] },
+];
 ---
 
 <Base title="Contact" description={`Start a project with ${identity.name}.`}>
@@ -29,30 +33,69 @@ const action = `${studio}/f/${encodeURIComponent(siteId)}/contact`;
     <div class="contact__panel">
       <p id="sent" class="contact__sent" role="status">{page.thanks}</p>
       <form class="contact__form" method="POST" action={action}>
+        <p class="brief__head">
+          <span class="eyebrow">Project brief</span>
+          <span class="brief__time">About two minutes</span>
+        </p>
         {
           (page.kinds ?? []).length > 0 && (
-            <fieldset class="kinds">
-              <legend>What are you after?</legend>
-              {(page.kinds ?? []).map((kind) => (
-                <label class="kind">
-                  <input type="checkbox" name="kind" value={kind} />
-                  <span>{kind}</span>
-                </label>
-              ))}
+            <fieldset class="brief__step">
+              <legend>
+                <span class="brief__n">01</span>What do you need? <span class="optional">Pick any</span>
+              </legend>
+              <div class="choices">
+                {(page.kinds ?? []).map((kind) => (
+                  <label class="choice">
+                    <input type="checkbox" name="kind" value={kind} />
+                    <span>{kind}</span>
+                  </label>
+                ))}
+              </div>
             </fieldset>
           )
         }
-        <div class="line">
-          <input id="name" name="name" autocomplete="name" placeholder=" " required />
-          <label for="name">Your name</label>
-        </div>
-        <div class="line">
-          <input id="email" name="email" type="email" autocomplete="email" placeholder=" " required />
-          <label for="email">Email</label>
-        </div>
-        <div class="line">
-          <textarea id="message" name="message" rows="5" placeholder=" " required></textarea>
-          <label for="message">What are you making?</label>
+        {
+          choices.map((group, i) => (
+            <fieldset class="brief__step">
+              <legend>
+                <span class="brief__n">{String(i + 2).padStart(2, '0')}</span>
+                {group.legend} <span class="optional">Optional</span>
+              </legend>
+              <div class="choices">
+                {group.options.map((option) => (
+                  <label class="choice">
+                    <input type="radio" name={group.name} value={option} />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))
+        }
+        <fieldset class="brief__step">
+          <legend><span class="brief__n">04</span>Who are we talking to?</legend>
+          <div class="brief__pair">
+            <div class="field">
+              <label for="name">Your name</label>
+              <input id="name" name="name" autocomplete="name" placeholder="Ada Okafor" required />
+              <p class="field__error">Tell us what to call you.</p>
+            </div>
+            <div class="field">
+              <label for="email">Work email</label>
+              <input id="email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+              <p class="field__error">That address is missing an @ or a domain.</p>
+            </div>
+          </div>
+        </fieldset>
+        <div class="brief__step field">
+          <label for="message"><span class="brief__n">05</span>What are you making?</label>
+          <textarea
+            id="message"
+            name="message"
+            rows="6"
+            placeholder="The product, who it is for, and the moment in it that does not feel right yet."
+            required></textarea>
+          <p class="field__error">A sentence or two is plenty.</p>
         </div>
         <input type="hidden" name="_redirect" value="/contact/#sent" />
         <input type="hidden" name="_t" value={String(Date.now())} />
@@ -60,10 +103,13 @@ const action = `${studio}/f/${encodeURIComponent(siteId)}/contact`;
           <label for="company">Company</label>
           <input id="company" name="company" tabindex="-1" autocomplete="off" />
         </div>
-        <button class="cta__button contact__send" type="submit" data-magnetic data-cursor="Send">
-          <span>Send it</span>
-          <span class="cta__arrow" aria-hidden="true">→</span>
-        </button>
+        <div class="brief__send">
+          <button class="cta__button contact__send" type="submit" data-magnetic data-cursor="Send">
+            <span>Send the brief</span>
+            <span class="cta__arrow" aria-hidden="true">→</span>
+          </button>
+          <p>We reply within two working days, usually with questions.</p>
+        </div>
       </form>
     </div>
   </section>

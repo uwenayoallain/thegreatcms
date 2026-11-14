@@ -81,23 +81,36 @@ useHead({
   </section>
 
   <section id="waitlist" class="waitlist" aria-labelledby="waitlist-heading">
+    <p class="eyebrow">Private beta · invitations go out weekly</p>
     <h2 id="waitlist-heading">Join the beta</h2>
-    <p>One email when your invitation is ready, and nothing else.</p>
+    <p class="waitlist-lede">
+      Leave an address and we will send one email, when your invitation is ready. Nothing else.
+    </p>
     <form
-      class="inline"
+      class="signup"
       method="POST"
       :action="`${config.public.cmsUrl}/f/${config.public.cmsSite}/waitlist`"
     >
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required />
+      <label for="email">Your email</label>
+      <div class="control">
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          placeholder="you@company.com"
+          aria-describedby="email-hint"
+          required
+        />
+        <button class="button" type="submit">Ask for an invitation</button>
       </div>
+      <p id="email-hint" class="hint">Work or personal, whichever calendar you live in.</p>
+      <p class="error">That does not look like an email address yet.</p>
       <input type="hidden" name="_redirect" value="/thanks/" />
       <div class="trap" aria-hidden="true">
         <label for="website">Website</label>
         <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
       </div>
-      <button class="button" type="submit">Ask for an invitation</button>
     </form>
   </section>
 </template>

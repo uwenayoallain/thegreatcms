@@ -3,14 +3,14 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Page not found" description="There is no page at this address." noindex>
-  <section>
+  <section class="page-intro">
     <p class="eyebrow">404</p>
     <h1>Nothing lives here</h1>
-    <p>This address does not lead anywhere. One of these will.</p>
-    <ul>
-      <li><a href="/">Home</a></li>
-      <li><a href="/about/">About</a></li>
-      <li><a href="/blog/">Blog</a></li>
+    <p class="lede">This address does not lead anywhere. One of these will.</p>
+    <ul class="link-list" role="list">
+      <li><a href="/">Home <span aria-hidden="true">→</span></a></li>
+      <li><a href="/about/">About <span aria-hidden="true">→</span></a></li>
+      <li><a href="/blog/">Blog <span aria-hidden="true">→</span></a></li>
     </ul>
   </section>
 </Base>

@@ -11,6 +11,14 @@
   --paper: #fbfaf8;
   --paper-raised: #ffffff;
   --line: #dcd8d1;
+  /* Form fields need 3:1 against what is around them, more than a decorative rule does. */
+  --field-line: #8c877e;
+  --placeholder: #6b6f76;
+  /* The contact panel: the brand's deep green in both schemes, with its own text and focus colours. */
+  --panel: #1f4d3d;
+  --panel-ink: #ffffff;
+  --panel-soft: #c6dcd3;
+  --error: #b42318;
   --accent: #1f4d3d;
   --accent-ink: #ffffff;
   --focus: #b4530a;
@@ -30,6 +38,12 @@
     --paper: #14161a;
     --paper-raised: #1c1f24;
     --line: #333840;
+    --field-line: #6b717b;
+    --placeholder: #8d929a;
+    --panel: #16332b;
+    --panel-ink: #eceae6;
+    --panel-soft: #a9c4b9;
+    --error: #ff8a80;
     --accent: #7fd3b0;
     --accent-ink: #10201a;
     --focus: #ffb066;
@@ -142,6 +156,22 @@ a:hover {
   text-decoration: none;
 }
 
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The mark: a page with its corner turned, in the accent. */
+.wordmark::before {
+  content: "";
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-right: 0.5rem;
+  background: var(--accent);
+  border-radius: 4px 9px 4px 4px;
+}
+
 .wordmark span {
   color: var(--accent);
 }
@@ -210,29 +240,180 @@ section + section {
 }
 
 .hero {
-  position: relative;
-  padding: clamp(1.5rem, 6vw, 4.5rem) 0 clamp(1rem, 4vw, 2.5rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(2.5rem, 6vw, 4.5rem);
+  align-items: center;
+  padding: clamp(0.5rem, 3vw, 2.5rem) 0 clamp(0.5rem, 2vw, 1.5rem);
 }
 
-/* A wash of the accent behind the headline, so the first screen has a centre of gravity. */
-.hero::before {
-  content: "";
-  position: absolute;
-  /* Out to the page's own padding and no further, so nothing ever scrolls sideways. */
-  inset: calc(-1 * clamp(2rem, 5vw, 4rem)) calc(-1 * var(--gap)) auto;
-  height: calc(100% + clamp(2rem, 5vw, 4rem));
-  z-index: -1;
-  /* Sized to the box and faded long before its edges, so it never shows a border. */
-  background: radial-gradient(
-    ellipse 34% 46% at 28% 50%,
-    color-mix(in srgb, var(--accent) 10%, transparent),
-    transparent
-  );
-  pointer-events: none;
+@media (min-width: 60rem) {
+  .hero {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
 }
 
 .hero h1 {
-  max-width: 16ch;
+  max-width: 15ch;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.75rem;
+  margin: 2rem 0 0;
+}
+
+.hero-actions .button {
+  margin-top: 0;
+}
+
+.text-link {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+/* The drawing: a page on a dotted desk, the line being changed outlined in the accent. */
+.hero-art {
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  background:
+    radial-gradient(
+        circle at 1px 1px,
+        color-mix(in srgb, var(--ink) 16%, transparent) 1px,
+        transparent 0
+      )
+      0 0 / 16px 16px,
+    color-mix(in srgb, var(--accent) 6%, var(--paper));
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) * 2);
+}
+
+.window {
+  overflow: hidden;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent),
+    0 28px 50px -28px color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.window-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.window-bar i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.window-bar span {
+  flex: 1;
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.75rem;
+  background: var(--paper);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.window-body {
+  padding: clamp(1.1rem, 3vw, 1.6rem);
+}
+
+.mock-kicker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mock-title {
+  margin: 0.2rem 0 1rem;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.mock-hours {
+  margin: 0;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mock-hours div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid transparent;
+  border-top-color: var(--line);
+}
+
+.mock-hours dt {
+  color: var(--ink-soft);
+}
+
+.mock-hours dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.mock-hours .is-editing {
+  border-color: var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--paper-raised));
+}
+
+.mock-hours .is-editing + div {
+  border-top-color: transparent;
+}
+
+.mock-hours mark {
+  padding-inline: 0.1em;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+  box-shadow: 2px 0 0 var(--accent);
+}
+
+.mock-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: -1.1rem 0 0 1.25rem;
+  padding: 0.5rem 0.95rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.mock-status b {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #2fbf86;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2fbf86 30%, transparent);
 }
 
 .lede,
@@ -343,19 +524,104 @@ form.contact button:hover {
   color: var(--ink-soft);
 }
 
+/* Two tones: the studio's green beside the form's paper, one panel with one edge. */
 .contact-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: var(--gap) clamp(2rem, 6vw, 5rem);
-  align-items: start;
-  padding: clamp(1.5rem, 4vw, 2.5rem);
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: calc(var(--radius) * 1.6);
+  box-shadow: 0 30px 60px -40px color-mix(in srgb, var(--ink) 40%, transparent);
 }
 
-.contact-intro p {
-  color: var(--ink-soft);
+@media (min-width: 56rem) {
+  .contact-section {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+
+.contact-intro,
+form.contact {
+  padding: clamp(1.5rem, 4.5vw, 3rem);
+}
+
+.contact-intro {
+  --focus: #ffb066;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      color-mix(in srgb, var(--panel-ink) 8%, transparent),
+      transparent 55%
+    ),
+    var(--panel);
+  color: var(--panel-ink);
+}
+
+.contact-intro .eyebrow,
+.contact-intro > p {
+  color: var(--panel-soft);
+}
+
+.contact-intro > p {
+  margin: 0;
+}
+
+.contact-details {
+  display: grid;
+  gap: 1rem;
+  margin: 2rem 0;
+  padding: 1.5rem 0;
+  border-block: 1px solid color-mix(in srgb, var(--panel-ink) 20%, transparent);
+}
+
+.contact-details dt {
+  color: var(--panel-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.contact-details dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* Who reads the message, at the foot of the panel however tall the form beside it grows. */
+.contact-person {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: auto;
+}
+
+.contact-person p {
+  margin: 0;
+  color: var(--panel-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.contact-person strong {
+  color: var(--panel-ink);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: #7fd3b0;
+  color: #10201a;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-ink) 25%, transparent);
 }
 
 .grid {
@@ -412,8 +678,20 @@ form.contact button:hover {
 
 blockquote.pull {
   margin: 0;
-  padding: 0.5rem 0 0.5rem 1.5rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1.25rem, 4vw, 3rem);
+  background: color-mix(in srgb, var(--accent) 6%, var(--paper));
   border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+blockquote.pull::before {
+  content: "\201C";
+  display: block;
+  height: 0.55em;
+  color: var(--accent);
+  font-family: Georgia, serif;
+  font-size: 4rem;
+  line-height: 1;
 }
 
 blockquote.pull p {
@@ -530,46 +808,146 @@ time {
 
 form.contact {
   display: grid;
-  gap: 1rem 1.25rem;
+  gap: 1.5rem 1.25rem;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
   align-items: start;
 }
 
-form.contact > :has(textarea),
-form.contact > button {
+form.contact > :is(:has(textarea), .form-actions) {
   grid-column: 1 / -1;
 }
 
-form.contact label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.3rem;
+/* The fields sit together on their own column, so the form needs no box of its own. */
+form.contact {
+  align-content: start;
 }
 
-form.contact :is(input, textarea) {
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.form-actions p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* A quiet tag beside the label; the field's own `required` is what a screen reader hears. */
+.field .required {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.field :is(input, textarea) {
   width: 100%;
-  padding: 0.7rem 0.8rem;
+  min-height: 3rem;
+  padding: 0.75rem 0.9rem;
   font: inherit;
+  line-height: 1.4;
   color: inherit;
   background: var(--paper);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: var(--radius);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
-form.contact .hint {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
+.field textarea {
+  min-height: 9.5rem;
+  resize: vertical;
+}
+
+.field :is(input, textarea)::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+.field :is(input, textarea):hover {
+  border-color: var(--ink-soft);
+}
+
+.field :is(input, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.field .hint {
+  font-size: 0.85rem;
   color: var(--ink-soft);
 }
 
-form.contact :is(input, textarea):focus-visible {
-  border-color: var(--accent);
+/* Only after the visitor has left a field wrong, never on a fresh page. */
+.field .error {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--error);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.field .error::before {
+  content: "!";
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--error);
+  color: var(--paper-raised);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.field :is(input, textarea):user-invalid {
+  border-color: var(--error);
+  box-shadow: inset 3px 0 0 var(--error);
+}
+
+.field :is(input, textarea):user-invalid:focus-visible {
+  outline-color: var(--error);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--error) 22%, transparent);
+}
+
+.field:has(:user-invalid) .error {
+  display: flex;
+}
+
+.field:has(:user-invalid) .hint {
+  display: none;
 }
 
 form.contact button {
   justify-self: start;
-  padding: 0.7rem 1.3rem;
+  min-height: 3rem;
+  padding: 0.75rem 1.6rem;
   font: inherit;
   font-weight: 600;
   color: var(--accent-ink);
@@ -577,6 +955,16 @@ form.contact button {
   border: 0;
   border-radius: var(--radius);
   cursor: pointer;
+}
+
+form.contact button:focus-visible {
+  outline-color: var(--accent);
+}
+
+@media (max-width: 40rem) {
+  form.contact button {
+    flex: 1 1 100%;
+  }
 }
 
 /* A honeypot: hidden from sight but never with `display:none`, which some
@@ -611,7 +999,6 @@ form.contact button {
 }
 
 .footer-main .wordmark {
-  display: inline-block;
   margin-bottom: 0.4rem;
   color: var(--ink);
 }

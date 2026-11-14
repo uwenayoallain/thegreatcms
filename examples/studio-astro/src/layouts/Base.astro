@@ -48,7 +48,9 @@ const speculation = JSON.stringify({
     <meta property="og:image" content={new URL('/og.png', Astro.site).href} />
     <meta name="twitter:card" content="summary_large_image" />
     {schema && <script type="application/ld+json" is:inline set:html={JSON.stringify({ '@context': 'https://schema.org', ...schema }).replaceAll('<', '\\u003c')} />}
-    <meta name="theme-color" content="#0b0b0e" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0b0b0e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href={display} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />

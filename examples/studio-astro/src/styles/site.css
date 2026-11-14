@@ -119,14 +119,29 @@
   line-gap-override: 0%;
 }
 
+/* --ink is the ground and --bone the figure in both schemes; the light one swaps them, warm. */
 :root {
   --ink: #0b0b0e;
   --ink-2: #16161b;
-  --line: rgb(243 239 231 / 0.12);
+  --panel: #1b1b22;
+  --line: color-mix(in srgb, var(--bone) 12%, transparent);
   --bone: #f3efe7;
-  --mute: rgb(243 239 231 / 0.62);
+  --mute: color-mix(in srgb, var(--bone) 62%, transparent);
   --accent: #ff5a36;
+  /* The accent where it is text or a focus ring, so it keeps its contrast on either ground. */
+  --accent-ink: var(--accent);
+  --on-accent: #0b0b0e;
+  --field: color-mix(in srgb, var(--bone) 45%, transparent);
+  --error: #ff8f9c;
   --accent-2: #7c5cff;
+  --shadow: rgb(0 0 0 / 0.6);
+  --shadow-2: rgb(0 0 0 / 0.35);
+  --mesh: 0.55;
+  --grain: 0.09;
+  --live: #4ade80;
+  --header-bg: transparent;
+  --header-blur: none;
+  --header-blend: difference;
   --sans:
     "Bricolage Grotesque Variable", "Bricolage fallback", ui-sans-serif, system-ui, sans-serif;
   --serif: "Instrument Serif", "Instrument fallback", ui-serif, Georgia, serif;
@@ -138,6 +153,50 @@
   color-scheme: dark;
 }
 
+@media (prefers-color-scheme: light) {
+  :root {
+    --ink: #f4efe6;
+    --ink-2: #fbf8f3;
+    --panel: #fff;
+    --line: color-mix(in srgb, var(--bone) 14%, transparent);
+    --bone: #16130f;
+    --mute: color-mix(in srgb, var(--bone) 64%, transparent);
+    --accent-ink: #bf3816;
+    --field: color-mix(in srgb, var(--bone) 50%, transparent);
+    --error: #b3263e;
+    --shadow: rgb(74 52 30 / 0.28);
+    --shadow-2: rgb(74 52 30 / 0.08);
+    --mesh: 0.3;
+    --grain: 0.05;
+    --live: #16a34a;
+    /* On paper the header is frosted rather than blended, so it reads the same over a cover. */
+    --header-bg: color-mix(in srgb, var(--ink) 80%, transparent);
+    --header-blur: blur(16px) saturate(1.4);
+    --header-blend: normal;
+    color-scheme: light;
+  }
+
+  /* A cover as pale as the paper still needs an edge. */
+  .work-card__media,
+  .case__cover > * {
+    outline: 1px solid var(--line);
+    outline-offset: -1px;
+  }
+
+  /* The closing call and the next project keep the studio's night: dark panels on the paper. */
+  .cta,
+  .next {
+    --ink: #0b0b0e;
+    --ink-2: #16161b;
+    --bone: #f3efe7;
+    --line: color-mix(in srgb, var(--bone) 12%, transparent);
+    --mute: color-mix(in srgb, var(--bone) 62%, transparent);
+    --accent-ink: var(--accent);
+    color: var(--bone);
+    box-shadow: 0 2rem 4rem -2rem var(--shadow);
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -146,6 +205,7 @@
 
 html {
   background: var(--ink);
+  accent-color: var(--accent);
   -webkit-text-size-adjust: 100%;
   /* Room for the scrollbar on every page, so the fixed header spans the same width on a short one. */
   scrollbar-gutter: stable;
@@ -188,12 +248,12 @@ p {
 }
 
 ::selection {
-  color: var(--ink);
+  color: var(--on-accent);
   background: var(--accent);
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 4px;
   border-radius: 4px;
 }
@@ -245,7 +305,9 @@ em {
   align-items: center;
   gap: 2rem;
   padding: 1.1rem var(--gutter);
-  mix-blend-mode: difference;
+  background: var(--header-bg);
+  backdrop-filter: var(--header-blur);
+  mix-blend-mode: var(--header-blend);
 }
 
 .wordmark {
@@ -264,12 +326,12 @@ em {
   border-radius: 50%;
   background: conic-gradient(
     from var(--spin),
-    var(--bone) 0 25%,
+    currentColor 0 25%,
     transparent 0 50%,
-    var(--bone) 0 75%,
+    currentColor 0 75%,
     transparent 0
   );
-  border: 1.5px solid var(--bone);
+  border: 1.5px solid;
 }
 
 .site-header nav {
@@ -315,7 +377,7 @@ em {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.8rem;
-  border: 1px solid rgb(243 239 231 / 0.3);
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
   border-radius: 999px;
   font: 500 0.72rem/1 var(--mono);
   letter-spacing: 0.04em;
@@ -325,8 +387,8 @@ em {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 0 0 rgb(74 222 128 / 0.6);
+  background: var(--live);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 60%, transparent);
 }
 
 .progress {
@@ -353,7 +415,7 @@ em {
   min-height: 3.1rem;
   padding: 0 1.5rem;
   overflow: hidden;
-  border: 1px solid rgb(243 239 231 / 0.35);
+  border: 1px solid color-mix(in srgb, var(--bone) 35%, transparent);
   border-radius: 999px;
   font-weight: 550;
   text-decoration: none;
@@ -391,7 +453,7 @@ em {
 }
 
 .button--solid {
-  color: var(--ink);
+  color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
 }
@@ -421,7 +483,7 @@ em {
 .hero__mesh span {
   position: absolute;
   inset: 0;
-  opacity: 0.55;
+  opacity: var(--mesh);
   background: radial-gradient(28% 32% at var(--a1) var(--b1), var(--accent), transparent 70%);
 }
 
@@ -430,7 +492,7 @@ em {
 }
 
 .hero__mesh span:nth-child(3) {
-  opacity: 0.35;
+  opacity: calc(var(--mesh) * 0.64);
   background: radial-gradient(22% 26% at var(--b2) var(--a1), #14b8a6, transparent 70%);
 }
 
@@ -439,7 +501,7 @@ em {
   position: absolute;
   inset: 0;
   z-index: -1;
-  opacity: 0.09;
+  opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
   pointer-events: none;
@@ -471,7 +533,7 @@ em {
 }
 
 .hero__line--rotate {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-family: var(--serif);
   font-style: italic;
   font-weight: 400;
@@ -563,7 +625,7 @@ em {
 }
 
 .marquee__track li {
-  color: rgb(243 239 231 / 0.5);
+  color: color-mix(in srgb, var(--bone) 50%, transparent);
   font-size: clamp(1.6rem, 3.4vw, 3rem);
   font-weight: 600;
   letter-spacing: -0.04em;
@@ -630,7 +692,7 @@ em {
 }
 
 .work-card:focus-visible .work-card__media {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 4px;
 }
 
@@ -639,7 +701,7 @@ em {
   aspect-ratio: 4 / 5;
   overflow: hidden;
   border-radius: clamp(0.75rem, 1.5vw, 1.25rem);
-  box-shadow: 0 1.5rem 3rem -1.5rem rgb(0 0 0 / 0.6);
+  box-shadow: 0 1.5rem 3rem -1.5rem var(--shadow);
   transform: perspective(1200px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
   transition: transform 0.6s var(--ease-out);
 }
@@ -957,13 +1019,13 @@ em {
   padding: clamp(1.75rem, 4vw, 3rem);
   border: 1px solid var(--line);
   border-radius: 1.5rem;
-  background: linear-gradient(160deg, #1b1b22, var(--ink-2));
-  box-shadow: 0 -1.5rem 3rem rgb(0 0 0 / 0.35);
+  background: linear-gradient(160deg, var(--panel), var(--ink-2));
+  box-shadow: 0 -1.5rem 3rem var(--shadow-2);
 }
 
 .service__index {
   padding-top: 0.6rem;
-  color: var(--accent);
+  color: var(--accent-ink);
   font: 500 0.85rem var(--mono);
 }
 
@@ -1029,7 +1091,7 @@ em {
 }
 
 .step__index {
-  color: var(--accent);
+  color: var(--accent-ink);
   font: 500 0.85rem var(--mono);
 }
 
@@ -1188,7 +1250,11 @@ em {
   inset: 1px;
   z-index: -1;
   border-radius: calc(2rem - 1px);
-  background: radial-gradient(120% 90% at 50% 0%, var(--ink-2) 40%, rgb(11 11 14 / 0.75));
+  background: radial-gradient(
+    120% 90% at 50% 0%,
+    var(--ink-2) 40%,
+    color-mix(in srgb, var(--ink) 75%, transparent)
+  );
   content: "";
 }
 
@@ -1245,6 +1311,14 @@ em {
   max-width: 18ch;
   font-size: clamp(3rem, 8vw, 8rem);
   line-height: 0.92;
+}
+
+.page-hero__title + p {
+  margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+.page-hero + .work {
+  padding-top: 0;
 }
 
 .case__head {
@@ -1304,7 +1378,7 @@ em {
 
 .prose {
   max-width: 40rem;
-  color: rgb(243 239 231 / 0.82);
+  color: color-mix(in srgb, var(--bone) 82%, transparent);
   font-size: clamp(1.05rem, 1.2vw, 1.15rem);
   line-height: 1.65;
   text-wrap: pretty;
@@ -1371,12 +1445,17 @@ em {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(90deg, rgb(11 11 14 / 0.88), rgb(11 11 14 / 0.55) 55%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ink) 88%, transparent),
+    color-mix(in srgb, var(--ink) 55%, transparent) 55%,
+    transparent
+  );
   content: "";
 }
 
 .next .eyebrow {
-  color: rgb(243 239 231 / 0.75);
+  color: color-mix(in srgb, var(--bone) 75%, transparent);
 }
 
 .next__arrow {
@@ -1422,14 +1501,18 @@ em {
 
 .contact {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: clamp(3rem, 7vw, 7rem);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(3rem, 6vw, 6rem);
   align-items: start;
   padding: clamp(9rem, 18vw, 13rem) var(--gutter) clamp(4rem, 8vw, 7rem);
 }
 
 .contact__intro .eyebrow {
   margin-bottom: 1.5rem;
+}
+
+.contact .page-hero__title {
+  font-size: clamp(3rem, 5.6vw, 6.5rem);
 }
 
 .contact .contact__mail {
@@ -1443,45 +1526,94 @@ em {
 }
 
 .contact__panel {
-  position: sticky;
-  top: 6rem;
-  padding: clamp(1.75rem, 4vw, 3rem);
+  padding: clamp(1.5rem, 4vw, 3.25rem);
   border: 1px solid var(--line);
-  border-radius: 1.75rem;
-  background: linear-gradient(160deg, #1b1b22, var(--ink-2));
+  border-radius: 2rem;
+  background: linear-gradient(160deg, var(--panel), var(--ink-2));
+  box-shadow: 0 2rem 4rem -2.5rem var(--shadow);
 }
 
 .contact__form {
   display: grid;
-  gap: 1.75rem;
 }
 
-.kinds {
+.brief__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brief__time,
+.optional {
+  color: var(--mute);
+  font: 400 0.72rem var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brief__step {
+  min-width: 0;
+  margin: 0;
+  padding: 1.75rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.brief__step legend,
+.brief__step > label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  width: 100%;
+  margin-bottom: 1.1rem;
+  padding: 0;
+  font-size: clamp(1.1rem, 1.6vw, 1.3rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Floated, a legend sits inside its fieldset's padding like any other label. */
+.brief__step legend {
+  float: left;
+}
+
+.brief__step legend + * {
+  clear: both;
+}
+
+.brief__n {
+  color: var(--accent-ink);
+  font: 500 0.75rem var(--mono);
+  letter-spacing: 0;
+}
+
+.optional {
+  margin-left: auto;
+}
+
+.choices {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  border: 0;
 }
 
-.kinds legend {
-  margin-bottom: 0.9rem;
-  color: var(--mute);
-  font-size: 0.95rem;
+.choice {
+  position: relative;
 }
 
-.kind input {
+.choice input {
   position: absolute;
   opacity: 0;
 }
 
-.kind span {
+.choice span {
   display: inline-block;
-  padding: 0.6rem 1rem;
-  border: 1px solid rgb(243 239 231 / 0.25);
+  padding: 0.7rem 1.15rem;
+  border: 1px solid var(--field);
   border-radius: 999px;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   cursor: pointer;
   transition:
     background-color 0.35s var(--ease-out),
@@ -1489,66 +1621,120 @@ em {
     border-color 0.35s;
 }
 
-.kind:hover span {
+.choice:hover span,
+.field :is(input, textarea):hover {
   border-color: var(--bone);
 }
 
-.kind input:checked + span {
-  color: var(--ink);
+.choice input:checked + span {
+  color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
 }
 
-.kind input:focus-visible + span {
-  outline: 2px solid var(--accent);
+.choice input:checked + span::before {
+  content: "\2713\00a0";
+}
+
+.choice input:focus-visible + span {
+  outline: 2px solid var(--accent-ink);
   outline-offset: 3px;
 }
 
-.line {
-  position: relative;
-  display: flex;
-  flex-direction: column-reverse;
+.brief__pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 1.25rem 1rem;
 }
 
-.line input,
-.line textarea {
-  width: 100%;
-  padding: 0.6rem 0 0.75rem;
-  border: 0;
-  border-radius: 0;
-  border-bottom: 1px solid rgb(243 239 231 / 0.3);
-  color: var(--bone);
-  background: linear-gradient(var(--accent), var(--accent)) 0 100% / 0 2px no-repeat;
-  font: inherit;
-  font-size: 1.2rem;
-  resize: vertical;
-  transition: background-size 0.6s var(--ease-out);
+.field {
+  display: grid;
+  align-content: start;
 }
 
-.line input:focus,
-.line textarea:focus {
-  outline: none;
-  background-size: 100% 2px;
-}
-
-.line label {
+.brief__pair label {
+  margin-bottom: 0.5rem;
   color: var(--mute);
-  font-size: 0.85rem;
-  letter-spacing: 0.01em;
-  transition: color 0.3s;
+  font-size: 0.9rem;
 }
 
-.line:focus-within label {
-  color: var(--accent);
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--field);
+  border-radius: 1rem;
+  color: var(--bone);
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  font: inherit;
+  font-size: 1.1rem;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+
+.field textarea {
+  min-height: 10rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+::placeholder {
+  color: var(--mute);
+  opacity: 0.75;
+}
+
+.field :is(input, textarea):focus {
+  border-color: var(--accent-ink);
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--accent-ink),
+    0 0 0 6px color-mix(in srgb, var(--accent-ink) 20%, transparent);
+}
+
+.field__error {
+  display: none;
+  margin-top: 0.5rem;
+  color: var(--error);
+  font-size: 0.88rem;
+}
+
+.field :is(input, textarea):user-invalid {
+  border-color: var(--error);
+}
+
+.field :user-invalid ~ .field__error {
+  display: block;
+}
+
+.brief__send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  padding-top: 2rem;
+}
+
+.brief__send p {
+  max-width: 17rem;
+  color: var(--mute);
+  font-size: 0.9rem;
 }
 
 .contact__send {
-  justify-self: start;
   border: 0;
+  color: var(--on-accent);
+  background: var(--accent);
   font: inherit;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.contact__send .cta__arrow {
+  color: var(--accent);
+  background: var(--on-accent);
 }
 
 .contact__sent {
@@ -1590,7 +1776,7 @@ em {
 
 .contact__mail:hover,
 .contact__mail:focus-visible {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .contact__prompts {
@@ -1615,7 +1801,7 @@ em {
 
 .contact__prompts li::before {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-ink);
   font: 500 0.85rem/1.65 var(--mono);
   content: counter(prompt, decimal-leading-zero);
 }
@@ -1651,7 +1837,7 @@ em {
 
 .site-footer__mail:hover,
 .site-footer__mail:focus-visible {
-  color: var(--accent);
+  color: var(--accent-ink);
   background-size: 100% 2px;
 }
 
@@ -1706,7 +1892,10 @@ em {
   /* Room for glyphs that overhang their box, so the gradient paints all of each letter. */
   margin: -0.15em -0.1em 0;
   padding: 0.15em 0.1em 0;
-  background: linear-gradient(rgb(243 239 231 / 0.18), rgb(243 239 231 / 0.02) 85%);
+  background: linear-gradient(
+    color-mix(in srgb, var(--bone) 18%, transparent),
+    color-mix(in srgb, var(--bone) 2%, transparent) 85%
+  );
   background-clip: text;
 }
 
@@ -1770,8 +1959,9 @@ em {
     grid-template-columns: 1fr;
   }
 
-  .contact__panel {
-    position: static;
+  .contact__send {
+    flex: 1 0 100%;
+    justify-content: space-between;
   }
 
   .hero__scroll {
@@ -1917,7 +2107,7 @@ em {
 
   @keyframes pulse {
     70% {
-      box-shadow: 0 0 0 0.6rem rgb(74 222 128 / 0);
+      box-shadow: 0 0 0 0.6rem transparent;
     }
   }
 
@@ -2394,7 +2584,7 @@ em {
 
     .cursor__label {
       position: relative;
-      color: var(--ink);
+      color: var(--on-accent);
       font-size: 0.85rem;
       font-weight: 600;
       opacity: 0;

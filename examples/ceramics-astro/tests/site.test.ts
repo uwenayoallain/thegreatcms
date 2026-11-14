@@ -126,9 +126,10 @@ describe("content", () => {
     const full = dom("workshops/glaze-chemistry-evening/index.html");
     expect(full.querySelector('a[href^="/book/"].button')).toBeNull();
     expect(full.querySelector(".badge")?.textContent).toMatch(/fully booked/i);
-    const options = [...dom("book/index.html").querySelectorAll("#workshop option")].map(
-      (option) => option.textContent,
-    );
+    const options = [
+      ...dom("book/index.html").querySelectorAll<HTMLInputElement>('[name="workshop"]'),
+    ].map((option) => option.value);
+    expect(options).toContain("First evening at the wheel");
     expect(options.join(" ")).not.toContain("Glaze chemistry");
   });
 });

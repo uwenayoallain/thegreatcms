@@ -24,9 +24,31 @@ const steps = [
   schema={{ '@type': 'WebSite', name: 'Example', url: Astro.site?.href }}
 >
   <section class="hero">
-    <h1>{hero.heading}</h1>
-    {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
-    {hero.cta?.href && <a class="button" href={hero.cta.href}>{hero.cta.label ?? 'Learn more'}</a>}
+    <div class="hero-copy">
+      <h1>{hero.heading}</h1>
+      {hero.subtitle && <p class="lede">{hero.subtitle}</p>}
+      <p class="hero-actions">
+        {hero.cta?.href && <a class="button" href={hero.cta.href}>{hero.cta.label ?? 'Learn more'}</a>}
+        <a class="text-link" href="/about/">How we work <span aria-hidden="true">→</span></a>
+      </p>
+    </div>
+
+    <!-- A picture of the promise, drawn in HTML: a client's page with one line being changed. -->
+    <div class="hero-art" aria-hidden="true">
+      <div class="window">
+        <div class="window-bar"><i></i><i></i><i></i><span>cafe-lumiere.example</span></div>
+        <div class="window-body">
+          <p class="mock-kicker">Café Lumière</p>
+          <p class="mock-title">Opening hours</p>
+          <dl class="mock-hours">
+            <div><dt>Monday to Friday</dt><dd>7:00 – 18:00</dd></div>
+            <div class="is-editing"><dt>Saturday</dt><dd>8:00 – <mark>16:00</mark></dd></div>
+            <div><dt>Sunday</dt><dd>Closed</dd></div>
+          </dl>
+        </div>
+      </div>
+      <p class="mock-status"><b></b>Published by Marie, just now</p>
+    </div>
   </section>
 
   <section aria-labelledby="how">
@@ -61,32 +83,68 @@ const steps = [
 
   <section class="contact-section" aria-labelledby="contact">
     <div class="contact-intro">
-      <h2 id="contact">Send a message</h2>
+      <p class="eyebrow">Contact</p>
+      <h2 id="contact">Tell us about your site</h2>
       <p>Questions, ideas, or a site you would like to move over. Every message is read by a person.</p>
+
+      <dl class="contact-details">
+        <div>
+          <dt>Email</dt>
+          <dd><a href="mailto:hello@example.com">hello@example.com</a></dd>
+        </div>
+        <div>
+          <dt>Replies</dt>
+          <dd>Usually within a day</dd>
+        </div>
+      </dl>
+
+      <div class="contact-person">
+        <span class="avatar" aria-hidden="true">AU</span>
+        <p><strong>Aline Uwimana</strong> reads every message, and builds the sites herself.</p>
+      </div>
     </div>
 
     <form class="contact" method="POST" action={`${studio}/f/${siteId}/contact`}>
-      <div>
-        <label for="name">Your name</label>
-        <input id="name" name="name" type="text" autocomplete="name" required />
+      <div class="field">
+        <label for="name">Your name <span class="required" aria-hidden="true">Required</span></label>
+        <input
+          id="name"
+          name="name"
+          type="text"
+          autocomplete="name"
+          placeholder="First and last name"
+          aria-describedby="name-error"
+          required
+        />
+        <span class="error" id="name-error">Tell us what to call you.</span>
       </div>
 
-      <div>
-        <label for="email">Email</label>
+      <div class="field">
+        <label for="email">Email <span class="required" aria-hidden="true">Required</span></label>
         <input
           id="email"
           name="email"
           type="email"
           autocomplete="email"
-          aria-describedby="email-hint"
+          placeholder="you@example.com"
+          aria-describedby="email-hint email-error"
           required
         />
         <span class="hint" id="email-hint">So we can reply. Never shared.</span>
+        <span class="error" id="email-error">Enter an address like name@example.com.</span>
       </div>
 
-      <div>
-        <label for="message">Message</label>
-        <textarea id="message" name="message" rows="5" required></textarea>
+      <div class="field">
+        <label for="message">Message <span class="required" aria-hidden="true">Required</span></label>
+        <textarea
+          id="message"
+          name="message"
+          rows="6"
+          placeholder="A line or two about your site, or what you would like it to do."
+          aria-describedby="message-error"
+          required
+        ></textarea>
+        <span class="error" id="message-error">Write a few words before sending.</span>
       </div>
 
       <!-- Where to land after posting, and when the form was rendered: a submission filled in
@@ -100,7 +158,10 @@ const steps = [
         <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
       </div>
 
-      <button type="submit">Send message</button>
+      <div class="form-actions">
+        <button type="submit">Send message</button>
+        <p>No account, no newsletter. Just a reply.</p>
+      </div>
     </form>
   </section>
 </Base>

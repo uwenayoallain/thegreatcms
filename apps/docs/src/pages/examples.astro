@@ -1,5 +1,5 @@
 ---
-import { Image } from "astro:assets";
+import { getImage } from "astro:assets";
 import Base from "../layouts/Base.astro";
 import examples from "../lib/examples.json";
 
@@ -7,7 +7,18 @@ import examples from "../lib/examples.json";
 const shots = import.meta.glob<{ default: ImageMetadata }>("../assets/examples/*.png", {
   eager: true,
 });
-const shotOf = (slug: string) => shots[`../assets/examples/${slug}.png`]!.default;
+const shotOf = (name: string) => shots[`../assets/examples/${name}.png`]!.default;
+const sizes = "(min-width: 40rem) 24rem, 92vw";
+
+// Each site in both of its themes; the browser picks the one matching the visitor's.
+const pictures = await Promise.all(
+  examples.map(async ({ slug }) => {
+    const [light, dark] = await Promise.all(
+      [slug, `${slug}-dark`].map((name) => getImage({ src: shotOf(name), widths: [720, 1440], sizes })),
+    );
+    return { light: light!, dark: dark! };
+  }),
+);
 const source = "https://github.com/uwenayoallain/thegreatcms/tree/main/";
 ---
 
@@ -27,13 +38,23 @@ const source = "https://github.com/uwenayoallain/thegreatcms/tree/main/";
         examples.map((example, index) => (
           <li>
             <span class="shot">
-              <Image
-                src={shotOf(example.slug)}
-                alt=""
-                widths={[720, 1440]}
-                sizes="(min-width: 40rem) 24rem, 92vw"
-                loading={index < 3 ? "eager" : "lazy"}
-              />
+              <picture>
+                <source
+                  media="(prefers-color-scheme: dark)"
+                  srcset={pictures[index]!.dark.srcSet.attribute}
+                  sizes={sizes}
+                />
+                <img
+                  src={pictures[index]!.light.src}
+                  srcset={pictures[index]!.light.srcSet.attribute}
+                  sizes={sizes}
+                  width={pictures[index]!.light.attributes.width}
+                  height={pictures[index]!.light.attributes.height}
+                  alt=""
+                  loading={index < 3 ? "eager" : "lazy"}
+                  decoding="async"
+                />
+              </picture>
             </span>
             <p class="meta">
               {example.framework} · {example.kind}
@@ -103,6 +124,10 @@ const source = "https://github.com/uwenayoallain/thegreatcms/tree/main/";
   border-radius: 12px 12px 0 0;
   overflow: hidden;
   background: var(--surface-2);
+}
+
+.shot picture {
+  display: contents;
 }
 
 .shot img {

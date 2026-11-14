@@ -23,12 +23,56 @@
   --blue: #1f3fbf;
   --blue-deep: #172f8f;
   --blue-wash: #eef1fb;
+  --blue-fill: var(--blue);
+  --blue-press: var(--blue-deep);
+  --on-blue: #ffffff;
+  --band: var(--blue);
   --butter: #f3c94a;
+  --leader: #c4c1b9;
+  --stamp-ink: var(--blue);
+  --stamp-disc: var(--blue-wash);
+  --note: color-mix(in srgb, var(--butter) 14%, var(--raised));
+  --night: #1b1a17;
+  --shadow: rgb(27 26 23 / 0.04);
+  --lift: rgb(23 47 143 / 0.35);
+  --placeholder: #6f6c65;
+  --error: #b3261e;
+  --stub: color-mix(in srgb, var(--blue-wash) 45%, var(--raised));
   --serif: var(--font-serif), "Instrument Serif Fallback", Georgia, serif;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --gap: clamp(1.25rem, 4vw, 3rem);
   --section: clamp(3.5rem, 8vw, 6.5rem);
   --radius: 14px;
+}
+
+/* After closing: the counter lit low, crust-brown paper, the enamel blue lifted so it still reads. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #16120e;
+    --raised: #201b16;
+    --ink: #f4ede1;
+    --ink-soft: #c0b5a5;
+    --line: #3b3329;
+    --field: #7d7366;
+    --blue: #a5b4ff;
+    --blue-deep: #cdd5ff;
+    --blue-wash: #252a4a;
+    --blue-fill: #3552d6;
+    --blue-press: #2b44b8;
+    --band: #1c2a7a;
+    --butter: #f5ca4f;
+    --leader: #51483c;
+    --stamp-ink: var(--butter);
+    --stamp-disc: var(--band);
+    --note: color-mix(in srgb, var(--butter) 8%, var(--raised));
+    --night: #0d0b08;
+    --shadow: rgb(0 0 0 / 0.35);
+    --lift: rgb(0 0 0 / 0.7);
+    --placeholder: #9c9183;
+    --error: #ff8e7e;
+    --stub: #251f19;
+  }
 }
 
 *,
@@ -139,8 +183,8 @@ a:hover {
   margin: 0;
   max-width: none;
   padding: 0.65rem var(--gap);
-  background: var(--blue);
-  color: #fff;
+  background: var(--band);
+  color: var(--on-blue);
   font-size: 0.88rem;
   font-weight: 500;
   line-height: 1.45;
@@ -216,8 +260,9 @@ a:hover {
 }
 
 .pill:hover {
-  background: var(--blue);
-  color: #fff;
+  border-color: var(--blue-fill);
+  background: var(--blue-fill);
+  color: var(--on-blue);
 }
 
 main {
@@ -260,10 +305,10 @@ main > section {
   justify-content: center;
   min-height: 3rem;
   padding: 0.75rem 1.4rem;
-  border: 1.5px solid var(--blue);
+  border: 1.5px solid var(--blue-fill);
   border-radius: 999px;
-  background: var(--blue);
-  color: #fff;
+  background: var(--blue-fill);
+  color: var(--on-blue);
   font: inherit;
   font-weight: 600;
   text-decoration: none;
@@ -271,11 +316,12 @@ main > section {
 }
 
 .button:hover {
-  background: var(--blue-deep);
-  border-color: var(--blue-deep);
+  background: var(--blue-press);
+  border-color: var(--blue-press);
 }
 
 .button.ghost {
+  border-color: var(--blue);
   background: transparent;
   color: var(--blue);
 }
@@ -286,8 +332,8 @@ main > section {
   color: var(--blue-deep);
 }
 
-.page-head .button {
-  margin-top: 2.25rem;
+.page-head p:has(> .button) {
+  margin: 2.25rem 0 0;
 }
 
 .actions {
@@ -336,13 +382,14 @@ main > section {
 }
 
 .stamp {
-  width: clamp(9rem, 22vw, 15rem);
+  width: clamp(9rem, 22vw, 16.5rem);
   height: auto;
-  color: var(--blue);
+  margin-right: clamp(0rem, 3vw, 2.5rem);
+  color: var(--stamp-ink);
 }
 
 .stamp circle {
-  fill: var(--blue-wash);
+  fill: var(--stamp-disc);
   stroke: currentColor;
   stroke-width: 2;
 }
@@ -417,9 +464,9 @@ main > section {
   padding: 1.5rem;
   background: var(--raised);
   border: 1px solid var(--line);
-  border-top: 3px solid var(--blue);
+  border-top: 3px solid var(--blue-fill);
   border-radius: var(--radius);
-  box-shadow: 0 1px 2px rgb(27 26 23 / 0.04);
+  box-shadow: 0 1px 2px var(--shadow);
 }
 
 .card .eyebrow {
@@ -470,8 +517,8 @@ main > section.story {
   gap: var(--gap);
   margin-top: var(--section);
   padding-block: var(--section);
-  background-color: var(--blue);
-  border-image: conic-gradient(var(--blue) 0 0) fill 0 / /0 100vmax;
+  background-color: var(--band);
+  border-image: conic-gradient(var(--band) 0 0) fill 0 / /0 100vmax;
   color: #fff;
 }
 
@@ -561,106 +608,238 @@ address {
   padding: 1rem 1.2rem;
   border-left: 4px solid var(--butter);
   border-radius: 0 8px 8px 0;
-  background: color-mix(in srgb, var(--butter) 14%, var(--raised));
+  background: var(--note);
   color: var(--ink-soft);
 }
 
-/* The order form posts to the studio's inbox, as a plain form. */
-.order {
+/* The order form posts to the studio's inbox, as a plain form, and reads like the slip on the counter. */
+.order-head {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: var(--gap);
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  align-items: end;
+  gap: 1rem var(--gap);
+  margin-bottom: clamp(1.75rem, 4vw, 2.75rem);
 }
 
-@media (max-width: 56rem) {
-  .order {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.order-intro > p {
-  max-width: 40ch;
+.order-lede {
+  max-width: 44ch;
+  margin: 0;
   color: var(--ink-soft);
-  margin: 1.25rem 0 0;
 }
 
-.order-notes {
-  margin: 1.75rem 0 0;
+/* What a regular already knows, printed on the stub. */
+.rules {
+  margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--line);
+  counter-reset: rule;
+  border-top: 2px dashed var(--line);
 }
 
-.order-notes li {
-  padding: 0.85rem 0 0.85rem 1.6rem;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(var(--blue), var(--blue)) 0 1.45rem / 0.6rem 2px no-repeat;
-  background-position-y: 1.55rem;
-}
-
-.form {
+.rules li {
+  counter-increment: rule;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-  gap: 1.35rem 1rem;
-  padding: clamp(1.25rem, 3vw, 2.25rem);
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.rules li::before {
+  content: counter(rule);
+  grid-row: span 2;
+  color: var(--blue);
+  font: 400 1.6rem/1 var(--serif);
+}
+
+.rules strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.slip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: calc(var(--radius) + 4px);
-  box-shadow: 0 18px 40px -28px rgb(23 47 143 / 0.35);
+  box-shadow: 0 24px 48px -32px var(--lift);
+  accent-color: var(--blue-fill);
+}
+
+.pick-pane,
+.details {
+  min-width: 0;
+  padding: clamp(1.25rem, 3.5vw, 2.75rem);
+}
+
+.pick {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pick-pane .notes {
+  margin-top: 1.75rem;
+}
+
+/* The stub: tinted, and torn off along a dashed line. */
+.details {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 1.4rem;
+  border-left: 2px dashed var(--line);
+  border-radius: 0 calc(var(--radius) + 3px) calc(var(--radius) + 3px) 0;
+  background: var(--stub);
+}
+
+.pick legend,
+.details-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+  font: 400 1.7rem/1.1 var(--serif);
+}
+
+.pick legend {
+  float: left;
+  width: 100%;
+  padding: 0 0 0.5rem;
+}
+
+.step {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--blue-fill);
+  color: var(--on-blue);
+  font: 650 0.9rem/1 var(--sans);
+}
+
+.pick .optional {
+  font-family: var(--sans);
+}
+
+.pick-group {
+  clear: both;
+}
+
+.pick-head {
+  max-width: none;
+  margin: 1.25rem 0 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--ink);
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.picks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.picks li {
+  border-bottom: 1px solid var(--line);
+}
+
+.details-fields {
+  display: grid;
+  gap: 1.4rem;
+}
+
+/* The button sits at the foot of the stub, level with the end of the order beside it. */
+.details .button {
+  align-self: end;
+  width: 100%;
+  min-height: 3.5rem;
+  font-size: 1.05rem;
+}
+
+.details .button::after {
+  content: "→" / "";
+  margin-left: 0.6rem;
+}
+
+@media (max-width: 56rem) {
+  .slip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .details {
+    border-left: 0;
+    border-top: 2px dashed var(--line);
+    border-radius: 0 0 calc(var(--radius) + 3px) calc(var(--radius) + 3px);
+  }
 }
 
 .field {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.5rem;
   align-content: start;
   margin: 0;
 }
 
-.field.wide,
-.form > .button {
-  grid-column: 1 / -1;
-}
-
-.form > .button {
-  justify-self: start;
-  margin-top: 0.25rem;
-}
-
-fieldset.field {
-  min-width: 0;
-  border: 0;
-  padding: 0;
-}
-
-label,
-legend {
+label {
+  font-size: 0.95rem;
   font-weight: 600;
+  line-height: 1.35;
 }
 
-legend {
-  padding: 0;
+/* Most fields are needed, so the exceptions are the ones marked. */
+.optional {
+  margin-left: 0.3rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.hint,
+.error {
+  max-width: none;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .hint {
-  font-weight: 400;
   color: var(--ink-soft);
 }
 
 input:not([type="checkbox"]),
 textarea {
+  display: block;
   width: 100%;
-  min-height: 3rem;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--field);
+  min-height: 3.25rem;
+  padding: 0.8rem 1rem;
+  border: 1.5px solid var(--field);
   border-radius: 10px;
-  background: var(--raised);
-  color: inherit;
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
+  line-height: 1.4;
 }
 
 textarea {
+  min-height: 8.5rem;
   resize: vertical;
+  line-height: 1.55;
+}
+
+::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 
 input:not([type="checkbox"]):hover,
@@ -670,38 +849,90 @@ textarea:hover {
 
 input:focus-visible,
 textarea:focus-visible {
-  border-color: var(--blue);
-  outline-offset: 1px;
+  border-color: var(--blue-fill);
+  outline-offset: 2px;
 }
 
-.choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
+/* Once the visitor has had a go: the browser says what is wrong, the field shows where. */
+input:user-invalid,
+textarea:user-invalid {
+  border-color: var(--error);
+}
+
+.error {
+  display: none;
+  color: var(--error);
+  font-weight: 550;
+}
+
+.field:has(:user-invalid) .error {
+  display: block;
+}
+
+.field:has(:user-invalid) .hint {
+  display: none;
+}
+
+/* The date field draws like its neighbours: the same text, an empty one in placeholder grey, the site's own calendar. */
+input[type="date"] {
+  --calendar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2'%3E%3Crect x='4' y='5' width='16' height='15' rx='2'/%3E%3Cpath d='M4 10h16M8 3v4m8-4v4'/%3E%3C/svg%3E");
+}
+
+input[type="date"]:invalid::-webkit-datetime-edit {
+  color: var(--placeholder);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  background: var(--blue);
+  mask: var(--calendar) center / contain no-repeat;
+  cursor: pointer;
 }
 
 .choice {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  min-height: 2.75rem;
-  padding: 0.45rem 0.95rem 0.45rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
-  font-weight: 500;
+  gap: 0.8rem;
+  min-height: 3.25rem;
+  margin: 3px -0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
   cursor: pointer;
 }
 
 .choice:hover {
-  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue-wash) 55%, transparent);
 }
 
 .choice:has(input:checked) {
-  border-color: var(--blue);
   background: var(--blue-wash);
   color: var(--blue-deep);
+}
+
+/* The dotted leader of the printed menu, from the name to its price. */
+.choice-name {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 0.6rem;
+  font: 400 1.3rem/1.15 var(--serif);
+}
+
+.choice-name::after {
+  content: "";
+  flex: 1;
+  min-width: 1.5rem;
+  border-bottom: 2px dotted var(--leader);
+}
+
+.choice .price {
+  font-size: 0.95rem;
+}
+
+.choice:has(input:checked) .choice-name::after {
+  border-bottom-color: currentColor;
 }
 
 .choice input {
@@ -709,24 +940,24 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   flex: none;
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.25rem;
+  height: 1.25rem;
   margin: 0;
   border: 1.5px solid var(--field);
   border-radius: 5px;
-  background: #fff;
+  background: var(--raised);
 }
 
 .choice input:checked {
-  border-color: var(--blue);
-  background: var(--blue)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3.5 8.5 3 3 6-7'/%3E%3C/svg%3E")
+  border-color: var(--blue-fill);
+  background: var(--blue-fill)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.4'%3E%3Cpath d='m3.5 8.5 3 3 6-7'/%3E%3C/svg%3E")
     center / 0.8rem no-repeat;
 }
 
 .choice:has(input:focus-visible) {
   outline: 3px solid var(--blue);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 .choice input:focus-visible {
@@ -801,7 +1032,7 @@ textarea:focus-visible {
 .leader {
   flex: 1;
   min-width: 1.5rem;
-  border-bottom: 2px dotted #c4c1b9;
+  border-bottom: 2px dotted var(--leader);
 }
 
 /* The leader inks in under the line being read, as a finger would trace it. */
@@ -856,8 +1087,8 @@ textarea:focus-visible {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   gap: 2rem var(--gap);
   padding: clamp(3rem, 6vw, 4.5rem) var(--edge) 2.5rem;
-  border-top: 4px solid var(--blue);
-  background: var(--ink);
+  border-top: 4px solid var(--blue-fill);
+  background: var(--night);
   color: #e9e7e1;
 }
 
@@ -952,10 +1183,6 @@ textarea:focus-visible {
   .pill {
     padding: 0.35rem 0.8rem;
   }
-
-  .form > .button {
-    justify-self: stretch;
-  }
 }
 
 /* Motion moves only transform and opacity, so nothing it does can shift the layout. */
@@ -1045,7 +1272,7 @@ textarea:focus-visible {
     .item,
     .hours,
     .visit-grid address,
-    .order-notes li {
+    .rules li {
       animation: set-down linear both;
       animation-timeline: view();
       animation-range: entry 10% entry 80%;

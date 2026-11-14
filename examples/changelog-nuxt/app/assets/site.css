@@ -59,6 +59,18 @@
   --sun: #f2a31b;
   --sun-deep: #9a5a00;
   --sun-wash: #fff4df;
+  --sun-edge: #f6cf8a;
+  --on-sun: #101418;
+  --press: #262d36;
+  --tick-minor: #b9bfc8;
+  --face-shadow: rgb(16 20 24 / 0.07);
+  --code: #eef0f3;
+  --panel: #101418;
+  --panel-edge: transparent;
+  --panel-glow: rgb(242 163 27 / 0.16);
+  --mark: #101418;
+  --well: #182028;
+  --chosen: #101418;
   --display:
     "Bricolage Grotesque Variable", "Bricolage Grotesque Fallback", ui-sans-serif, system-ui,
     sans-serif;
@@ -68,6 +80,33 @@
   --section: clamp(4rem, 9vw, 7rem);
   --radius: 16px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* After sunset: blue-black paper, the same amber, lifted a step so it still reads as text. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #0d1015;
+    --raised: #151a21;
+    --ink: #edf0f4;
+    --ink-soft: #9ea7b4;
+    --line: #252c35;
+    --line-strong: #39424e;
+    --sun: #f5a623;
+    --sun-deep: #ffbe4f;
+    --sun-wash: #2a2112;
+    --sun-edge: #6b4a14;
+    --press: #c9d0d9;
+    --tick-minor: #4a5360;
+    --face-shadow: rgb(245 166 35 / 0.1);
+    --code: #1e242c;
+    --panel: #151a21;
+    --panel-edge: #2a313b;
+    --panel-glow: rgb(245 166 35 / 0.2);
+    --mark: #232a33;
+    --well: #0d1015;
+    --chosen: #d4dae2;
+  }
 }
 
 *,
@@ -184,6 +223,14 @@ a {
   flex: none;
 }
 
+.sun-mark .tile {
+  fill: var(--mark);
+}
+
+.sun-mark .hand {
+  stroke: var(--mark);
+}
+
 .masthead ul {
   display: flex;
   align-items: center;
@@ -253,7 +300,7 @@ a {
 }
 
 .button:hover {
-  background: #262d36;
+  background: var(--press);
 }
 
 .button:active {
@@ -322,7 +369,7 @@ main {
   fill: var(--raised);
   stroke: var(--line);
   stroke-width: 2;
-  filter: drop-shadow(0 18px 28px rgb(16 20 24 / 0.07));
+  filter: drop-shadow(0 18px 28px var(--face-shadow));
 }
 
 .dial .focus {
@@ -336,7 +383,7 @@ main {
 }
 
 .dial .tick.minor {
-  stroke: #b9bfc8;
+  stroke: var(--tick-minor);
 }
 
 .dial .gnomon {
@@ -373,11 +420,12 @@ main {
   .masthead a,
   .log a,
   .back,
-  .inline input {
+  .control {
     transition:
       background-color 0.15s,
       color 0.15s,
       border-color 0.15s,
+      box-shadow 0.15s,
       text-decoration-color 0.15s,
       translate 0.1s;
   }
@@ -459,7 +507,7 @@ section + section {
 }
 
 .plan.featured {
-  border: 2px solid var(--ink);
+  border: 2px solid var(--chosen);
   box-shadow: 6px 6px 0 var(--sun);
 }
 
@@ -472,7 +520,7 @@ section + section {
   padding: 0.15rem 0.7rem;
   border-radius: 999px;
   background: var(--sun);
-  color: var(--ink);
+  color: var(--on-sun);
   translate: 0 -50%;
   font: 600 0.75rem/1.5 var(--mono);
 }
@@ -561,7 +609,7 @@ section + section {
 .log li {
   position: relative;
   display: grid;
-  grid-template-columns: 12rem minmax(0, 1fr) auto;
+  grid-template-columns: 10rem minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 0.6rem 2rem;
   padding: 1.6rem 0;
@@ -673,7 +721,7 @@ section + section {
 }
 
 .kind.feature {
-  border-color: #f6cf8a;
+  border-color: var(--sun-edge);
   background: var(--sun-wash);
   color: var(--sun-deep);
 }
@@ -805,7 +853,7 @@ section + section {
 .prose code {
   padding: 0.1rem 0.35rem;
   border-radius: 6px;
-  background: #eef0f3;
+  background: var(--code);
   font: 0.9em var(--mono);
 }
 
@@ -847,96 +895,226 @@ section + section {
   translate: -0.2rem 0;
 }
 
+/* The call to action: a sun coming up over the dial, and one control to answer it. */
 .waitlist {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0 var(--gap);
+  --sun-size: clamp(15rem, 42vw, 26rem);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   margin-top: var(--section);
-  padding: clamp(1.75rem, 5vw, 3.5rem);
-  border-radius: calc(var(--radius) + 6px);
+  padding: clamp(3rem, 8vw, 5.5rem) clamp(1.25rem, 5vw, 4rem)
+    calc(var(--sun-size) * 0.44 + clamp(2rem, 4vw, 3rem));
+  border: 1px solid var(--panel-edge);
+  border-radius: calc(var(--radius) + 8px);
   background:
-    radial-gradient(120% 90% at 100% 100%, rgb(242 163 27 / 0.16), transparent 55%), var(--ink);
-  color: var(--paper);
+    radial-gradient(70% 60% at 50% 100%, var(--panel-glow), transparent 70%), var(--panel);
+  color: #f7f8fa;
+  text-align: center;
 }
 
 section.waitlist {
-  padding-top: clamp(1.75rem, 5vw, 3.5rem);
+  padding-top: clamp(3rem, 8vw, 5.5rem);
 }
 
-.waitlist p {
-  margin: 0.9rem 0 0;
+.waitlist::before,
+.waitlist::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  border-radius: 50%;
+  translate: -50% 0;
+}
+
+.waitlist::before {
+  bottom: calc(var(--sun-size) * -0.7);
+  width: var(--sun-size);
+  height: var(--sun-size);
+  background: radial-gradient(circle at 50% 30%, #ffc867, #f5a623 45%, #dc8509);
+  box-shadow:
+    0 0 60px 10px rgb(245 166 35 / 0.35),
+    0 0 180px 60px rgb(245 166 35 / 0.14);
+}
+
+/* The hour ticks of the dial, ringed around the sun. */
+.waitlist::after {
+  bottom: calc(var(--sun-size) * -1.2);
+  width: calc(var(--sun-size) * 2);
+  height: calc(var(--sun-size) * 2);
+  background: repeating-conic-gradient(rgb(255 255 255 / 0.22) 0 0.5deg, transparent 0.5deg 7.5deg);
+  mask: radial-gradient(closest-side, transparent 56%, #000 56.5% 63%, transparent 63.5%);
+}
+
+.waitlist .eyebrow {
+  max-width: none;
+  text-wrap: balance;
+  margin-bottom: 1rem;
+  color: #ffbe4f;
+}
+
+.waitlist h2 {
+  color: #fff;
+  font-size: clamp(2.4rem, 1.4rem + 3.6vw, 4.25rem);
+  letter-spacing: -0.04em;
+}
+
+.waitlist-lede {
+  max-width: 44ch;
+  margin: 1rem auto 0;
   color: #b9c0ca;
+  font-size: clamp(1.02rem, 0.95rem + 0.3vw, 1.15rem);
 }
 
-@media (min-width: 52rem) {
-  .waitlist {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    align-items: end;
-  }
-
-  .waitlist form {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-}
-
-.inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 0.75rem;
-  margin-top: 1.75rem;
-}
-
-.waitlist .inline {
-  margin-top: 1.75rem;
-}
-
-.inline .field {
+.signup {
   display: grid;
-  gap: 0.45rem;
-  flex: 1 1 15rem;
-  min-width: 0;
+  gap: 0.55rem;
+  max-width: 34rem;
+  margin: 2.25rem auto 0;
+  text-align: left;
+  accent-color: var(--sun);
 }
 
-.inline label {
+.signup label {
+  padding-left: 1.4rem;
+  color: #dfe4ea;
+  font-size: 0.9rem;
   font-weight: 600;
-  font-size: 0.95rem;
 }
 
-.inline input {
+/* One control: the field and its button share a border, a fill and a focus ring. */
+.control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.375rem;
+  border: 1.5px solid #6b7685;
+  border-radius: 999px;
+  background: var(--well);
+}
+
+.control:hover {
+  border-color: #8d97a5;
+}
+
+.control:focus-within {
+  border-color: var(--sun);
+  box-shadow:
+    0 0 0 1px var(--sun),
+    0 0 0 6px rgb(245 166 35 / 0.28);
+}
+
+/* After a first try: the browser says what is wrong, the control shows where. */
+.control:has(input:user-invalid) {
+  border-color: #ff8f80;
+}
+
+.control:has(input:user-invalid:focus) {
+  box-shadow:
+    0 0 0 1px #ff8f80,
+    0 0 0 6px rgb(255 143 128 / 0.25);
+}
+
+.control input {
+  flex: 1;
   min-width: 0;
   min-height: 3rem;
-  padding: 0.6rem 1rem;
-  border: 1px solid #4a5462;
-  border-radius: 12px;
-  background: #182028;
+  padding: 0 0.6rem 0 1rem;
+  border: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
 }
 
-.inline input:hover {
-  border-color: #6b7685;
+/* The ring on the control is the focus indicator. */
+.control input:focus-visible {
+  outline: none;
 }
 
-.inline input:focus-visible {
-  border-color: var(--sun);
-  outline-offset: 2px;
+.control input::placeholder {
+  color: #8d97a5;
+  opacity: 1;
 }
 
-.inline .button {
+.control .button {
+  flex: none;
   min-height: 3rem;
+  padding-inline: 1.5rem;
   background: var(--sun);
-  color: var(--ink);
+  color: var(--on-sun);
 }
 
-.inline .button:hover {
+.control .button:hover {
   background: #ffb93d;
 }
 
-@media (max-width: 30rem) {
-  .inline .button {
+.control .button:focus-visible {
+  outline-color: #fff;
+  outline-offset: 2px;
+}
+
+.signup .hint,
+.signup .error {
+  max-width: none;
+  margin: 0.15rem 0 0;
+  padding-left: 1.4rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.signup .hint {
+  color: #a9b2be;
+}
+
+.signup .error {
+  display: none;
+  color: #ff8f80;
+  font-weight: 550;
+}
+
+.signup .error::before {
+  content: "!" / "";
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: #ff8f80;
+  color: #101418;
+  font-size: 0.75rem;
+  font-weight: 800;
+  vertical-align: 0.05em;
+}
+
+.signup:has(:user-invalid) .error {
+  display: block;
+}
+
+.signup:has(:user-invalid) .hint {
+  display: none;
+}
+
+/* A phone stacks the button under the field, still inside the one border. */
+@media (max-width: 34rem) {
+  .control {
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 20px;
+  }
+
+  .control input {
+    padding-inline: 0.75rem;
+  }
+
+  .control .button {
     width: 100%;
+    border-radius: 14px;
+  }
+
+  .signup label,
+  .signup .hint,
+  .signup .error {
+    padding-left: 0.5rem;
   }
 }
 

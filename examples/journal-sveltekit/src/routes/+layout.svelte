@@ -37,16 +37,39 @@
 
 <footer class="footer">
   <section class="letter" id="letter" aria-labelledby="letter-heading">
-    <h2 id="letter-heading">{data.newsletter.heading}</h2>
-    {#if data.newsletter.text}<p>{data.newsletter.text}</p>{/if}
-    <form method="POST" action="{data.studio.url}/f/{data.studio.site}/newsletter">
-      <label for="letter-email">Email address</label>
-      <div class="inline">
-        <input id="letter-email" name="email" type="email" autocomplete="email" required />
-        <button type="submit">{data.newsletter.button ?? "Subscribe"}</button>
+    <div class="letter-card">
+      <div class="letter-copy">
+        <p class="kicker">From the desk of {data.identity.author}</p>
+        <h2 id="letter-heading">{data.newsletter.heading}</h2>
+        {#if data.newsletter.text}<p class="letter-text">{data.newsletter.text}</p>{/if}
+        <p class="signature">— {data.identity.author.split(" ")[0]}</p>
       </div>
-      <input type="hidden" name="_redirect" value="/subscribed/" />
-    </form>
+      <div class="letter-reply">
+        <div class="postmark" aria-hidden="true">
+          <span>Monthly</span>
+          <b>{data.identity.title}</b>
+          <span>By post</span>
+        </div>
+        <form method="POST" action="{data.studio.url}/f/{data.studio.site}/newsletter">
+          <label for="letter-email">Email address <span class="required" aria-hidden="true">Required</span></label>
+          <div class="inline">
+            <input
+              id="letter-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="you@example.com"
+              aria-describedby="letter-hint letter-error"
+              required
+            />
+            <button type="submit">{data.newsletter.button ?? "Subscribe"}</button>
+          </div>
+          <p class="hint" id="letter-hint">One letter a month. Every one has a link to unsubscribe.</p>
+          <p class="error" id="letter-error">That does not look like an email address yet.</p>
+          <input type="hidden" name="_redirect" value="/subscribed/" />
+        </form>
+      </div>
+    </div>
   </section>
   <p class="colophon">
     <span>{data.identity.title} · {data.identity.author}</span>

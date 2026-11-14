@@ -188,7 +188,7 @@ describe("the export", () => {
     for (const element of document.querySelectorAll("[src]"))
       loaded.add(join(DIST, element.getAttribute("src")!.split("?")[0]!));
     const bytes = [...loaded].reduce((total, path) => total + statSync(path).size, 0);
-    // Before compression: the page, its stylesheet and one font. The home page measures 44 KB.
+    // Before compression: the page, its stylesheet and one font. The home page measures 49 KB.
     expect(bytes).toBeLessThan(50_000);
   });
 });

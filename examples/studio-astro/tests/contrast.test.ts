@@ -1,4 +1,4 @@
-/** Colour contrast, in a browser, on a dark theme that is faint on purpose in places. */
+/** Colour contrast, in a browser, in both schemes, on a theme that is faint on purpose in places. */
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -94,9 +94,10 @@ afterAll(async () => {
 });
 
 describe.skipIf(!browser).each(PAGES)("%s", (_name, path) => {
-  it("has readable contrast against its real background", async () => {
+  it.each(["dark", "light"] as const)("has readable contrast in the %s scheme", async (scheme) => {
     // Contrast is a property of the page at rest: measured with motion off, after the fonts load.
     const page = await browser!.newPage({
+      colorScheme: scheme,
       reducedMotion: "reduce",
       viewport: { width: 1440, height: 900 },
     });

@@ -138,57 +138,119 @@ export default function Home() {
       </section>
 
       <section className="order" id="order" aria-labelledby="order-heading">
-        <div className="order-intro">
-          <h2 id="order-heading">Pre-order for pickup</h2>
-          <p>Tell us what you would like and when. We will reply to confirm.</p>
-          <ul className="order-notes">
-            <li>Order by 15:00 for a loaf the next morning.</li>
-            <li>Pay when you collect, in cash or MoMo.</li>
-            <li>Whole loaves keep three days; we slice on request.</li>
-          </ul>
+        <div className="order-head">
+          <div>
+            <p className="eyebrow">Order ahead</p>
+            <h2 id="order-heading">Pre-order for pickup</h2>
+          </div>
+          <p className="order-lede">
+            Tick what you would like, tell us when, and we will reply to confirm.
+          </p>
         </div>
-        <form className="form" method="POST" action={`${studio.url}/f/${studio.site}/order`}>
-          <div className="field">
-            <label htmlFor="name">Name</label>
-            <input id="name" name="name" type="text" autoComplete="name" required />
+        <form className="form slip" method="POST" action={`${studio.url}/f/${studio.site}/order`}>
+          <div className="pick-pane">
+            {orderable.length > 0 ? (
+              <fieldset className="pick">
+                <legend>
+                  <span className="step" aria-hidden="true">
+                    1
+                  </span>
+                  What would you like? <span className="optional">Optional</span>
+                </legend>
+                {orderable.map((section) => (
+                  <div className="pick-group" key={section.value}>
+                    <p className="pick-head">{section.label}</p>
+                    <ul className="picks">
+                      {section.items.map((item) => (
+                        <li key={item.slug}>
+                          <label className="choice">
+                            <input type="checkbox" name="items" value={item.name} />{" "}
+                            <span className="choice-name">{item.name}</span>
+                            <Price value={item.price} />
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </fieldset>
+            ) : null}
+            <div className="field notes">
+              <label htmlFor="notes">
+                Anything else? <span className="optional">Optional</span>
+              </label>
+              <textarea
+                id="notes"
+                name="notes"
+                rows={3}
+                placeholder="Quantities, sliced or whole, a name for the box."
+              />
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" autoComplete="email" required />
-          </div>
-          <div className="field">
-            <label htmlFor="pickup">Pickup day</label>
-            <input id="pickup" name="pickup" type="date" required />
-          </div>
-          {orderable.length > 0 ? (
-            <fieldset className="field wide">
-              <legend>What would you like?</legend>
-              <div className="choices">
-                {orderable.flatMap((section) =>
-                  section.items.map((item) => (
-                    <label className="choice" key={item.slug}>
-                      <input type="checkbox" name="items" value={item.name} />{" "}
-                      <span>{item.name}</span>
-                    </label>
-                  )),
-                )}
+          <div className="details">
+            <p className="details-head">
+              <span className="step" aria-hidden="true">
+                {orderable.length > 0 ? 2 : 1}
+              </span>
+              Your details
+            </p>
+            <div className="details-fields">
+              <div className="field">
+                <label htmlFor="name">Name</label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Your name"
+                  required
+                />
+                <p className="error">Tell us who to put the order under.</p>
               </div>
-            </fieldset>
-          ) : null}
-          <div className="field wide">
-            <label htmlFor="notes">
-              Anything else? <span className="hint">Quantities, sliced or whole.</span>
-            </label>
-            <textarea id="notes" name="notes" rows={3} />
+              <div className="field">
+                <label htmlFor="email">Email</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  required
+                />
+                <p className="error">An email address, so we can confirm.</p>
+              </div>
+              <div className="field">
+                <label htmlFor="pickup">Pickup day</label>
+                <input
+                  id="pickup"
+                  name="pickup"
+                  type="date"
+
+                  required
+                />
+                <p className="error">Choose the day you will collect.</p>
+              </div>
+            </div>
+            <input type="hidden" name="_redirect" value="/thanks/" />
+            <div className="trap" aria-hidden="true">
+              <label htmlFor="website">Website</label>
+              <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+            </div>
+            <ol className="rules">
+              <li>
+                <strong>Order by 15:00</strong> for a loaf the next morning.
+              </li>
+              <li>
+                <strong>Pay when you collect,</strong> in cash or MoMo.
+              </li>
+              <li>
+                <strong>Sliced on request.</strong> Whole loaves keep three days.
+              </li>
+            </ol>
+            <button className="button" type="submit">
+              Send the order
+            </button>
           </div>
-          <input type="hidden" name="_redirect" value="/thanks/" />
-          <div className="trap" aria-hidden="true">
-            <label htmlFor="website">Website</label>
-            <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
-          </div>
-          <button className="button" type="submit">
-            Send the order
-          </button>
         </form>
       </section>
     </Shell>

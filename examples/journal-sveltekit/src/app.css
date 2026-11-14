@@ -107,7 +107,11 @@
   --ink-soft: #57554f;
   --line: #dddcd6;
   --mark: #ffe45c;
+  /* Text on a full highlight: dark in both schemes, since the highlighter stays bright. */
+  --mark-ink: #161514;
   --mark-rule: #f2cc2c;
+  --placeholder: #6e6c66;
+  --error: #a3261b;
   --serif: "Newsreader Variable", "Newsreader Fallback", Georgia, serif;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --measure: 36rem;
@@ -122,8 +126,10 @@
     --ink: #ecebe6;
     --ink-soft: #aaa8a1;
     --line: #34332f;
-    --mark: #6b5a00;
+    --mark: #d9b43a;
     --mark-rule: #c9a924;
+    --placeholder: #8e8c85;
+    --error: #ff9a8b;
   }
 }
 
@@ -180,6 +186,12 @@ a {
 
 a:hover {
   background-size: 100% 100%;
+  color: var(--mark-ink);
+}
+
+/* Links that only thicken their stroke keep their own colour. */
+:is(.masthead a, .lead h2 a, .archive h3 a, .pager a):hover {
+  color: inherit;
 }
 
 :focus-visible {
@@ -197,6 +209,10 @@ a:hover {
   background: var(--ink);
   color: var(--paper);
   font: 600 0.95rem var(--sans);
+}
+
+.skip-link:hover {
+  color: var(--paper);
 }
 
 .skip-link:focus {
@@ -294,7 +310,6 @@ main {
 
 .lead-head {
   grid-area: head;
-  align-self: end;
 }
 
 .lead .more {
@@ -303,11 +318,18 @@ main {
   justify-self: start;
 }
 
+/* The opening lines, labelled on the same line as the essay's own date, so both columns start together. */
 .opening {
+  --indent: 1.75rem;
   grid-area: opening;
-  align-self: center;
-  margin: 0;
-  padding: 0.35rem 0 0.35rem 1.75rem;
+  padding-left: var(--indent);
+  border-left: 1px solid var(--line);
+}
+
+/* The highlighter stroke lies over the thin rule, beside the quoted lines only. */
+.opening blockquote {
+  margin: 0 0 0 calc(-1 * var(--indent) - 1px);
+  padding: 0.2rem 0 0.2rem calc(var(--indent) - 2px);
   border-left: 3px solid var(--mark-rule);
 }
 
@@ -318,11 +340,11 @@ main {
   }
 
   .opening {
-    padding-left: 1.25rem;
+    --indent: 1.25rem;
   }
 }
 
-.opening p {
+.opening blockquote p {
   margin: 0;
   font-size: clamp(1.2rem, 1.05rem + 0.6vw, 1.5rem);
   line-height: 1.55;
@@ -432,7 +454,7 @@ main {
 /* What a reader selects is marked the way they would mark a page. */
 ::selection {
   background: var(--mark);
-  color: var(--ink);
+  color: var(--mark-ink);
 }
 
 @media (max-width: 40rem) {
@@ -656,56 +678,208 @@ main {
   padding-inline: var(--gap);
 }
 
-.letter h2 {
-  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.8rem);
+/* The sign-up is a letter on the desk: a sheet of paper with an airmail edge and a postmark. */
+.letter-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem clamp(2rem, 6vw, 5rem);
+  padding: clamp(2rem, 5vw, 3.5rem) clamp(1.25rem, 5vw, 3.5rem) clamp(1.75rem, 4vw, 3rem);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 0 var(--line),
+    0 24px 48px -32px color-mix(in srgb, var(--ink) 35%, transparent);
 }
 
-.letter > p {
-  max-width: var(--measure);
-  margin: 0.75rem 0 0;
-  line-height: 1.5;
+.letter-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto;
+  height: 5px;
+  border-radius: 4px 4px 0 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--mark-rule) 0 9px,
+    transparent 9px 15px,
+    var(--ink-soft) 15px 24px,
+    transparent 24px 30px
+  );
+}
+
+@media (min-width: 52rem) {
+  .letter-card {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+}
+
+.letter-copy .kicker {
+  margin-bottom: 1rem;
+}
+
+.letter h2 {
+  font-size: clamp(2rem, 1.4rem + 2.2vw, 3rem);
+}
+
+.letter-text {
+  max-width: 28rem;
+  margin: 1rem 0 0;
+  font-size: 1.2rem;
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
+.signature {
+  margin: 1.5rem 0 0;
+  font-size: 1.6rem;
+  font-style: italic;
+  line-height: 1;
+}
+
+.letter-reply {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1.5rem;
+}
+
+/* A rubber stamp: decorative, so the words in it are for the eye only. */
+.postmark {
+  display: grid;
+  place-content: center;
+  align-self: flex-end;
+  width: 7.5rem;
+  height: 7.5rem;
+  padding: 0.5rem;
+  border: 2px solid var(--ink-soft);
+  border-radius: 50%;
+  outline: 1px solid var(--ink-soft);
+  outline-offset: 4px;
+  color: var(--ink-soft);
+  text-align: center;
+  rotate: -10deg;
+}
+
+.postmark span {
+  font: 600 0.62rem/1.4 var(--sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.postmark b {
+  margin-block: 0.15rem;
+  padding-block: 0.15rem;
+  border-block: 1px solid var(--ink-soft);
+  font-size: 0.95rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+@media (max-width: 52rem) {
+  .postmark {
+    position: absolute;
+    top: 1.25rem;
+    right: 1rem;
+    width: 4.75rem;
+    height: 4.75rem;
+    padding: 0.25rem;
+  }
+
+  .postmark span {
+    font-size: 0.5rem;
+  }
+
+  .postmark b {
+    font-size: 0.68rem;
+  }
+
+  .letter-copy > :is(.kicker, h2) {
+    max-width: calc(100% - 5.5rem);
+  }
+}
+
 .letter label {
-  display: block;
-  margin: 1.75rem 0 0.5rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 30rem;
+  margin: 0 0 0.55rem;
   font: 600 0.9rem var(--sans);
 }
 
+/* A quiet tag; the field's own `required` is what a screen reader hears. */
+.letter .required {
+  font: 500 0.72rem var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* The field and its button are one control: one border, one focus ring, a shared edge. */
 .inline {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
   max-width: 30rem;
+  border: 1px solid var(--ink-soft);
+  border-radius: 8px;
+  background: var(--paper);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.inline:hover {
+  border-color: var(--ink);
+}
+
+.inline:has(input:focus-visible) {
+  border-color: var(--ink);
+  box-shadow:
+    0 0 0 1px var(--ink),
+    0 0 0 5px var(--mark);
+}
+
+.inline:has(input:user-invalid) {
+  border-color: var(--error);
+}
+
+.inline:has(input:user-invalid:focus-visible) {
+  box-shadow:
+    0 0 0 1px var(--error),
+    0 0 0 5px color-mix(in srgb, var(--error) 30%, transparent);
 }
 
 .inline input {
-  flex: 1 1 12rem;
+  flex: 1 1 auto;
   min-width: 0;
-  min-height: 3rem;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid var(--ink-soft);
-  border-radius: 6px;
-  background: var(--paper);
+  min-height: 3.25rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 7px 0 0 7px;
+  background: transparent;
   color: inherit;
   font: 1rem var(--sans);
 }
 
-.inline input:hover {
-  border-color: var(--ink);
+/* The ring is drawn on the joined control instead. */
+.inline input:focus-visible {
+  outline: none;
 }
 
-.inline input:focus-visible {
-  border-color: var(--ink);
-  outline-offset: 2px;
+.inline input::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 
 .inline button {
-  min-height: 3rem;
-  padding: 0.6rem 1.3rem;
+  flex: none;
+  min-height: 3.25rem;
+  margin: -1px -1px -1px 0;
+  padding: 0.7rem 1.4rem;
   border: 1px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 0 8px 8px 0;
   background: var(--ink);
   color: var(--paper);
   font: 600 1rem var(--sans);
@@ -713,8 +887,51 @@ main {
 }
 
 .inline button:hover {
+  border-color: var(--mark);
   background: var(--mark);
-  color: var(--ink);
+  color: var(--mark-ink);
+}
+
+.inline button:focus-visible {
+  outline-offset: 2px;
+}
+
+.letter .hint,
+.letter .error {
+  max-width: 30rem;
+  margin: 0.6rem 0 0;
+  font: 0.85rem/1.45 var(--sans);
+  color: var(--ink-soft);
+}
+
+.letter .error {
+  display: none;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.letter form:has(input:user-invalid) .error {
+  display: block;
+}
+
+.letter form:has(input:user-invalid) .hint {
+  display: none;
+}
+
+/* On a phone the button sits under the field, full width, still joined to it. */
+@media (max-width: 30rem) {
+  .inline {
+    flex-direction: column;
+  }
+
+  .inline input {
+    border-radius: 7px 7px 0 0;
+  }
+
+  .inline button {
+    margin: 0 -1px -1px;
+    border-radius: 0 0 8px 8px;
+  }
 }
 
 .colophon {
