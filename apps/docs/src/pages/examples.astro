@@ -1,0 +1,135 @@
+---
+import { Image } from "astro:assets";
+import Base from "../layouts/Base.astro";
+import examples from "../lib/examples.json";
+
+// Each example is a real site, built by its own framework and served beside this one.
+const shots = import.meta.glob<{ default: ImageMetadata }>("../assets/examples/*.png", {
+  eager: true,
+});
+const shotOf = (slug: string) => shots[`../assets/examples/${slug}.png`]!.default;
+const source = "https://github.com/uwenayoallain/thegreatcms/tree/main/";
+---
+
+<Base
+  title="Examples · GreatCMS"
+  description="Six real sites on Astro, Next.js, Nuxt and SvelteKit, every one managed by GreatCMS and shipped as static HTML."
+>
+  <section class="proofs examples">
+    <p class="stamp">Examples</p>
+    <h1>Real sites, every word managed</h1>
+    <p class="intro">
+      Six sites on four frameworks. Each reads its content from files in its own repository, is
+      built to plain static pages, and is edited in the studio. Open one, then read its source.
+    </p>
+    <ul>
+      {
+        examples.map((example, index) => (
+          <li>
+            <span class="shot">
+              <Image
+                src={shotOf(example.slug)}
+                alt=""
+                widths={[720, 1440]}
+                sizes="(min-width: 40rem) 24rem, 92vw"
+                loading={index < 3 ? "eager" : "lazy"}
+              />
+            </span>
+            <p class="meta">
+              {example.framework} · {example.kind}
+            </p>
+            <h2>{example.name}</h2>
+            <p>{example.summary}</p>
+            <p class="links">
+              <a
+                class="more"
+                href={`/examples/${example.slug}/`}
+                aria-label={`Open the site: ${example.name}`}
+              >
+                Open the site <span aria-hidden="true">→</span>
+              </a>
+              <a class="source" href={`${source}${example.dir}`} aria-label={`Source of ${example.name}`}>
+                Source
+              </a>
+            </p>
+          </li>
+        ))
+      }
+    </ul>
+    <p class="after">
+      How each one is built, and what it proves, is in <a href="/docs/examples/">the examples guide</a>.
+    </p>
+  </section>
+</Base>
+
+<!-- Only this page uses these, so they ride in it rather than in the one shared stylesheet. -->
+<style is:global>
+.examples h1 {
+  font-size: clamp(2.2rem, 1.3rem + 3.4vw, 3.8rem);
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  margin: 0.4rem 0 1rem;
+}
+
+.examples .intro,
+.examples .after {
+  max-width: var(--measure);
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.examples .intro {
+  font-size: 1.1rem;
+}
+
+.examples .after {
+  margin-top: 2rem;
+}
+
+.examples .links {
+  margin: auto 0 0;
+}
+
+.proofs.examples ul {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+}
+
+/* The picture's box is set before it arrives, so nothing below it moves. */
+.shot {
+  display: block;
+  aspect-ratio: 16 / 10;
+  margin: -1.4rem -1.4rem 1.2rem;
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.examples .meta {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.examples .source {
+  position: relative;
+  z-index: 1;
+  margin-left: 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.examples h2 {
+  font-size: 1.08rem;
+  margin: 0 0 0.45rem;
+}
+</style>

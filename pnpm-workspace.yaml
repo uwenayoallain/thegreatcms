@@ -6,6 +6,8 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: true
+  # wrangler's local runtime: only `wrangler dev` needs it, and deploying does not.
+  workerd: false
 
 # Security fixes released too recently for pnpm's minimum release age to allow yet.
 minimumReleaseAgeExclude:

@@ -1,0 +1,17 @@
+// The public website, greatcms.uwe.rw: the docs site and every example, as static files on
+// Cloudflare. `pnpm website` builds the folder; `pnpm website:deploy` builds and publishes it.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "greatcms-website",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist-website",
+    // A missing page gets the nearest 404.html: an example's own, or the website's.
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash",
+  },
+  "routes": [{ "pattern": "greatcms.uwe.rw", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+}

@@ -7,6 +7,9 @@ order: 70
 Every example in the repository is also a test. They build in CI, run axe with
 zero violations allowed, and assert that their output contains no script tag.
 
+Each one is live on this website under [/examples/](/examples/), built by its
+own framework exactly as below and served as static files.
+
 ## A minimal site
 
 ```sh

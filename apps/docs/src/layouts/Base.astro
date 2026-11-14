@@ -15,9 +15,11 @@ const { title, description } = Astro.props;
 const path = Astro.url.pathname.replace(/\/+$/, "") || "/";
 const canonical = new URL(path === "/" ? "/" : `${path}/`, Astro.site).href;
 const footer = cms.region("site.footer");
+// The order matters: site.css sizes each link to its label in the real font.
 const nav = [
   { href: "/docs/", label: "Docs" },
   { href: "/spec/", label: "Standard" },
+  { href: "/examples/", label: "Examples" },
   { href: "https://github.com/uwenayoallain/thegreatcms", label: "Source" },
 ];
 
@@ -56,7 +58,7 @@ const nav = [
         <ul>
           {
             nav.map((item) => (
-              <li>
+              <li class={item.href.startsWith("/") ? undefined : "outward"}>
                 <a
                   href={item.href}
                   aria-current={path.startsWith(item.href.replace(/\/$/, "")) && item.href.startsWith("/") ? "page" : undefined}

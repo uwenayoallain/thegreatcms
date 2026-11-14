@@ -60,6 +60,11 @@ jobs:
           path: .turbo/cache
           key: turbo-build-${{ runner.os }}-${{ github.sha }}
 
+      # The website and every example as one folder, the way Cloudflare serves it: a link that lands
+      # nowhere fails here, before anything is deployed.
+      - name: Website links land
+        run: node scripts/build-website.mjs
+
       - name: Typecheck
         run: pnpm typecheck
 

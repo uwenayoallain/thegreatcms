@@ -15,7 +15,9 @@
     "format:check": "oxfmt --check .",
     "check": "oxlint && oxfmt --check . && node scripts/gen-agent-docs.mjs --check && turbo run typecheck test",
     "docs:check": "node scripts/gen-agent-docs.mjs --check",
-    "docs:build": "node scripts/gen-agent-docs.mjs"
+    "docs:build": "node scripts/gen-agent-docs.mjs",
+    "website": "node scripts/build-website.mjs",
+    "website:deploy": "pnpm build && node scripts/build-website.mjs && wrangler deploy"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
@@ -24,7 +26,8 @@
     "tsdown": "^0.22.14",
     "turbo": "^2.10.9",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.162.0"
   },
   "engines": {
     "node": ">=22.18"

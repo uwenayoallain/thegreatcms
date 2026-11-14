@@ -15,6 +15,7 @@ const PAGES = [
   { name: "a docs page", file: "docs/getting-started/index.html" },
   { name: "the command line", file: "docs/the-command-line/index.html" },
   { name: "the standard", file: "spec/index.html" },
+  { name: "examples", file: "examples/index.html" },
   { name: "not found", file: "404.html" },
 ];
 
@@ -225,6 +226,9 @@ describe("the docs", () => {
     for (const [page, source] of html) {
       for (const href of links(source)) {
         if (!href.startsWith("/") && !href.startsWith("#")) continue;
+        // The examples are built by their own frameworks and served beside this site; the combined
+        // build (scripts/build-website.mjs) follows every link into them.
+        if (/^\/examples\/[^/]+\//.test(href)) continue;
         const [path, fragment] = href.split("#") as [string, string | undefined];
         const target = !path
           ? page
@@ -310,7 +314,8 @@ describe("weight", () => {
   it("keeps the pages people read well under budget", () => {
     const files = walk(DIST).filter((file) => /\.(html|css)$/.test(file));
     const total = kilobytes(files);
-    expect(total, `${total.toFixed(1)} KB of HTML and CSS`).toBeLessThan(270);
+    // 270 KB before the examples page, which is about 10 KB of its own.
+    expect(total, `${total.toFixed(1)} KB of HTML and CSS`).toBeLessThan(282);
   });
 
   it("keeps scroll timelines where browsers read them, not folded into the shorthand", () => {
@@ -326,7 +331,8 @@ describe("weight", () => {
     expect(files.filter((file) => file.endsWith(".js"))).toEqual([]);
     const css = files.filter((file) => file.endsWith(".css"));
     expect(css).toHaveLength(1);
-    // Three font faces and the highlighter's classes ride in the one stylesheet.
-    expect(kilobytes(css)).toBeLessThan(24);
+    // Three font faces and the highlighter's classes ride in the one stylesheet; the last half
+    // kilobyte keeps a fourth header link still on a phone and while the font loads.
+    expect(kilobytes(css)).toBeLessThan(24.5);
   });
 });

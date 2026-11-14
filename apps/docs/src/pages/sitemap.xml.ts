@@ -4,7 +4,13 @@ import type { APIRoute } from "astro";
 import { docsPages } from "../lib/cms";
 
 export const GET: APIRoute = ({ site }) => {
-  const paths = ["/", "/docs/", "/spec/", ...docsPages().map((page) => `/docs/${page.slug}/`)];
+  const paths = [
+    "/",
+    "/docs/",
+    "/spec/",
+    "/examples/",
+    ...docsPages().map((page) => `/docs/${page.slug}/`),
+  ];
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',

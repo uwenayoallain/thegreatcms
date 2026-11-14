@@ -229,6 +229,12 @@ a:hover {
   font-weight: 500;
 }
 
+/* "Examples" is the one label whose stand-in face runs 2px wider; it keeps its Space Grotesk width. */
+.masthead nav li:nth-child(3) a {
+  box-sizing: content-box;
+  width: 4.58em;
+}
+
 /* One mark for a nav link: the text brightens and an accent line sits under it. */
 .masthead nav a {
   position: relative;
@@ -262,6 +268,13 @@ a:hover {
   transform: scaleX(1);
 }
 
+/* On a phone the link out to the source gives way; the footer still carries it. */
+@media (max-width: 40rem) {
+  .masthead nav .outward {
+    display: none;
+  }
+}
+
 /* A 320px phone: tighter gutters and links, so the header still fits on one line. */
 @media (max-width: 22.5rem) {
   .masthead {
@@ -269,12 +282,16 @@ a:hover {
     padding-inline: 0.75rem;
   }
 
+  .masthead nav ul {
+    font-size: 0.84rem;
+  }
+
   .masthead nav a {
-    padding-inline: 0.3rem;
+    padding-inline: 0.25rem;
   }
 
   .masthead nav a::after {
-    inset-inline: 0.3rem;
+    inset-inline: 0.25rem;
   }
 }
 
